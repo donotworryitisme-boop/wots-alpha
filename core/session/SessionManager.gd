@@ -4,6 +4,7 @@ class_name SessionManager
 # Manages the lifecycle of a training session, including simulation clock, event queue, rules, scenarios,
 # domain models (sorter and loading docks), role management, zero-score mode, scoring, and feedback.
 
+@warning_ignore("shadowed_global_identifier")
 const SorterModel  = preload("res://core/domain/SorterModel.gd")
 const LoadingModel = preload("res://core/domain/LoadingModel.gd")
 const ScoreEngine  = preload("res://core/scoring/ScoreEngine.gd")

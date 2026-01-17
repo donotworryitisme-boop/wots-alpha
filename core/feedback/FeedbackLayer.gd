@@ -21,7 +21,7 @@ func reset() -> void:
 func handle_event(rule_id: int, produces_waste: bool, timestamp: float) -> void:
 	# Record and display an event in the timeline.
 	events.append({"time": timestamp, "rule_id": rule_id, "waste": produces_waste})
-	var time_str: String = String.sprintf("%.2f", timestamp)
+	var time_str: String = "%0.2f" % timestamp
 	var status: String = produces_waste ? "Waste" : "Good"
 	$RichTextLabel.append_bbcode("[b]" + time_str + "s[/b]: Rule " + str(rule_id) + " - " + status + "\n")
 	if not produces_waste:
@@ -37,5 +37,5 @@ func notify_session_end(final_score: int) -> void:
 		+ str(final_score) + "[/color]\n")
 
 func _on_toggle_changed(button_pressed: bool) -> void:
-	# Update the explain-why toggle state.
+	# Update the explain‑why toggle state.
 	explain_why_enabled = button_pressed
