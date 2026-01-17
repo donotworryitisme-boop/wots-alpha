@@ -28,3 +28,6 @@ func _trigger_rule(rule_engine: RuleEngine, session: SessionManager, rule_id: in
 	# Update the score if a score engine exists
 	if session.score_engine != null:
 		session.score_engine.apply_rule(rule_id, produces_waste)
+	# Notify the feedback layer of the event
+	if session.feedback_layer != null:
+		session.feedback_layer.handle_event(rule_id, produces_waste, current_time)

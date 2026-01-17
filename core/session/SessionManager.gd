@@ -2,7 +2,7 @@ extends Node
 class_name SessionManager
 
 # Manages the lifecycle of a training session, including simulation clock, event queue, rules, scenarios,
-# domain models (sorter and loading docks), role management, zero-score mode, and scoring.
+# domain models (sorter and loading docks), role management, zero-score mode, scoring, and feedback.
 
 const SorterModel  = preload("res://core/domain/SorterModel.gd")
 const LoadingModel = preload("res://core/domain/LoadingModel.gd")
@@ -16,6 +16,7 @@ var sorter_model: SorterModel
 var loading_model: LoadingModel
 var role_manager: RoleManager
 var score_engine: ScoreEngine
+var feedback_layer: FeedbackLayer = null
 var zero_score_mode: bool = false
 
 var session_active: bool = false
@@ -47,6 +48,7 @@ func _ready() -> void:
 	# Instantiate score engine
 	score_engine = ScoreEngine.new()
 	add_child(score_engine)
+	# feedback_layer will be assigned in Main.gd after instantiation
 
 func start_session() -> void:
 	if session_active:
@@ -65,6 +67,9 @@ func start_session() -> void:
 	zero_score_mode = false
 	# Reset scoring
 	score_engine.start_session()
+	# Reset feedback layer
+	if feedback_layer != null:
+		feedback_layer.reset()
 	# Load the default scenario and schedule its events
 	scenario_loader.load_scenario("default", self, rule_engine)
 
@@ -73,6 +78,9 @@ func end_session() -> void:
 	# Record the final score if appropriate
 	if score_engine != null:
 		score_engine.end_session(self)
+	# Notify feedback layer that the session has ended
+	if feedback_layer != null:
+		feedback_layer.notify_session_end(score_engine.current_score)
 	# Future: trigger scoring, etc.
 
 func schedule_event_in(delay: float, callback: Callable) -> void:
