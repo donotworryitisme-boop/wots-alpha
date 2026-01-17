@@ -13,6 +13,6 @@ var time_scale: float = 1.0
 var emballage_delay: float = 0.0
 
 func _process(delta: float) -> void:
-    var scaled_delta = delta * time_scale
-    current_time += scaled_delta
-    emit_signal("tick", scaled_delta, current_time)
+	var scaled_delta = delta * time_scale
+	current_time += scaled_delta
+	emit_signal("tick", scaled_delta, current_time)
