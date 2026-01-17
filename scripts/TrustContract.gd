@@ -3,11 +3,13 @@ class_name TrustContract
 
 signal accepted
 
-# Handles the Trust Contract overlay: shows text and emits when accepted.
+# Handles the Trust Contract overlay: emits when accepted.
 
 func _ready() -> void:
-	# Connect the accept button signal
-	$AcceptButton.connect("pressed", Callable(self, "_on_accept_pressed"))
+	# Find the AcceptButton anywhere in this scene and connect its signal.
+	var accept_button := find_node("AcceptButton", recursive=true)
+	if accept_button:
+		accept_button.connect("pressed", Callable(self, "_on_accept_pressed"))
 
 func _on_accept_pressed() -> void:
 	# Save a file to indicate the contract has been seen
