@@ -1,8 +1,7 @@
 extends Node
 class_name SessionManager
 
-# Manages the lifecycle of a training session, including simulation clock, event queue, rules, scenarios,
-# domain models, role management, zero-score mode, scoring, feedback, and pressure knobs.
+signal hint_updated(hint_text: String)
 
 @warning_ignore("shadowed_global_identifier")
 const SorterModel  = preload("res://core/domain/SorterModel.gd")
@@ -26,7 +25,12 @@ var ambiguity_level: float = 0.0
 var time_slack: float = 1.0
 var time_pressure: float = 0.0
 
-# Dynamic pressure state that affects decision context
+# Scaffolding tiers (8.3)
+var scaffold_source: String = "scenario" # "scenario" or "role"
+var scaffold_tier_scenario: int = 1      # 1..3
+var scaffold_tier_active: int = 1        # resolved at load time (scenario or role)
+
+# Dynamic pressure state
 var interruptions_since_last_decision: int = 0
 var last_interrupt_at: float = -1.0
 
@@ -68,33 +72,24 @@ func start_session() -> void:
 	session_active = true
 	session_start_time = sim_clock.current_time
 
-	# Reset simulation time
 	sim_clock.current_time = 0.0
-
-	# Clear previous waste log
 	rule_engine.waste_log.clear()
 
-	# Reset sorter and loading model state
 	sorter_model.set_available(true)
 	loading_model.set_sorter_model(sorter_model)
 
-	# Reset role to default (operator) at session start
 	role_manager.set_role(WOTSConfig.Role.OPERATOR)
 
 	zero_score_mode = false
-
-	# Reset scoring
 	score_engine.start_session()
 
-	# Reset feedback layer
 	if feedback_layer != null:
 		feedback_layer.reset()
 
-	# Reset dynamic pressure state
 	interruptions_since_last_decision = 0
 	last_interrupt_at = -1.0
 
-	# Load the default scenario and schedule its events (pressure knobs are applied there)
+	# Load default scenario (knobs + scaffold tier resolved there)
 	scenario_loader.load_scenario("default", self, rule_engine)
 
 func end_session() -> void:
@@ -116,20 +111,43 @@ func _on_tick(_delta_time: float, current_time: float) -> void:
 		event_queue.process_events(current_time)
 
 # -------------------------------------------------------------------
+# Scaffolding tiers (8.3)
+
+func set_scaffolding(source: String, tier: int) -> void:
+	scaffold_source = source
+	scaffold_tier_scenario = clamp(tier, 1, 3)
+
+	# Resolve active tier:
+	# - scenario: use scaffold_tier_scenario
+	# - role: derive from current role (guided for trainers, partial for captains, none for operators by default)
+	if scaffold_source == "role":
+		scaffold_tier_active = _tier_for_role(role_manager.get_role())
+	else:
+		scaffold_tier_active = scaffold_tier_scenario
+
+func _tier_for_role(role: int) -> int:
+	if role == WOTSConfig.Role.TRAINER:
+		return 1
+	if role == WOTSConfig.Role.CAPTAIN:
+		return 2
+	return 3
+
+func publish_hint(hint_text: String) -> void:
+	# No score impact; hints are purely guidance and must not reveal outcomes.
+	hint_updated.emit(hint_text)
+
+# -------------------------------------------------------------------
 # Pressure APIs used by ScenarioLoader and Rule evaluation
 
 func register_interrupt(related_rule_id: int, timestamp: float) -> void:
-	# Inline behavior: interruptions are non-critical but they accumulate in decision context.
 	interruptions_since_last_decision += 1
 	last_interrupt_at = timestamp
 	WOTSLogger.log_info("Interrupt: benign event before rule %s at %0.2fs" % [str(related_rule_id), timestamp])
 
-	# Optional: surface a benign event to feedback layer (no scoring penalty).
 	if feedback_layer != null:
 		feedback_layer.handle_event(0, false, timestamp)
 
 func register_info_reveal(revealed: Dictionary, timestamp: float) -> void:
-	# Inline behavior: delayed info "arrives" later, showing ambiguity effects in the timeline.
 	WOTSLogger.log_info("Info reveal at %0.2fs: %s" % [timestamp, str(revealed)])
 	if feedback_layer != null:
 		feedback_layer.handle_event(0, false, timestamp)
@@ -145,32 +163,25 @@ func build_decision_context(
 	decision_time: float,
 	decision_window: float
 ) -> Dictionary:
-	# Decision context is what the "operator" effectively has available when making a decision.
-	# Pressure affects this context (time pressure, ambiguity, interruptions) rather than only UI.
 	var ctx: Dictionary = {}
-
 	ctx["rule_id"] = rule_id
 	ctx["now"] = current_time
 
-	# Time pressure: slack maps into perceived urgency.
+	# Time pressure
 	ctx["time_slack"] = time_slack
 	ctx["time_pressure"] = time_pressure
-
-	# Deadline: under time pressure, less slack means less time to react.
-	# This is contextual (used by rules/logic), not a UI timer.
 	ctx["decision_time"] = decision_time
 	ctx["decision_window"] = decision_window
 	ctx["deadline"] = decision_time
 
-	# Interruptions: count since last decision evaluation.
+	# Interruptions
 	ctx["interruptions"] = interruptions_since_last_decision
 	ctx["last_interrupt_at"] = last_interrupt_at
 
-	# Ambiguity: missing or delayed info
+	# Ambiguity
 	ctx["ambiguous"] = bool(payload.get("ambiguous", false))
 	ctx["withheld"] = payload.get("_withheld", {})
 
-	# If info_delay_seconds is present, treat info as unavailable at decision time.
 	var delay_seconds: float = float(payload.get("info_delay_seconds", 0.0))
 	if delay_seconds > 0.0:
 		ctx["info_available"] = false
@@ -179,13 +190,52 @@ func build_decision_context(
 		ctx["info_available"] = true
 		ctx["info_delay_seconds"] = 0.0
 
+	# Scaffolding tier (8.3)
+	ctx["scaffold_tier"] = scaffold_tier_active
+	ctx["hint"] = _build_hint_for_tier(rule_id, payload, ctx, scaffold_tier_active)
+
 	return ctx
+
+func _build_hint_for_tier(rule_id: int, payload: Dictionary, ctx: Dictionary, tier: int) -> String:
+	# Hints must not reveal outcomes. They are process reminders only.
+	# Tier 1: guided, explicit reminder steps
+	# Tier 2: partial reminder
+	# Tier 3: no hints
+	if tier >= 3:
+		return ""
+
+	var ambiguous: bool = bool(ctx.get("ambiguous", false))
+	var intr: int = int(ctx.get("interruptions", 0))
+
+	var base: String = ""
+	match rule_id:
+		1:
+			base = "Stay on the standard placement sequence. Confirm location and stage before moving."
+		2:
+			base = "Scan workflow reminder: confirm scan requirement, then verify the pallet ID."
+		_:
+			base = "Follow the standard operating steps and confirm required fields before acting."
+
+	# Tier 2: shorter, less explicit
+	if tier == 2:
+		base = base.split(".")[0] + "."
+
+	# Add non-outcome, context-only note (still not revealing result)
+	if ambiguous:
+		base += " Info may be incomplete—double-check what you can confirm."
+	if intr > 0:
+		base += " Ignore non-critical noise and re-check your last confirmed step."
+
+	return base
 
 # -------------------------------------------------------------------
 # Role and capability APIs
 
 func set_role(role: int) -> void:
 	role_manager.set_role(role)
+	# If scaffolding is role-based, update active tier when role changes.
+	if scaffold_source == "role":
+		scaffold_tier_active = _tier_for_role(role_manager.get_role())
 
 func get_role() -> int:
 	return role_manager.get_role()

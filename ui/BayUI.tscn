@@ -21,3 +21,11 @@ offset_top = 60.0
 offset_right = 220.0
 offset_bottom = 92.0
 text = "Trust Contract"
+
+[node name="HintLabel" type="Label" parent="Root"]
+offset_left = 24.0
+offset_top = 110.0
+offset_right = 900.0
+offset_bottom = 170.0
+text = ""
+autowrap_mode = 3
