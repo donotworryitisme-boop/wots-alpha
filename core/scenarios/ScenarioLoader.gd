@@ -19,9 +19,12 @@ func load_scenario(name: String, session: SessionManager, rule_engine: RuleEngin
 		var delay: float = ev.get("time", 0.0)
 		var rule_id: int = ev.get("rule_id", -1)
 		var payload: Dictionary = ev.get("payload", {})
-		# Schedule an event relative to the session start. When it triggers, call the rule engine.
+		# Schedule an event relative to the session start. When it triggers, call the rule engine and update score.
 		session.schedule_event_in(delay, Callable(self, "_trigger_rule").bind(rule_engine, session, rule_id, payload))
 
 func _trigger_rule(rule_engine: RuleEngine, session: SessionManager, rule_id: int, payload: Dictionary) -> void:
 	var current_time: float = session.sim_clock.current_time
-	rule_engine.evaluate_event(rule_id, payload, current_time)
+	var produces_waste: bool = rule_engine.evaluate_event(rule_id, payload, current_time)
+	# Update the score if a score engine exists
+	if session.score_engine != null:
+		session.score_engine.apply_rule(rule_id, produces_waste)

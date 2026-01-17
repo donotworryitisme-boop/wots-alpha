@@ -2,10 +2,11 @@ extends Node
 class_name SessionManager
 
 # Manages the lifecycle of a training session, including simulation clock, event queue, rules, scenarios,
-# domain models (sorter and loading docks), role management, and zero-score mode.
+# domain models (sorter and loading docks), role management, zero-score mode, and scoring.
 
-const SorterModel    = preload("res://core/domain/SorterModel.gd")
-const LoadingModel   = preload("res://core/domain/LoadingModel.gd")
+const SorterModel  = preload("res://core/domain/SorterModel.gd")
+const LoadingModel = preload("res://core/domain/LoadingModel.gd")
+const ScoreEngine  = preload("res://core/scoring/ScoreEngine.gd")
 
 var sim_clock: SimClock
 var event_queue: EventQueue
@@ -14,6 +15,7 @@ var scenario_loader: ScenarioLoader
 var sorter_model: SorterModel
 var loading_model: LoadingModel
 var role_manager: RoleManager
+var score_engine: ScoreEngine
 var zero_score_mode: bool = false
 
 var session_active: bool = false
@@ -42,13 +44,16 @@ func _ready() -> void:
 	# Instantiate role manager
 	role_manager = RoleManager.new()
 	add_child(role_manager)
+	# Instantiate score engine
+	score_engine = ScoreEngine.new()
+	add_child(score_engine)
 
 func start_session() -> void:
 	if session_active:
 		return
 	session_active = true
 	session_start_time = sim_clock.current_time
-	# Reset clock time to zero for a new session
+	# Reset simulation time
 	sim_clock.current_time = 0.0
 	# Clear previous waste log
 	rule_engine.waste_log.clear()
@@ -58,11 +63,16 @@ func start_session() -> void:
 	# Reset role to default (operator) at session start
 	role_manager.set_role(WOTSConfig.Role.OPERATOR)
 	zero_score_mode = false
+	# Reset scoring
+	score_engine.start_session()
 	# Load the default scenario and schedule its events
 	scenario_loader.load_scenario("default", self, rule_engine)
 
 func end_session() -> void:
 	session_active = false
+	# Record the final score if appropriate
+	if score_engine != null:
+		score_engine.end_session(self)
 	# Future: trigger scoring, etc.
 
 func schedule_event_in(delay: float, callback: Callable) -> void:
@@ -79,7 +89,6 @@ func _on_tick(delta_time: float, current_time: float) -> void:
 # Role and capability APIs
 
 func set_role(role: int) -> void:
-	# Set the current role (e.g., WOTSConfig.Role.OPERATOR)
 	role_manager.set_role(role)
 
 func get_role() -> int:

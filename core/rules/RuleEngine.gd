@@ -16,17 +16,19 @@ func _ready() -> void:
 func register_rule(rule_id: int, handler: Callable) -> void:
 	rules[rule_id] = handler
 
-func evaluate_event(rule_id: int, payload: Dictionary, current_time: float) -> void:
-	# Invoke the handler for the given rule ID. If the handler returns true, record waste.
+func evaluate_event(rule_id: int, payload: Dictionary, current_time: float) -> bool:
+	# Invoke the handler for the given rule ID. Returns true if the rule produces waste.
+	var produces_waste: bool = false
 	if rules.has(rule_id):
 		var handler: Callable = rules[rule_id]
-		var produces_waste: bool = handler.call(payload)
+		produces_waste = handler.call(payload)
 		if produces_waste:
 			waste_log.append({
 				"timestamp": current_time,
 				"rule_id": rule_id,
 				"payload": payload
 			})
+	return produces_waste
 
 func get_waste_timeline() -> Array:
 	return waste_log
@@ -35,12 +37,12 @@ func get_waste_timeline() -> Array:
 # Example rule handlers. Replace/expand these with real logic later.
 # Each handler returns true if it produces waste, false otherwise.
 
-func _rule_emplacement_time_over(payload: Dictionary) -> bool:
+func _rule_emplacement_time_over(_payload: Dictionary) -> bool:
 	# Example: always produces waste
 	WOTSLogger.log_info("Rule 1: emplacement time exceeded.")
 	return true
 
-func _rule_missing_scan(payload: Dictionary) -> bool:
+func _rule_missing_scan(_payload: Dictionary) -> bool:
 	# Example: triggers but does not produce waste
 	WOTSLogger.log_info("Rule 2: missing scan detected.")
 	return false
