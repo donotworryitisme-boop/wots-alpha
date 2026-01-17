@@ -7,7 +7,7 @@ signal accepted
 
 func _ready() -> void:
 	# Connect the accept button signal
-	$Panel/AcceptButton.connect("pressed", Callable(self, "_on_accept_pressed"))
+	$AcceptButton.connect("pressed", Callable(self, "_on_accept_pressed"))
 
 func _on_accept_pressed() -> void:
 	# Save a file to indicate the contract has been seen
