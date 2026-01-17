@@ -7,7 +7,7 @@ signal accepted
 
 func _ready() -> void:
 	# Find the AcceptButton anywhere in this scene and connect its signal.
-	var accept_button := find_node("AcceptButton", recursive=true)
+	var accept_button = find_node("AcceptButton", true, false)
 	if accept_button:
 		accept_button.connect("pressed", Callable(self, "_on_accept_pressed"))
 
