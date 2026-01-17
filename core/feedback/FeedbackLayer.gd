@@ -22,7 +22,7 @@ func handle_event(rule_id: int, produces_waste: bool, timestamp: float) -> void:
 	# Record and display an event in the timeline.
 	events.append({"time": timestamp, "rule_id": rule_id, "waste": produces_waste})
 	var time_str: String = "%0.2f" % timestamp
-	var status: String = produces_waste ? "Waste" : "Good"
+	var status: String = "Waste" if produces_waste else "Good"
 	$RichTextLabel.append_bbcode("[b]" + time_str + "s[/b]: Rule " + str(rule_id) + " - " + status + "\n")
 	if not produces_waste:
 		$RichTextLabel.append_bbcode("[color=green]Good job! No waste produced.[/color]\n")
