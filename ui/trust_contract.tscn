@@ -1,0 +1,65 @@
+[gd_scene load_steps=2 format=3 uid="uid://c0k7iwmjwkabu"]
+
+[sub_resource type="GDScript" id="GDScript_bskq2"]
+script/source = "extends \"res://scripts/TrustContract.gd\"
+"
+
+[node name="TrustContract" type="CanvasLayer"]
+layer = 10
+script = SubResource("GDScript_bskq2")
+
+[node name="Dimmer" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Root"]
+custom_minimum_size = Vector2(900, 520)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Root/Panel"]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Root/Panel/MarginContainer"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Root/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Trust Contract"
+
+[node name="Body" type="RichTextLabel" parent="Root/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+
+[node name="Buttons" type="HBoxContainer" parent="Root/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="Root/Panel/MarginContainer/VBoxContainer/Buttons"]
+layout_mode = 2
+
+[node name="AcceptButton" type="Button" parent="Root/Panel/MarginContainer/VBoxContainer/Buttons"]
+layout_mode = 2
+text = "I understand"

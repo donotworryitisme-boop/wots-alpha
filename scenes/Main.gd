@@ -1,58 +1,50 @@
 extends Control
 
-const DEBUG_OVERLAY_SCENE: PackedScene    = preload("res://debug/DebugOverlay.tscn")
-const SessionManagerClass                 = preload("res://core/session/SessionManager.gd")
-const FeedbackLayerScene: PackedScene     = preload("res://ui/FeedbackLayer.tscn")
+const DEBUG_OVERLAY_SCENE: PackedScene = preload("res://debug/DebugOverlay.tscn")
+const TRUST_CONTRACT_SCENE: PackedScene = preload("res://ui/TrustContract.tscn")
+const TRUST_FILE_PATH: String = "user://trust_contract_seen.dat"
 
-var session_manager: SessionManager
-var feedback_layer: FeedbackLayer
+var _trust_ok: bool = false
 
 func _ready() -> void:
-	# Show debug overlay in debug builds only
+	# Debug overlay only in debug builds.
 	if OS.is_debug_build():
-		var overlay = DEBUG_OVERLAY_SCENE.instantiate()
+		var overlay := DEBUG_OVERLAY_SCENE.instantiate()
 		add_child(overlay)
 
-	# Instantiate session manager and feedback layer
-	session_manager = SessionManagerClass.new()
-	add_child(session_manager)
+	# Hook BayUI request button (if present).
+	var bay_ui := get_node_or_null("BayUI")
+	if bay_ui != null and bay_ui.has_signal("trust_contract_requested"):
+		bay_ui.connect("trust_contract_requested", Callable(self, "_on_trust_contract_requested"))
 
-	feedback_layer = FeedbackLayerScene.instantiate()
-	add_child(feedback_layer)
-	session_manager.feedback_layer = feedback_layer
-
-	# Show trust contract if needed
-	show_trust_contract_if_needed()
-
-func show_trust_contract_if_needed() -> void:
-	var path := "user://trust_contract_seen.dat"
-	if FileAccess.file_exists(path):
-		# Already accepted; start the session
-		start_training_session()
+	# Gate start behind trust contract on first launch.
+	if _trust_contract_seen():
+		_trust_ok = true
+		_start_session_if_ready()
 	else:
-		show_trust_contract()
+		_show_trust_contract()
 
-func show_trust_contract() -> void:
-	# Use AcceptDialog for the trust contract overlay
-	var dialog := AcceptDialog.new()
-	dialog.name = "TrustContractDialog"
-	dialog.dialog_text = "- This simulation is for learning and coaching only; it will never be used for discipline or ranking.\n- Scores are private to you; managers and captains cannot see individual runs.\n- No personal data is collected; only aggregated metrics are used to improve training.\n- Your role determines what you see; fairness is built into the system."
-	dialog.get_ok_button().text = "I Understand"
-	dialog.connect("confirmed", Callable(self, "_on_trust_contract_confirmed"))
-	add_child(dialog)
-	dialog.popup_centered()  # Center the dialog on screen
+func _on_trust_contract_requested() -> void:
+	# Manual reopen from UI (does not depend on file existing).
+	_show_trust_contract()
 
-func _on_trust_contract_confirmed() -> void:
-	# Persist acceptance so the contract isn’t shown again
-	var file := FileAccess.open("user://trust_contract_seen.dat", FileAccess.WRITE)
-	file.store_string("1")
-	file.close()
-	# Start the session
-	start_training_session()
+func _show_trust_contract() -> void:
+	var tc := TRUST_CONTRACT_SCENE.instantiate()
+	add_child(tc)
+	if tc.has_signal("accepted"):
+		tc.connect("accepted", Callable(self, "_on_trust_contract_accepted"))
 
-func start_training_session() -> void:
-	session_manager.start_session()
+func _on_trust_contract_accepted() -> void:
+	_trust_ok = true
+	_start_session_if_ready()
 
-func show_trust_contract_again() -> void:
-	# Allows re-opening the trust contract from the UI
-	show_trust_contract()
+func _trust_contract_seen() -> bool:
+	return FileAccess.file_exists(TRUST_FILE_PATH)
+
+func _start_session_if_ready() -> void:
+	# Placeholder gate. Real session start (if/when present in this project)
+	# must only be triggered after _trust_ok is true.
+	if not _trust_ok:
+		return
+	# No-op for now (Bay B2B Alpha: no new session logic added here).
+	pass
