@@ -11,21 +11,24 @@ func _ready() -> void:
 	layer = 10
 	add_to_group("wots_trust_contract")
 
-	# Standard signal connection
-	if accept_button != null and not accept_button.pressed.is_connected(_on_accept_pressed):
-		accept_button.pressed.connect(_on_accept_pressed)
-
 	if body != null:
 		body.bbcode_enabled = true
 		body.text = _build_contract_text()
 
+	# Ensure signal connection
+	if accept_button != null and not accept_button.pressed.is_connected(_on_accept_pressed):
+		accept_button.pressed.connect(_on_accept_pressed)
+
+	# If accept_button is missing, it will be obvious in Output.
+	if accept_button == null:
+		print("[TrustContract] ERROR: AcceptButton not found (scene mismatch).")
+
 func _input(event: InputEvent) -> void:
-	# Hard fallback: runs even if UI intercepts input.
-	# If user clicks inside accept button rect, accept.
+	# Hard fallback: even if UI delivery is weird, clicking on the button area accepts.
 	if accept_button == null:
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var r: Rect2 = accept_button.get_global_rect()
+		var r := accept_button.get_global_rect()
 		if r.has_point(event.position):
 			_on_accept_pressed()
 			get_viewport().set_input_as_handled()

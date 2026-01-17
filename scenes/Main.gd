@@ -1,7 +1,7 @@
 extends Control
 
 const DEBUG_OVERLAY_SCENE: PackedScene = preload("res://debug/DebugOverlay.tscn")
-const TRUST_CONTRACT_SCENE: PackedScene = preload("res://ui/trust_contract.tscn") # lowercase, deterministic
+const TRUST_CONTRACT_SCENE: PackedScene = preload("res://ui/TrustContract.tscn") # lowercase, deterministic
 const TRUST_FILE_PATH: String = "user://trust_contract_seen.dat"
 
 var _trust_ok: bool = false

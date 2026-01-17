@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="WOTS Bay B2B Alpha"
-run/main_scene="uid://cti3ionhovfei"
+run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.5")
 config/icon="res://icon.svg"
 
