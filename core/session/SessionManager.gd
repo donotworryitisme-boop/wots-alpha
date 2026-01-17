@@ -2,7 +2,7 @@ extends Node
 class_name SessionManager
 
 # Manages the lifecycle of a training session, including simulation clock, event queue, rules, scenarios,
-# and domain models (sorter and loading docks).
+# domain models (sorter and loading docks), role management, and zero-score mode.
 
 const SorterModel    = preload("res://core/domain/SorterModel.gd")
 const LoadingModel   = preload("res://core/domain/LoadingModel.gd")
@@ -13,6 +13,8 @@ var rule_engine: RuleEngine
 var scenario_loader: ScenarioLoader
 var sorter_model: SorterModel
 var loading_model: LoadingModel
+var role_manager: RoleManager
+var zero_score_mode: bool = false
 
 var session_active: bool = false
 var session_start_time: float = 0.0
@@ -37,6 +39,9 @@ func _ready() -> void:
 	loading_model = LoadingModel.new()
 	add_child(loading_model)
 	loading_model.set_sorter_model(sorter_model)
+	# Instantiate role manager
+	role_manager = RoleManager.new()
+	add_child(role_manager)
 
 func start_session() -> void:
 	if session_active:
@@ -50,6 +55,9 @@ func start_session() -> void:
 	# Reset sorter and loading model state
 	sorter_model.set_available(true)
 	loading_model.set_sorter_model(sorter_model)
+	# Reset role to default (operator) at session start
+	role_manager.set_role(WOTSConfig.Role.OPERATOR)
+	zero_score_mode = false
 	# Load the default scenario and schedule its events
 	scenario_loader.load_scenario("default", self, rule_engine)
 
@@ -66,3 +74,25 @@ func schedule_event_at(time: float, callback: Callable) -> void:
 func _on_tick(delta_time: float, current_time: float) -> void:
 	if session_active:
 		event_queue.process_events(current_time)
+
+# -------------------------------------------------------------------
+# Role and capability APIs
+
+func set_role(role: int) -> void:
+	# Set the current role (e.g., WOTSConfig.Role.OPERATOR)
+	role_manager.set_role(role)
+
+func get_role() -> int:
+	return role_manager.get_role()
+
+func has_capability(capability: String) -> bool:
+	return role_manager.has_capability(capability)
+
+# -------------------------------------------------------------------
+# Zero-score mode APIs
+
+func set_zero_score_mode(enabled: bool) -> void:
+	zero_score_mode = enabled
+
+func is_zero_score_mode() -> bool:
+	return zero_score_mode
