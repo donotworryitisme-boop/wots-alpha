@@ -1,33 +1,70 @@
-[gd_scene load_steps=2 format=3 uid="uid://dtyyb45n8dnqr"]
+[gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" uid="uid://dbg8uk1qnu80w" path="res://scripts/TrustContract.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/TrustContract.gd" id="1"]
 
 [node name="TrustContract" type="CanvasLayer"]
 layer = 10
 script = ExtResource("1")
 
-[node name="Panel" type="Panel" parent="."]
-anchors_preset = -1
-anchor_left = 0.1
-anchor_top = 0.1
-anchor_right = 0.9
-anchor_bottom = 0.9
+[node name="Dimmer" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+color = Color(0, 0, 0, 0.6)
 
-[node name="Text" type="Label" parent="."]
-anchors_preset = -1
-anchor_left = 0.05
-anchor_top = 0.05
-anchor_right = 0.95
-anchor_bottom = 0.75
-text = "- This simulation is for learning and coaching only; it will never be used for discipline or ranking.
-- Scores are private to you; managers and captains cannot see individual runs.
-- No personal data is collected; only aggregated metrics are used to improve training.
-- Your role determines what you see; fairness is built into the system."
+[node name="Root" type="Control" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
 
-[node name="AcceptButton" type="Button" parent="."]
-anchors_preset = -1
-anchor_left = 0.35
-anchor_top = 0.8
-anchor_right = 0.65
-anchor_bottom = 0.9
+[node name="Center" type="CenterContainer" parent="Root"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="Root/Center"]
+custom_minimum_size = Vector2(980, 560)
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="Root/Center/Panel"]
+theme_override_constants/margin_left = 18
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 18
+theme_override_constants/margin_bottom = 18
+mouse_filter = 2
+
+[node name="VBox" type="VBoxContainer" parent="Root/Center/Panel/Margin"]
+theme_override_constants/separation = 14
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="Root/Center/Panel/Margin/VBox"]
+text = "Trust Contract"
+mouse_filter = 0
+
+[node name="BodyPanel" type="PanelContainer" parent="Root/Center/Panel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 400)
+mouse_filter = 2
+
+[node name="BodyMargin" type="MarginContainer" parent="Root/Center/Panel/Margin/VBox/BodyPanel"]
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 14
+mouse_filter = 2
+
+[node name="Body" type="RichTextLabel" parent="Root/Center/Panel/Margin/VBox/BodyPanel/BodyMargin"]
+bbcode_enabled = true
+scroll_active = true
+mouse_filter = 0
+
+[node name="ButtonCenter" type="CenterContainer" parent="Root/Center/Panel/Margin/VBox"]
+custom_minimum_size = Vector2(0, 84)
+mouse_filter = 2
+
+[node name="AcceptButton" type="Button" parent="Root/Center/Panel/Margin/VBox/ButtonCenter"]
+custom_minimum_size = Vector2(360, 60)
 text = "I Understand"
+mouse_filter = 2
+focus_mode = 2
+
+[connection signal="pressed" from="Root/Center/Panel/Margin/VBox/ButtonCenter/AcceptButton" to="." method="_on_accept_pressed"]

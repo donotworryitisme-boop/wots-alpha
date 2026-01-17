@@ -1,7 +1,7 @@
 extends Control
 
 const DEBUG_OVERLAY_SCENE: PackedScene = preload("res://debug/DebugOverlay.tscn")
-const TRUST_CONTRACT_SCENE: PackedScene = preload("res://ui/TrustContract.tscn")
+const TRUST_CONTRACT_SCENE: PackedScene = preload("res://ui/trust_contract.tscn") # lowercase, deterministic
 const TRUST_FILE_PATH: String = "user://trust_contract_seen.dat"
 
 var _trust_ok: bool = false
@@ -28,16 +28,12 @@ func _on_trust_contract_requested() -> void:
 	_show_trust_contract()
 
 func _show_trust_contract() -> void:
-	# Prevent duplicates if button is pressed repeatedly.
+	# Prevent duplicates.
 	if get_tree().get_nodes_in_group("wots_trust_contract").size() > 0:
 		return
 
 	var tc := TRUST_CONTRACT_SCENE.instantiate()
 	add_child(tc)
-
-	# Mark so we can avoid duplicates.
-	if tc.has_method("add_to_group"):
-		tc.add_to_group("wots_trust_contract")
 
 	if tc.has_signal("accepted"):
 		tc.connect("accepted", Callable(self, "_on_trust_contract_accepted"))
