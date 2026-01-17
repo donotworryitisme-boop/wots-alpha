@@ -6,6 +6,7 @@ class_name FeedbackLayer
 
 var explain_why_enabled: bool = false
 var events: Array = []
+var output: String = ""
 
 func _ready() -> void:
 	# Initialize toggle state and connect the signal.
@@ -14,27 +15,31 @@ func _ready() -> void:
 	reset()
 
 func reset() -> void:
-	# Clear the timeline and stored events.
+	# Clear the timeline, stored events, and output.
 	events.clear()
-	$RichTextLabel.clear()
+	output = ""
+	if $RichTextLabel:
+		$RichTextLabel.text = output
 
 func handle_event(rule_id: int, produces_waste: bool, timestamp: float) -> void:
 	# Record and display an event in the timeline.
 	events.append({"time": timestamp, "rule_id": rule_id, "waste": produces_waste})
 	var time_str: String = "%0.2f" % timestamp
 	var status: String = "Waste" if produces_waste else "Good"
-	$RichTextLabel.append_bbcode("[b]" + time_str + "s[/b]: Rule " + str(rule_id) + " - " + status + "\n")
+	output += time_str + "s: Rule " + str(rule_id) + " - " + status + "\n"
 	if not produces_waste:
-		$RichTextLabel.append_bbcode("[color=green]Good job! No waste produced.[/color]\n")
+		output += "Good job! No waste produced.\n"
 	elif explain_why_enabled:
 		# Provide a simple explanation for waste. This can be expanded later.
-		$RichTextLabel.append_bbcode("[color=yellow]Explanation: Waste occurred due to rule "
-			+ str(rule_id) + " violation.[/color]\n")
+		output += "Explanation: Waste occurred due to rule " + str(rule_id) + " violation.\n"
+	if $RichTextLabel:
+		$RichTextLabel.text = output
 
 func notify_session_end(final_score: int) -> void:
 	# Add a cue when the session ends.
-	$RichTextLabel.append_bbcode("[color=cyan]Session ended. Final score: "
-		+ str(final_score) + "[/color]\n")
+	output += "Session ended. Final score: " + str(final_score) + "\n"
+	if $RichTextLabel:
+		$RichTextLabel.text = output
 
 func _on_toggle_changed(button_pressed: bool) -> void:
 	# Update the explain‑why toggle state.
