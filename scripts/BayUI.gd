@@ -1,8 +1,8 @@
-extends Control
+extends CanvasLayer
 
 signal trust_contract_requested
 
-@onready var trust_button: Button = $TrustContractButton
+@onready var trust_button: Button = $Root/TrustContractButton
 
 func _ready() -> void:
 	if trust_button != null:

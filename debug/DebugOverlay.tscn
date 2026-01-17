@@ -1,23 +1,26 @@
-[gd_scene format=3 uid="uid://be46u7e7eacjw"]
+[gd_scene load_steps=2 format=3 uid="uid://cqgt2wd6g2gtb"]
+
+[ext_resource type="Script" uid="uid://baahtoh7divbt" path="res://debug/DebugOverlay.gd" id="1"]
 
 [node name="DebugOverlay" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
+script = ExtResource("1")
 
 [node name="Panel" type="PanelContainer" parent="."]
 layout_mode = 0
-offset_left = 12.0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -612.0
 offset_top = 12.0
-offset_right = 612.0
+offset_right = -12.0
 offset_bottom = 312.0
 
 [node name="Margin" type="MarginContainer" parent="Panel"]
 layout_mode = 2
+mouse_filter = 0
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
@@ -25,9 +28,11 @@ theme_override_constants/margin_bottom = 10
 
 [node name="VBox" type="VBoxContainer" parent="Panel/Margin"]
 layout_mode = 2
+mouse_filter = 0
 
 [node name="Title" type="Label" parent="Panel/Margin/VBox"]
 layout_mode = 2
+mouse_filter = 0
 text = "DEBUG LOG"
 
 [node name="LogText" type="TextEdit" parent="Panel/Margin/VBox"]

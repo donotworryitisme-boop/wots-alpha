@@ -4,30 +4,31 @@ signal accepted
 
 const TRUST_FILE_PATH: String = "user://trust_contract_seen.dat"
 
-@onready var body: RichTextLabel = $Root/Panel/Margin/VBox/Body
-@onready var accept_button: Button = $Root/Panel/Margin/VBox/Buttons/AcceptButton
+@onready var body: RichTextLabel = $Root/Center/Panel/Margin/VBox/BodyPanel/BodyMargin/Body
+@onready var accept_button: Button = $Root/Center/Panel/Margin/VBox/Buttons/AcceptButton
 
 func _ready() -> void:
 	# Ensure we are above normal UI.
 	layer = 10
+	add_to_group("wots_trust_contract")
 
-	if accept_button != null:
+	# Belt + suspenders: connect in code (scene also has a connection).
+	if accept_button != null and not accept_button.pressed.is_connected(_on_accept_pressed):
 		accept_button.pressed.connect(_on_accept_pressed)
 
-	# Text is set here to avoid relying on scene text state.
 	if body != null:
+		body.bbcode_enabled = true
 		body.text = _build_contract_text()
 
 func _build_contract_text() -> String:
-	# Keep it short and explicit; bullet points via BBCode.
-	return (
-		"[b]Before you start:[/b]\n\n"
-		"• This is a training simulator — not a discipline or ranking tool.\n"
-		"• Scores are for your feedback and learning; no automatic sharing.\n"
-		"• No personal data is collected by this simulator.\n"
-		"• Scoring aims for consistency and fairness across scenarios.\n\n"
-		"Press [b]I Understand[/b] to continue."
-	)
+	return """[b]Before you start:[/b]
+
+• This simulation is for learning and coaching only; it will never be used for discipline or ranking.
+• Scores are private to you; managers and captains cannot see individual runs.
+• No personal data is collected; only aggregated metrics are used to improve training.
+• Your role determines what you see; fairness is built into the system.
+
+Press [b]I Understand[/b] to continue."""
 
 func _on_accept_pressed() -> void:
 	_write_trust_file()

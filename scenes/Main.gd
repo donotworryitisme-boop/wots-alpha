@@ -12,12 +12,12 @@ func _ready() -> void:
 		var overlay := DEBUG_OVERLAY_SCENE.instantiate()
 		add_child(overlay)
 
-	# Hook BayUI request button (if present).
+	# Ensure BayUI is present and hook its signal.
 	var bay_ui := get_node_or_null("BayUI")
 	if bay_ui != null and bay_ui.has_signal("trust_contract_requested"):
 		bay_ui.connect("trust_contract_requested", Callable(self, "_on_trust_contract_requested"))
 
-	# Gate start behind trust contract on first launch.
+	# First-run gate behind trust contract.
 	if _trust_contract_seen():
 		_trust_ok = true
 		_start_session_if_ready()
@@ -25,12 +25,20 @@ func _ready() -> void:
 		_show_trust_contract()
 
 func _on_trust_contract_requested() -> void:
-	# Manual reopen from UI (does not depend on file existing).
 	_show_trust_contract()
 
 func _show_trust_contract() -> void:
+	# Prevent duplicates if button is pressed repeatedly.
+	if get_tree().get_nodes_in_group("wots_trust_contract").size() > 0:
+		return
+
 	var tc := TRUST_CONTRACT_SCENE.instantiate()
 	add_child(tc)
+
+	# Mark so we can avoid duplicates.
+	if tc.has_method("add_to_group"):
+		tc.add_to_group("wots_trust_contract")
+
 	if tc.has_signal("accepted"):
 		tc.connect("accepted", Callable(self, "_on_trust_contract_accepted"))
 
@@ -42,9 +50,7 @@ func _trust_contract_seen() -> bool:
 	return FileAccess.file_exists(TRUST_FILE_PATH)
 
 func _start_session_if_ready() -> void:
-	# Placeholder gate. Real session start (if/when present in this project)
-	# must only be triggered after _trust_ok is true.
 	if not _trust_ok:
 		return
-	# No-op for now (Bay B2B Alpha: no new session logic added here).
+	# No-op here (do not add new session logic in this fix).
 	pass
