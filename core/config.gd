@@ -30,4 +30,3 @@ const SESSION_TIME_LIMIT_SECONDS_BY_DIFFICULTY: Dictionary = {
 # Generic, shared constants (safe defaults)
 const TARGET_FPS: int = 60
 const FIXED_TIMESTEP_SECONDS: float = 1.0 / 60.0
-
