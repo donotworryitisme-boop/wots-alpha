@@ -10,7 +10,11 @@ config_version=5
 
 [application]
 
-config/name="WOTS_BayB2B_Alpha"
-run/main_scene="uid://dv0dow2jjvdb3"
-config/features=PackedStringArray("4.5", "Forward Plus")
+config/name="WOTS Bay B2B Alpha"
+run/main_scene="uid://d16hqu5ovxrg7"
+config/features=PackedStringArray("4.5")
 config/icon="res://icon.svg"
+
+[filesystem]
+
+import/blender/enabled=false
