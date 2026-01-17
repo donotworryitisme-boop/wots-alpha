@@ -1,0 +1,34 @@
+[gd_scene format=3 uid="uid://cju655f2dgpc0"]
+
+[node name="TrustContract" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="TrustContract#Panel" type="Panel" parent="."]
+layout_mode = 0
+anchor_left = 0.1
+anchor_top = 0.1
+anchor_right = 0.9
+anchor_bottom = 0.9
+
+[node name="TrustContract_Panel#Text" type="Label" parent="."]
+layout_mode = 0
+anchor_left = 0.05
+anchor_top = 0.05
+anchor_right = 0.95
+anchor_bottom = 0.75
+text = "- This simulation is for learning and coaching only; it will never be used for discipline or ranking.
+- Scores are private to you; managers and captains cannot see individual runs.
+- No personal data is collected; only aggregated metrics are used to improve training.
+- Your role determines what you see; fairness is built into the system."
+
+[node name="TrustContract_Panel#AcceptButton" type="Button" parent="."]
+layout_mode = 0
+anchor_left = 0.35
+anchor_top = 0.8
+anchor_right = 0.65
+anchor_bottom = 0.9
+text = "I Understand"
