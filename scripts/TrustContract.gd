@@ -15,6 +15,5 @@ func _on_accept_pressed() -> void:
 	var file = FileAccess.open(path, FileAccess.WRITE)
 	file.store_string("1")
 	file.close()
-
 	emit_signal("accepted")
 	queue_free()
