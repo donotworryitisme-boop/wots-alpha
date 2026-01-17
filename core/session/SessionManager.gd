@@ -2,7 +2,7 @@ extends Node
 class_name SessionManager
 
 # Manages the lifecycle of a training session, including simulation clock, event queue, rules, scenarios,
-# domain models (sorter and loading docks), role management, zero-score mode, scoring, and feedback.
+# domain models (sorter and loading docks), role management, zero-score mode, scoring, feedback, and pressure knobs.
 
 @warning_ignore("shadowed_global_identifier")
 const SorterModel  = preload("res://core/domain/SorterModel.gd")
@@ -19,6 +19,11 @@ var role_manager: RoleManager
 var score_engine: ScoreEngine
 var feedback_layer: FeedbackLayer = null
 var zero_score_mode: bool = false
+
+# Pressure knob values (set by ScenarioLoader)
+var interrupt_frequency: float = 0.0
+var ambiguity_level: float = 0.0
+var time_slack: float = 1.0
 
 var session_active: bool = false
 var session_start_time: float = 0.0
