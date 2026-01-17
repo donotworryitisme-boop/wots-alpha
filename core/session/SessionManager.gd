@@ -49,7 +49,7 @@ func _ready() -> void:
 	# Instantiate score engine
 	score_engine = ScoreEngine.new()
 	add_child(score_engine)
-	# feedback_layer will be assigned in Main.gd after instantiation
+	# feedback_layer will be assigned externally (Main.gd)
 
 func start_session() -> void:
 	if session_active:
@@ -90,7 +90,8 @@ func schedule_event_in(delay: float, callback: Callable) -> void:
 func schedule_event_at(time: float, callback: Callable) -> void:
 	event_queue.schedule_event_at(time, callback)
 
-func _on_tick(delta_time: float, current_time: float) -> void:
+func _on_tick(_delta_time: float, current_time: float) -> void:
+	# Use underscore to avoid unused-parameter warnings
 	if session_active:
 		event_queue.process_events(current_time)
 
