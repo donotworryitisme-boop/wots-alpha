@@ -10,22 +10,138 @@ script = ExtResource("1")
 anchor_right = 1.0
 anchor_bottom = 1.0
 
-[node name="TitleLabel" type="Label" parent="Root"]
-offset_left = 24.0
-offset_top = 24.0
+[node name="SetupPanel" type="PanelContainer" parent="Root"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 520.0
+offset_bottom = 250.0
+
+[node name="SetupMargin" type="MarginContainer" parent="Root/SetupPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="SetupVBox" type="VBoxContainer" parent="Root/SetupPanel/SetupMargin"]
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
 text = "BAY B2B ALPHA"
 
-[node name="TrustContractButton" type="Button" parent="Root"]
-offset_left = 24.0
-offset_top = 60.0
-offset_right = 220.0
-offset_bottom = 92.0
+[node name="ScenarioRow" type="HBoxContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+theme_override_constants/separation = 8
+
+[node name="ScenarioLabel" type="Label" parent="Root/SetupPanel/SetupMargin/SetupVBox/ScenarioRow"]
+text = "Scenario:"
+
+[node name="ScenarioDropdown" type="OptionButton" parent="Root/SetupPanel/SetupMargin/SetupVBox/ScenarioRow"]
+size_flags_horizontal = 3
+
+[node name="RoleRow" type="HBoxContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+theme_override_constants/separation = 8
+
+[node name="RoleLabel" type="Label" parent="Root/SetupPanel/SetupMargin/SetupVBox/RoleRow"]
+text = "Role:"
+
+[node name="RoleDropdown" type="OptionButton" parent="Root/SetupPanel/SetupMargin/SetupVBox/RoleRow"]
+size_flags_horizontal = 3
+
+[node name="ButtonsRow" type="HBoxContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+theme_override_constants/separation = 8
+
+[node name="StartButton" type="Button" parent="Root/SetupPanel/SetupMargin/SetupVBox/ButtonsRow"]
+text = "Start Scenario"
+
+[node name="EndButton" type="Button" parent="Root/SetupPanel/SetupMargin/SetupVBox/ButtonsRow"]
+text = "End Scenario"
+disabled = true
+
+[node name="TrustContractButton" type="Button" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
 text = "Trust Contract"
 
-[node name="HintLabel" type="Label" parent="Root"]
-offset_left = 24.0
-offset_top = 110.0
-offset_right = 900.0
-offset_bottom = 170.0
-text = ""
+[node name="WhatToDoPanel" type="PanelContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+custom_minimum_size = Vector2(0, 44)
+
+[node name="WhatToDoMargin" type="MarginContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox/WhatToDoPanel"]
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="WhatToDoLabel" type="Label" parent="Root/SetupPanel/SetupMargin/SetupVBox/WhatToDoPanel/WhatToDoMargin"]
+text = "Pick a scenario and role, then start."
 autowrap_mode = 3
+
+[node name="HintLabel" type="Label" parent="Root"]
+offset_left = 16.0
+offset_top = 262.0
+offset_right = 860.0
+offset_bottom = 320.0
+autowrap_mode = 3
+text = ""
+
+[node name="SituationPanel" type="PanelContainer" parent="Root"]
+offset_left = 16.0
+offset_top = 330.0
+offset_right = 520.0
+offset_bottom = 570.0
+visible = false
+
+[node name="SituationMargin" type="MarginContainer" parent="Root/SituationPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="SituationVBox" type="VBoxContainer" parent="Root/SituationPanel/SituationMargin"]
+theme_override_constants/separation = 8
+
+[node name="SituationTitle" type="Label" parent="Root/SituationPanel/SituationMargin/SituationVBox"]
+text = "Current Situation"
+
+[node name="TimeLabel" type="Label" parent="Root/SituationPanel/SituationMargin/SituationVBox"]
+text = "Time: 0.00s (Loading: 0.00s)"
+
+[node name="ObjectiveLabel" type="Label" parent="Root/SituationPanel/SituationMargin/SituationVBox"]
+autowrap_mode = 3
+text = "Objective: (none)"
+
+[node name="DecisionRow" type="HBoxContainer" parent="Root/SituationPanel/SituationMargin/SituationVBox"]
+theme_override_constants/separation = 8
+
+[node name="CheckButton" type="Button" parent="Root/SituationPanel/SituationMargin/SituationVBox/DecisionRow"]
+text = "Check transit / lines"
+
+[node name="EscalateButton" type="Button" parent="Root/SituationPanel/SituationMargin/SituationVBox/DecisionRow"]
+text = "Call captain"
+
+[node name="ProceedButton" type="Button" parent="Root/SituationPanel/SituationMargin/SituationVBox/DecisionRow"]
+text = "Load what’s available"
+
+[node name="LogPanel" type="PanelContainer" parent="Root"]
+offset_left = 560.0
+offset_top = 16.0
+offset_right = 1240.0
+offset_bottom = 570.0
+visible = true
+
+[node name="LogMargin" type="MarginContainer" parent="Root/LogPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="LogVBox" type="VBoxContainer" parent="Root/LogPanel/LogMargin"]
+theme_override_constants/separation = 8
+
+[node name="LogTitle" type="Label" parent="Root/LogPanel/LogMargin/LogVBox"]
+text = "Learning summary"
+
+[node name="ExplainWhyToggle" type="CheckButton" parent="Root/LogPanel/LogMargin/LogVBox"]
+text = "Explain the why"
+visible = false
+
+[node name="LogText" type="RichTextLabel" parent="Root/LogPanel/LogMargin/LogVBox"]
+custom_minimum_size = Vector2(0, 470)
+bbcode_enabled = true
+text = ""

@@ -7,24 +7,34 @@ const TRUST_FILE_PATH: String = "user://trust_contract_seen.dat"
 var _trust_ok: bool = false
 
 func _ready() -> void:
+	# Debug overlay only in debug builds.
 	if OS.is_debug_build():
 		var overlay := DEBUG_OVERLAY_SCENE.instantiate()
 		add_child(overlay)
 
 	var bay_ui := get_node_or_null("BayUI")
+	var session := get_node_or_null("SessionManager")
+
+	# Wire session into BayUI harness (no new systems).
+	if bay_ui != null and session != null and bay_ui.has_method("set_session"):
+		bay_ui.call("set_session", session)
+
+	# Allow reopening trust contract from BayUI.
 	if bay_ui != null and bay_ui.has_signal("trust_contract_requested"):
 		bay_ui.connect("trust_contract_requested", Callable(self, "_on_trust_contract_requested"))
 
-	# If a SessionManager exists in-scene, connect its hint signal to BayUI.
-	var session := get_node_or_null("SessionManager")
-	if session != null and bay_ui != null and session.has_signal("hint_updated") and bay_ui.has_method("set_hint_text"):
-		session.connect("hint_updated", Callable(bay_ui, "set_hint_text"))
-
+	# Gate interaction behind trust contract on first launch.
 	if _trust_contract_seen():
 		_trust_ok = true
-		_start_session_if_ready()
+		_enable_bay_ui()
 	else:
 		_show_trust_contract()
+
+func _enable_bay_ui() -> void:
+	# BayUI harness is interactive only after trust contract acceptance.
+	var bay_ui := get_node_or_null("BayUI")
+	if bay_ui != null and bay_ui.has_method("set_enabled"):
+		bay_ui.call("set_enabled", true)
 
 func _on_trust_contract_requested() -> void:
 	_show_trust_contract()
@@ -44,16 +54,7 @@ func _show_trust_contract() -> void:
 
 func _on_trust_contract_accepted() -> void:
 	_trust_ok = true
-	_start_session_if_ready()
+	_enable_bay_ui()
 
 func _trust_contract_seen() -> bool:
 	return FileAccess.file_exists(TRUST_FILE_PATH)
-
-func _start_session_if_ready() -> void:
-	if not _trust_ok:
-		return
-
-	# Start the session only if a SessionManager exists (no new UI screens; no forced instancing here).
-	var session := get_node_or_null("SessionManager")
-	if session != null and session.has_method("start_session"):
-		session.call("start_session")
