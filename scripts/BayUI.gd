@@ -2,37 +2,73 @@ extends CanvasLayer
 
 signal trust_contract_requested
 
-@onready var scenario_dropdown: OptionButton = $Root/SetupPanel/SetupMargin/SetupVBox/ScenarioRow/ScenarioDropdown
-@onready var role_dropdown: OptionButton = $Root/SetupPanel/SetupMargin/SetupVBox/RoleRow/RoleDropdown
-@onready var start_button: Button = $Root/SetupPanel/SetupMargin/SetupVBox/ButtonsRow/StartButton
-@onready var end_button: Button = $Root/SetupPanel/SetupMargin/SetupVBox/ButtonsRow/EndButton
-@onready var trust_button: Button = $Root/SetupPanel/SetupMargin/SetupVBox/TrustContractButton
-@onready var what_to_do_label: Label = $Root/SetupPanel/SetupMargin/SetupVBox/WhatToDoPanel/WhatToDoMargin/WhatToDoLabel
+const PANEL_NAMES: Array[String] = [
+	"Shift Board",
+	"Loading Plan",
+	"AS400",
+	"Trailer Capacity",
+	"RAQ",
+	"Phone",
+	"Notes"
+]
 
-@onready var hint_label: Label = $Root/HintLabel
+@onready var top_time_label: Label = $Root/FrameVBox/TopBar/TopBarMargin/TopBarHBox/TopTimeLabel
+@onready var role_strip_label: Label = $Root/FrameVBox/TopBar/TopBarMargin/TopBarHBox/RoleStripLabel
 
-@onready var situation_panel: PanelContainer = $Root/SituationPanel
-@onready var time_label: Label = $Root/SituationPanel/SituationMargin/SituationVBox/TimeLabel
-@onready var objective_label: Label = $Root/SituationPanel/SituationMargin/SituationVBox/ObjectiveLabel
+@onready var scenario_dropdown: OptionButton = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/ScenarioRow/ScenarioDropdown
+@onready var role_dropdown: OptionButton = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/RoleRow/RoleDropdown
+@onready var start_button: Button = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/ButtonsRow/StartButton
+@onready var end_button: Button = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/ButtonsRow/EndButton
+@onready var trust_button: Button = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/TrustContractButton
+@onready var what_to_do_label: Label = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/WhatToDoPanel/WhatToDoMargin/WhatToDoLabel
 
-@onready var check_button: Button = $Root/SituationPanel/SituationMargin/SituationVBox/DecisionRow/CheckButton
-@onready var escalate_button: Button = $Root/SituationPanel/SituationMargin/SituationVBox/DecisionRow/EscalateButton
-@onready var proceed_button: Button = $Root/SituationPanel/SituationMargin/SituationVBox/DecisionRow/ProceedButton
+@onready var hint_label: Label = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/HintLabel
 
-@onready var log_title: Label = $Root/LogPanel/LogMargin/LogVBox/LogTitle
-@onready var explain_toggle: CheckButton = $Root/LogPanel/LogMargin/LogVBox/ExplainWhyToggle
-@onready var log_text: RichTextLabel = $Root/LogPanel/LogMargin/LogVBox/LogText
+@onready var situation_panel: PanelContainer = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel
+@onready var time_label: Label = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox/TimeLabel
+@onready var objective_label: Label = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox/ObjectiveLabel
+
+@onready var check_button: Button = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox/DecisionRow/CheckButton
+@onready var escalate_button: Button = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox/DecisionRow/EscalateButton
+@onready var proceed_button: Button = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox/DecisionRow/ProceedButton
+
+@onready var log_title: Label = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel/LogMargin/LogVBox/LogTitle
+@onready var explain_toggle: CheckButton = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel/LogMargin/LogVBox/ExplainWhyToggle
+@onready var log_text: RichTextLabel = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel/LogMargin/LogVBox/LogText
+
+# Toggle buttons
+@onready var btn_shift_board: Button = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/ShiftBoardBtn
+@onready var btn_loading_plan: Button = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/LoadingPlanBtn
+@onready var btn_as400: Button = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/AS400Btn
+@onready var btn_trailer_capacity: Button = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/TrailerCapacityBtn
+@onready var btn_raq: Button = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/RAQBtn
+@onready var btn_phone: Button = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/PhoneBtn
+@onready var btn_notes: Button = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/NotesBtn
+
+# Overlay panels
+@onready var pnl_shift_board: PanelContainer = $Root/PanelOverlayLayer/ShiftBoardPanel
+@onready var pnl_loading_plan: PanelContainer = $Root/PanelOverlayLayer/LoadingPlanPanel
+@onready var pnl_as400: PanelContainer = $Root/PanelOverlayLayer/AS400Panel
+@onready var pnl_trailer_capacity: PanelContainer = $Root/PanelOverlayLayer/TrailerCapacityPanel
+@onready var pnl_raq: PanelContainer = $Root/PanelOverlayLayer/RAQPanel
+@onready var pnl_phone: PanelContainer = $Root/PanelOverlayLayer/PhonePanel
+@onready var pnl_notes: PanelContainer = $Root/PanelOverlayLayer/NotesPanel
 
 var _enabled: bool = false
 var _session: SessionManager = null
-
 var _is_active: bool = false
+
 var _debrief_what_happened: String = ""
 var _debrief_why_it_mattered: String = ""
 
+# Per-session panel state (open/closed)
+var _panel_state: Dictionary = {} # name -> bool
+var _panel_nodes: Dictionary = {} # name -> PanelContainer
+
 func _ready() -> void:
-	# Default UI state: disabled until trust contract accepted.
 	set_enabled(false)
+
+	_reset_panel_state()
 
 	if trust_button != null:
 		trust_button.pressed.connect(func() -> void:
@@ -44,25 +80,25 @@ func _ready() -> void:
 	if end_button != null:
 		end_button.pressed.connect(_on_end_pressed)
 
-	# Action buttons (renamed; no logic change—still just a manual decision event)
 	if check_button != null:
 		check_button.pressed.connect(func() -> void: _on_decision_pressed("Check transit / lines"))
 	if escalate_button != null:
 		escalate_button.pressed.connect(func() -> void: _on_decision_pressed("Call captain"))
 	if proceed_button != null:
-		# Use plain ASCII apostrophe in the action label for safety.
 		proceed_button.pressed.connect(func() -> void: _on_decision_pressed("Load what's available"))
 
-	# Explain-why toggle (only shown on end screen)
 	if explain_toggle != null:
 		explain_toggle.toggled.connect(_on_explain_toggled)
 
+	_init_panel_nodes_and_buttons()
+
 	_set_setup_guidance()
+	_update_role_strip()
+	_update_top_time(0.0)
 
 func set_enabled(enabled: bool) -> void:
 	_enabled = enabled
 
-	# Keep trust button available even when disabled.
 	if trust_button != null:
 		trust_button.disabled = false
 
@@ -93,12 +129,16 @@ func set_enabled(enabled: bool) -> void:
 		explain_toggle.visible = false
 		explain_toggle.button_pressed = false
 
+	_close_all_panels(true)
+
 func set_session(session: SessionManager) -> void:
 	_session = session
 	_populate_scenarios()
 	_populate_roles()
 
-	# Connect learning signals (hints + time + situation + end + action feedback).
+	if _session != null and _session.has_method("register_panel_catalog"):
+		_session.call("register_panel_catalog", PANEL_NAMES)
+
 	if _session != null:
 		if _session.has_signal("hint_updated"):
 			_session.connect("hint_updated", Callable(self, "_on_hint_updated"))
@@ -110,6 +150,8 @@ func set_session(session: SessionManager) -> void:
 			_session.connect("session_ended", Callable(self, "_on_session_ended"))
 		if _session.has_signal("action_registered"):
 			_session.connect("action_registered", Callable(self, "_on_action_registered"))
+		if _session.has_signal("role_updated"):
+			_session.connect("role_updated", Callable(self, "_on_role_updated"))
 
 func _populate_scenarios() -> void:
 	if scenario_dropdown == null or _session == null:
@@ -147,9 +189,13 @@ func _on_start_pressed() -> void:
 		role_id = role_dropdown.get_selected_id()
 
 	_session.set_role(role_id)
+	_update_role_strip()
 
 	_is_active = true
 	_set_active_guidance()
+
+	_reset_panel_state()
+	_close_all_panels(true)
 
 	if situation_panel != null:
 		situation_panel.visible = true
@@ -159,7 +205,6 @@ func _on_start_pressed() -> void:
 	if start_button != null:
 		start_button.disabled = true
 
-	# Reset log area for this run
 	if log_title != null:
 		log_title.text = "Learning summary"
 	if log_text != null:
@@ -181,7 +226,6 @@ func _on_end_pressed() -> void:
 func _on_decision_pressed(action: String) -> void:
 	if _session == null:
 		return
-	# Manual decision event pushed into existing rule pipeline.
 	if _session.has_method("manual_decision"):
 		_session.call("manual_decision", action)
 
@@ -190,6 +234,7 @@ func _on_hint_updated(hint_text: String) -> void:
 		hint_label.text = hint_text
 
 func _on_time_updated(total_time: float, loading_time: float) -> void:
+	_update_top_time(total_time)
 	if time_label != null:
 		time_label.text = "Time: %0.2fs (Loading: %0.2fs)" % [total_time, loading_time]
 
@@ -198,13 +243,11 @@ func _on_situation_updated(objective_text: String) -> void:
 		objective_label.text = "Objective: " + objective_text
 
 func _on_action_registered(one_line: String) -> void:
-	# Immediate feedback after each action: one-line with timestamp.
 	if log_text == null:
 		return
 	log_text.text += one_line + "\n"
 
 func _on_session_ended(debrief_payload: Dictionary) -> void:
-	# End screen: show clear structure
 	_is_active = false
 	_set_setup_guidance()
 
@@ -223,11 +266,9 @@ func _on_session_ended(debrief_payload: Dictionary) -> void:
 		log_title.text = "Learning summary"
 
 	if explain_toggle != null:
-		# Only show if we actually have a "why" section
 		explain_toggle.visible = _debrief_why_it_mattered.strip_edges() != ""
 		explain_toggle.button_pressed = false
 
-	# FIX: GDScript does not support := named-arg syntax here; call with a plain bool.
 	_render_debrief(false)
 
 func _on_explain_toggled(pressed: bool) -> void:
@@ -254,3 +295,88 @@ func _set_setup_guidance() -> void:
 func _set_active_guidance() -> void:
 	if what_to_do_label != null:
 		what_to_do_label.text = "Use actions to manage priorities and uncertainty. End to review learning summary."
+
+func _update_top_time(total_time: float) -> void:
+	if top_time_label != null:
+		top_time_label.text = "Time: %0.2fs" % total_time
+
+func _on_role_updated(_role_id: int) -> void:
+	_update_role_strip()
+
+func _update_role_strip() -> void:
+	if role_strip_label == null:
+		return
+
+	var role_name := "Operator"
+	var responsibility := "Execute standard work, keep flow moving"
+
+	if role_dropdown != null:
+		match role_dropdown.get_selected_id():
+			WOTSConfig.Role.OPERATOR:
+				role_name = "Operator"
+				responsibility = "Execute standard work, keep flow moving"
+			WOTSConfig.Role.CAPTAIN:
+				role_name = "Captain"
+				responsibility = "Remove blockers, coordinate priorities"
+			WOTSConfig.Role.TRAINER:
+				role_name = "Trainer"
+				responsibility = "Coach process and safe decisions"
+
+	role_strip_label.text = "Role: %s — Responsibility: %s" % [role_name, responsibility]
+
+# ------------------------------
+# Attention Panels (8.4)
+
+func _init_panel_nodes_and_buttons() -> void:
+	_panel_nodes.clear()
+	_panel_nodes["Shift Board"] = pnl_shift_board
+	_panel_nodes["Loading Plan"] = pnl_loading_plan
+	_panel_nodes["AS400"] = pnl_as400
+	_panel_nodes["Trailer Capacity"] = pnl_trailer_capacity
+	_panel_nodes["RAQ"] = pnl_raq
+	_panel_nodes["Phone"] = pnl_phone
+	_panel_nodes["Notes"] = pnl_notes
+
+	if btn_shift_board != null:
+		btn_shift_board.pressed.connect(func() -> void: _toggle_panel("Shift Board"))
+	if btn_loading_plan != null:
+		btn_loading_plan.pressed.connect(func() -> void: _toggle_panel("Loading Plan"))
+	if btn_as400 != null:
+		btn_as400.pressed.connect(func() -> void: _toggle_panel("AS400"))
+	if btn_trailer_capacity != null:
+		btn_trailer_capacity.pressed.connect(func() -> void: _toggle_panel("Trailer Capacity"))
+	if btn_raq != null:
+		btn_raq.pressed.connect(func() -> void: _toggle_panel("RAQ"))
+	if btn_phone != null:
+		btn_phone.pressed.connect(func() -> void: _toggle_panel("Phone"))
+	if btn_notes != null:
+		btn_notes.pressed.connect(func() -> void: _toggle_panel("Notes"))
+
+func _reset_panel_state() -> void:
+	_panel_state.clear()
+	for name in PANEL_NAMES:
+		_panel_state[name] = false
+
+func _close_all_panels(silent: bool) -> void:
+	for name in PANEL_NAMES:
+		_set_panel_visible(name, false, silent)
+
+func _toggle_panel(name: String) -> void:
+	var is_open: bool = bool(_panel_state.get(name, false))
+	_set_panel_visible(name, not is_open, false)
+
+func _set_panel_visible(name: String, visible: bool, silent: bool) -> void:
+	_panel_state[name] = visible
+
+	var node: PanelContainer = _panel_nodes.get(name, null)
+	if node != null:
+		node.visible = visible
+
+	if silent:
+		return
+
+	if _session != null:
+		if visible and _session.has_method("panel_opened"):
+			_session.call("panel_opened", name)
+		elif (not visible) and _session.has_method("panel_closed"):
+			_session.call("panel_closed", name)

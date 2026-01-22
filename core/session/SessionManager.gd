@@ -6,6 +6,7 @@ signal time_updated(total_time: float, loading_time: float)
 signal situation_updated(objective_text: String)
 signal session_ended(debrief_payload: Dictionary)
 signal action_registered(one_line: String)
+signal role_updated(role_id: int)
 
 @warning_ignore("shadowed_global_identifier")
 const SorterModel  = preload("res://core/domain/SorterModel.gd")
@@ -21,7 +22,7 @@ var loading_model: LoadingModel
 var role_manager: RoleManager
 var score_engine: ScoreEngine
 
-# Alpha-safe harness timeline (no UI FeedbackLayer instancing)
+# Alpha-safe harness timeline
 var timeline_lines: Array[String] = []
 
 # Pressure knobs (8.2)
@@ -46,6 +47,11 @@ var loading_time_accum: float = 0.0
 
 # Score safety (ScoreEngine expects this API)
 var zero_score_mode: bool = false
+
+# --------------------------
+# Attention & Panels (8.4)
+var panel_catalog: Array[String] = []
+var panels_ever_opened: Dictionary = {} # name -> true
 
 func _ready() -> void:
 	sim_clock = SimClock.new()
@@ -75,6 +81,33 @@ func _ready() -> void:
 	score_engine = ScoreEngine.new()
 	add_child(score_engine)
 
+func register_panel_catalog(names: Array[String]) -> void:
+	# Called by BayUI once to define which panels exist (so we can audit "never opened").
+	panel_catalog = names.duplicate()
+	panels_ever_opened.clear()
+	for n in panel_catalog:
+		panels_ever_opened[str(n)] = false
+
+func panel_opened(name: String) -> void:
+	if not session_active:
+		# Still allow logging even if opened before start, but timestamp will be 0.0.
+		pass
+	var t: float = sim_clock.current_time
+	if panels_ever_opened.has(name):
+		panels_ever_opened[name] = true
+	else:
+		panels_ever_opened[name] = true
+
+	var line := "%0.2fs: Panel opened — %s" % [t, name]
+	action_registered.emit(line)
+	_add_timeline_line(line)
+
+func panel_closed(name: String) -> void:
+	var t: float = sim_clock.current_time
+	var line := "%0.2fs: Panel closed — %s" % [t, name]
+	action_registered.emit(line)
+	_add_timeline_line(line)
+
 func start_session_with_scenario(scenario_name: String) -> void:
 	if session_active:
 		return
@@ -91,6 +124,11 @@ func start_session_with_scenario(scenario_name: String) -> void:
 	zero_score_mode = false
 	timeline_lines.clear()
 
+	# Reset panel usage per session (requirement: per session)
+	if panel_catalog.size() > 0:
+		for n in panel_catalog:
+			panels_ever_opened[str(n)] = false
+
 	score_engine.start_session()
 
 	publish_hint("")
@@ -98,7 +136,6 @@ func start_session_with_scenario(scenario_name: String) -> void:
 
 	_add_timeline_line("%0.2fs: Session started — scenario: %s" % [sim_clock.current_time, scenario_name])
 
-	# Load scenario and schedule its events (knobs + scaffolding applied there)
 	scenario_loader.load_scenario(scenario_name, self, rule_engine)
 
 func start_session() -> void:
@@ -113,7 +150,18 @@ func end_session() -> void:
 
 	_add_timeline_line("%0.2fs: Session ended" % sim_clock.current_time)
 
-	# Build debrief payload with clearly separated sections
+	# Panel audit: never opened
+	if panel_catalog.size() > 0:
+		var never: Array[String] = []
+		for n in panel_catalog:
+			if not bool(panels_ever_opened.get(str(n), false)):
+				never.append(str(n))
+		if never.size() > 0:
+			_add_timeline_line("%0.2fs: Panels never opened — %s" % [sim_clock.current_time, ", ".join(never)])
+		else:
+			_add_timeline_line("%0.2fs: Panels never opened — (none)" % sim_clock.current_time)
+
+	# Debrief sections
 	var what_happened := ""
 	what_happened += "[b]Final score:[/b] %d\n\n" % score_engine.current_score
 	what_happened += "[b]Events[/b]\n"
@@ -122,12 +170,12 @@ func end_session() -> void:
 
 	var waste_count: int = rule_engine.waste_log.size()
 	var why := ""
-	# Keep this process-focused; do not reveal alternate outcomes.
 	if waste_count > 0:
-		why += "Some moments produced waste signals. Under pressure (time, ambiguity, interruptions), small misses stack up.\n"
-		why += "Use the action buttons to slow down, clarify unknowns, and re-check priority steps.\n"
+		why += "Some moments produced waste signals. Under pressure (time, ambiguity, interruptions), attention misses stack up.\n"
+		why += "Your panel choices show what information you prioritized during decisions.\n"
 	else:
 		why += "This run produced no waste signals. Consistent checking and clean handoffs reduce rework under pressure.\n"
+		why += "Your panel choices show what information you used to stay aligned.\n"
 
 	var payload := {
 		"what_happened": what_happened,
@@ -137,20 +185,11 @@ func end_session() -> void:
 	session_ended.emit(payload)
 
 func manual_decision(action: String) -> void:
-	# Minimal “decision event” pushed into rule pipeline (generic, no outcome reveal).
 	if not session_active:
 		return
 
-	var payload := {
-		"action": action,
-		"objective": current_objective
-	}
-
-	var ctx := {
-		"scaffold_tier": scaffold_tier_active,
-		"time_pressure": time_pressure,
-		"interruptions": interruptions_since_last_decision
-	}
+	var payload := {"action": action, "objective": current_objective}
+	var ctx := {"scaffold_tier": scaffold_tier_active, "time_pressure": time_pressure, "interruptions": interruptions_since_last_decision}
 
 	var t := sim_clock.current_time
 	var produces_waste := rule_engine.evaluate_event(0, payload, ctx, t)
@@ -178,7 +217,6 @@ func _on_tick(_delta_time: float, current_time: float) -> void:
 func set_scaffolding(source: String, tier: int) -> void:
 	scaffold_source = source
 	scaffold_tier_scenario = clamp(tier, 1, 3)
-
 	if scaffold_source == "role":
 		scaffold_tier_active = _tier_for_role(role_manager.get_role())
 	else:
@@ -202,7 +240,7 @@ func set_current_objective(text: String) -> void:
 	situation_updated.emit(current_objective)
 
 # --------------------------
-# Timeline hooks used by ScenarioLoader
+# Timeline hook used by ScenarioLoader
 
 func record_rule_result(rule_id: int, produces_waste: bool, timestamp: float) -> void:
 	var tag := "Good"
@@ -216,7 +254,6 @@ func record_rule_result(rule_id: int, produces_waste: bool, timestamp: float) ->
 func register_interrupt(_related_rule_id: int, timestamp: float) -> void:
 	interruptions_since_last_decision += 1
 	last_interrupt_at = timestamp
-
 	_add_timeline_line("%0.2fs: Interrupt (non-critical noise)" % timestamp)
 
 func register_info_reveal(revealed: Dictionary, timestamp: float) -> void:
@@ -259,14 +296,11 @@ func build_decision_context(
 
 	ctx["scaffold_tier"] = scaffold_tier_active
 	ctx["hint"] = _build_hint_for_tier(rule_id, ctx, scaffold_tier_active)
-
 	return ctx
 
 func _build_hint_for_tier(rule_id: int, ctx: Dictionary, tier: int) -> String:
-	# Process-only hints; no outcome revelation.
 	if tier >= 3:
 		return ""
-
 	var ambiguous: bool = bool(ctx.get("ambiguous", false))
 	var intr: int = int(ctx.get("interruptions", 0))
 
@@ -286,7 +320,6 @@ func _build_hint_for_tier(rule_id: int, ctx: Dictionary, tier: int) -> String:
 		base += " Info may be incomplete—confirm what you can."
 	if intr > 0:
 		base += " Ignore non-critical noise and re-check last confirmed step."
-
 	return base
 
 # --------------------------
@@ -296,6 +329,7 @@ func set_role(role: int) -> void:
 	role_manager.set_role(role)
 	if scaffold_source == "role":
 		scaffold_tier_active = _tier_for_role(role_manager.get_role())
+	role_updated.emit(role)
 
 func get_role() -> int:
 	return role_manager.get_role()

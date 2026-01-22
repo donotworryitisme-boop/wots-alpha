@@ -10,138 +10,404 @@ script = ExtResource("1")
 anchor_right = 1.0
 anchor_bottom = 1.0
 
-[node name="SetupPanel" type="PanelContainer" parent="Root"]
-offset_left = 16.0
-offset_top = 16.0
-offset_right = 520.0
-offset_bottom = 250.0
+[node name="FrameVBox" type="VBoxContainer" parent="Root"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 8
 
-[node name="SetupMargin" type="MarginContainer" parent="Root/SetupPanel"]
+[node name="TopBar" type="PanelContainer" parent="Root/FrameVBox"]
+custom_minimum_size = Vector2(0, 48)
+
+[node name="TopBarMargin" type="MarginContainer" parent="Root/FrameVBox/TopBar"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="TopBarHBox" type="HBoxContainer" parent="Root/FrameVBox/TopBar/TopBarMargin"]
+theme_override_constants/separation = 12
+
+[node name="TopTimeLabel" type="Label" parent="Root/FrameVBox/TopBar/TopBarMargin/TopBarHBox"]
+text = "Time: 0.00s"
+
+[node name="Spacer" type="Control" parent="Root/FrameVBox/TopBar/TopBarMargin/TopBarHBox"]
+size_flags_horizontal = 3
+
+[node name="RoleStripLabel" type="Label" parent="Root/FrameVBox/TopBar/TopBarMargin/TopBarHBox"]
+text = "Role: Operator — Responsibility: Standard flow"
+
+[node name="MainHBox" type="HBoxContainer" parent="Root/FrameVBox"]
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+
+[node name="Workspace" type="Control" parent="Root/FrameVBox/MainHBox"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="WorkspaceVBox" type="VBoxContainer" parent="Root/FrameVBox/MainHBox/Workspace"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 8
+
+[node name="SetupPanel" type="PanelContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox"]
+custom_minimum_size = Vector2(0, 250)
+
+[node name="SetupMargin" type="MarginContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel"]
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 12
 
-[node name="SetupVBox" type="VBoxContainer" parent="Root/SetupPanel/SetupMargin"]
+[node name="SetupVBox" type="VBoxContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin"]
 theme_override_constants/separation = 8
 
-[node name="TitleLabel" type="Label" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+[node name="TitleLabel" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox"]
 text = "BAY B2B ALPHA"
 
-[node name="ScenarioRow" type="HBoxContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+[node name="ScenarioRow" type="HBoxContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox"]
 theme_override_constants/separation = 8
 
-[node name="ScenarioLabel" type="Label" parent="Root/SetupPanel/SetupMargin/SetupVBox/ScenarioRow"]
+[node name="ScenarioLabel" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/ScenarioRow"]
 text = "Scenario:"
 
-[node name="ScenarioDropdown" type="OptionButton" parent="Root/SetupPanel/SetupMargin/SetupVBox/ScenarioRow"]
+[node name="ScenarioDropdown" type="OptionButton" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/ScenarioRow"]
 size_flags_horizontal = 3
 
-[node name="RoleRow" type="HBoxContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+[node name="RoleRow" type="HBoxContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox"]
 theme_override_constants/separation = 8
 
-[node name="RoleLabel" type="Label" parent="Root/SetupPanel/SetupMargin/SetupVBox/RoleRow"]
+[node name="RoleLabel" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/RoleRow"]
 text = "Role:"
 
-[node name="RoleDropdown" type="OptionButton" parent="Root/SetupPanel/SetupMargin/SetupVBox/RoleRow"]
+[node name="RoleDropdown" type="OptionButton" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/RoleRow"]
 size_flags_horizontal = 3
 
-[node name="ButtonsRow" type="HBoxContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+[node name="ButtonsRow" type="HBoxContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox"]
 theme_override_constants/separation = 8
 
-[node name="StartButton" type="Button" parent="Root/SetupPanel/SetupMargin/SetupVBox/ButtonsRow"]
+[node name="StartButton" type="Button" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/ButtonsRow"]
 text = "Start Scenario"
 
-[node name="EndButton" type="Button" parent="Root/SetupPanel/SetupMargin/SetupVBox/ButtonsRow"]
+[node name="EndButton" type="Button" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/ButtonsRow"]
 text = "End Scenario"
 disabled = true
 
-[node name="TrustContractButton" type="Button" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+[node name="TrustContractButton" type="Button" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox"]
 text = "Trust Contract"
 
-[node name="WhatToDoPanel" type="PanelContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox"]
+[node name="WhatToDoPanel" type="PanelContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox"]
 custom_minimum_size = Vector2(0, 44)
 
-[node name="WhatToDoMargin" type="MarginContainer" parent="Root/SetupPanel/SetupMargin/SetupVBox/WhatToDoPanel"]
+[node name="WhatToDoMargin" type="MarginContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/WhatToDoPanel"]
 theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 8
 
-[node name="WhatToDoLabel" type="Label" parent="Root/SetupPanel/SetupMargin/SetupVBox/WhatToDoPanel/WhatToDoMargin"]
+[node name="WhatToDoLabel" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SetupPanel/SetupMargin/SetupVBox/WhatToDoPanel/WhatToDoMargin"]
 text = "Pick a scenario and role, then start."
 autowrap_mode = 3
 
-[node name="HintLabel" type="Label" parent="Root"]
-offset_left = 16.0
-offset_top = 262.0
-offset_right = 860.0
-offset_bottom = 320.0
+[node name="HintLabel" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox"]
+custom_minimum_size = Vector2(0, 58)
 autowrap_mode = 3
 text = ""
 
-[node name="SituationPanel" type="PanelContainer" parent="Root"]
-offset_left = 16.0
-offset_top = 330.0
-offset_right = 520.0
-offset_bottom = 570.0
+[node name="SituationPanel" type="PanelContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox"]
+custom_minimum_size = Vector2(0, 220)
 visible = false
 
-[node name="SituationMargin" type="MarginContainer" parent="Root/SituationPanel"]
+[node name="SituationMargin" type="MarginContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel"]
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 12
 
-[node name="SituationVBox" type="VBoxContainer" parent="Root/SituationPanel/SituationMargin"]
+[node name="SituationVBox" type="VBoxContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin"]
 theme_override_constants/separation = 8
 
-[node name="SituationTitle" type="Label" parent="Root/SituationPanel/SituationMargin/SituationVBox"]
+[node name="SituationTitle" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox"]
 text = "Current Situation"
 
-[node name="TimeLabel" type="Label" parent="Root/SituationPanel/SituationMargin/SituationVBox"]
+[node name="TimeLabel" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox"]
 text = "Time: 0.00s (Loading: 0.00s)"
 
-[node name="ObjectiveLabel" type="Label" parent="Root/SituationPanel/SituationMargin/SituationVBox"]
-autowrap_mode = 3
+[node name="ObjectiveLabel" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox"]
 text = "Objective: (none)"
+autowrap_mode = 3
 
-[node name="DecisionRow" type="HBoxContainer" parent="Root/SituationPanel/SituationMargin/SituationVBox"]
+[node name="DecisionRow" type="HBoxContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox"]
 theme_override_constants/separation = 8
 
-[node name="CheckButton" type="Button" parent="Root/SituationPanel/SituationMargin/SituationVBox/DecisionRow"]
+[node name="CheckButton" type="Button" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox/DecisionRow"]
 text = "Check transit / lines"
 
-[node name="EscalateButton" type="Button" parent="Root/SituationPanel/SituationMargin/SituationVBox/DecisionRow"]
+[node name="EscalateButton" type="Button" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox/DecisionRow"]
 text = "Call captain"
 
-[node name="ProceedButton" type="Button" parent="Root/SituationPanel/SituationMargin/SituationVBox/DecisionRow"]
-text = "Load what’s available"
+[node name="ProceedButton" type="Button" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/SituationPanel/SituationMargin/SituationVBox/DecisionRow"]
+text = "Load what's available"
 
-[node name="LogPanel" type="PanelContainer" parent="Root"]
-offset_left = 560.0
-offset_top = 16.0
-offset_right = 1240.0
-offset_bottom = 570.0
+[node name="LogPanel" type="PanelContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox"]
+custom_minimum_size = Vector2(0, 300)
+size_flags_vertical = 3
 visible = true
 
-[node name="LogMargin" type="MarginContainer" parent="Root/LogPanel"]
+[node name="LogMargin" type="MarginContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel"]
 theme_override_constants/margin_left = 12
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 12
 theme_override_constants/margin_bottom = 12
 
-[node name="LogVBox" type="VBoxContainer" parent="Root/LogPanel/LogMargin"]
+[node name="LogVBox" type="VBoxContainer" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel/LogMargin"]
 theme_override_constants/separation = 8
 
-[node name="LogTitle" type="Label" parent="Root/LogPanel/LogMargin/LogVBox"]
+[node name="LogTitle" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel/LogMargin/LogVBox"]
 text = "Learning summary"
 
-[node name="ExplainWhyToggle" type="CheckButton" parent="Root/LogPanel/LogMargin/LogVBox"]
+[node name="ExplainWhyToggle" type="CheckButton" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel/LogMargin/LogVBox"]
 text = "Explain the why"
 visible = false
 
-[node name="LogText" type="RichTextLabel" parent="Root/LogPanel/LogMargin/LogVBox"]
-custom_minimum_size = Vector2(0, 470)
+[node name="LogText" type="RichTextLabel" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel/LogMargin/LogVBox"]
+custom_minimum_size = Vector2(0, 240)
+size_flags_vertical = 3
 bbcode_enabled = true
 text = ""
+
+[node name="PanelToggleBar" type="PanelContainer" parent="Root/FrameVBox/MainHBox"]
+custom_minimum_size = Vector2(190, 0)
+
+[node name="ToggleMargin" type="MarginContainer" parent="Root/FrameVBox/MainHBox/PanelToggleBar"]
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="ToggleVBox" type="VBoxContainer" parent="Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin"]
+theme_override_constants/separation = 8
+
+[node name="PanelsLabel" type="Label" parent="Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox"]
+text = "Panels"
+
+[node name="ShiftBoardBtn" type="Button" parent="Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox"]
+text = "Shift Board"
+
+[node name="LoadingPlanBtn" type="Button" parent="Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox"]
+text = "Loading Plan"
+
+[node name="AS400Btn" type="Button" parent="Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox"]
+text = "AS400"
+
+[node name="TrailerCapacityBtn" type="Button" parent="Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox"]
+text = "Trailer Capacity"
+
+[node name="RAQBtn" type="Button" parent="Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox"]
+text = "RAQ"
+
+[node name="PhoneBtn" type="Button" parent="Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox"]
+text = "Phone"
+
+[node name="NotesBtn" type="Button" parent="Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox"]
+text = "Notes"
+
+[node name="PanelOverlayLayer" type="Control" parent="Root"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="ShiftBoardPanel" type="PanelContainer" parent="Root/PanelOverlayLayer"]
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = -640.0
+offset_right = -206.0
+offset_top = 56.0
+offset_bottom = -16.0
+
+[node name="ShiftBoardMargin" type="MarginContainer" parent="Root/PanelOverlayLayer/ShiftBoardPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="ShiftBoardVBox" type="VBoxContainer" parent="Root/PanelOverlayLayer/ShiftBoardPanel/ShiftBoardMargin"]
+theme_override_constants/separation = 8
+
+[node name="ShiftBoardTitle" type="Label" parent="Root/PanelOverlayLayer/ShiftBoardPanel/ShiftBoardMargin/ShiftBoardVBox"]
+text = "Shift Board"
+
+[node name="ShiftBoardBody" type="RichTextLabel" parent="Root/PanelOverlayLayer/ShiftBoardPanel/ShiftBoardMargin/ShiftBoardVBox"]
+bbcode_enabled = true
+size_flags_vertical = 3
+text = "Placeholder view: staffing, breaks, key tasks."
+
+[node name="LoadingPlanPanel" type="PanelContainer" parent="Root/PanelOverlayLayer"]
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = -640.0
+offset_right = -206.0
+offset_top = 56.0
+offset_bottom = -16.0
+
+[node name="LoadingPlanMargin" type="MarginContainer" parent="Root/PanelOverlayLayer/LoadingPlanPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="LoadingPlanVBox" type="VBoxContainer" parent="Root/PanelOverlayLayer/LoadingPlanPanel/LoadingPlanMargin"]
+theme_override_constants/separation = 8
+
+[node name="LoadingPlanTitle" type="Label" parent="Root/PanelOverlayLayer/LoadingPlanPanel/LoadingPlanMargin/LoadingPlanVBox"]
+text = "Loading Plan"
+
+[node name="LoadingPlanBody" type="RichTextLabel" parent="Root/PanelOverlayLayer/LoadingPlanPanel/LoadingPlanMargin/LoadingPlanVBox"]
+bbcode_enabled = true
+size_flags_vertical = 3
+text = "Placeholder view: planned loads, priorities, constraints."
+
+[node name="AS400Panel" type="PanelContainer" parent="Root/PanelOverlayLayer"]
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = -640.0
+offset_right = -206.0
+offset_top = 56.0
+offset_bottom = -16.0
+
+[node name="AS400Margin" type="MarginContainer" parent="Root/PanelOverlayLayer/AS400Panel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="AS400VBox" type="VBoxContainer" parent="Root/PanelOverlayLayer/AS400Panel/AS400Margin"]
+theme_override_constants/separation = 8
+
+[node name="AS400Title" type="Label" parent="Root/PanelOverlayLayer/AS400Panel/AS400Margin/AS400VBox"]
+text = "AS400"
+
+[node name="AS400Body" type="RichTextLabel" parent="Root/PanelOverlayLayer/AS400Panel/AS400Margin/AS400VBox"]
+bbcode_enabled = true
+size_flags_vertical = 3
+text = "Placeholder view: system lookups and status."
+
+[node name="TrailerCapacityPanel" type="PanelContainer" parent="Root/PanelOverlayLayer"]
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = -640.0
+offset_right = -206.0
+offset_top = 56.0
+offset_bottom = -16.0
+
+[node name="TrailerCapacityMargin" type="MarginContainer" parent="Root/PanelOverlayLayer/TrailerCapacityPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="TrailerCapacityVBox" type="VBoxContainer" parent="Root/PanelOverlayLayer/TrailerCapacityPanel/TrailerCapacityMargin"]
+theme_override_constants/separation = 8
+
+[node name="TrailerCapacityTitle" type="Label" parent="Root/PanelOverlayLayer/TrailerCapacityPanel/TrailerCapacityMargin/TrailerCapacityVBox"]
+text = "Trailer Capacity"
+
+[node name="TrailerCapacityBody" type="RichTextLabel" parent="Root/PanelOverlayLayer/TrailerCapacityPanel/TrailerCapacityMargin/TrailerCapacityVBox"]
+bbcode_enabled = true
+size_flags_vertical = 3
+text = "Placeholder view: cube/weight, remaining space."
+
+[node name="RAQPanel" type="PanelContainer" parent="Root/PanelOverlayLayer"]
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = -640.0
+offset_right = -206.0
+offset_top = 56.0
+offset_bottom = -16.0
+
+[node name="RAQMargin" type="MarginContainer" parent="Root/PanelOverlayLayer/RAQPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="RAQVBox" type="VBoxContainer" parent="Root/PanelOverlayLayer/RAQPanel/RAQMargin"]
+theme_override_constants/separation = 8
+
+[node name="RAQTitle" type="Label" parent="Root/PanelOverlayLayer/RAQPanel/RAQMargin/RAQVBox"]
+text = "RAQ"
+
+[node name="RAQBody" type="RichTextLabel" parent="Root/PanelOverlayLayer/RAQPanel/RAQMargin/RAQVBox"]
+bbcode_enabled = true
+size_flags_vertical = 3
+text = "Placeholder view: requests / adjustments / questions."
+
+[node name="PhonePanel" type="PanelContainer" parent="Root/PanelOverlayLayer"]
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = -640.0
+offset_right = -206.0
+offset_top = 56.0
+offset_bottom = -16.0
+
+[node name="PhoneMargin" type="MarginContainer" parent="Root/PanelOverlayLayer/PhonePanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="PhoneVBox" type="VBoxContainer" parent="Root/PanelOverlayLayer/PhonePanel/PhoneMargin"]
+theme_override_constants/separation = 8
+
+[node name="PhoneTitle" type="Label" parent="Root/PanelOverlayLayer/PhonePanel/PhoneMargin/PhoneVBox"]
+text = "Phone"
+
+[node name="PhoneBody" type="RichTextLabel" parent="Root/PanelOverlayLayer/PhonePanel/PhoneMargin/PhoneVBox"]
+bbcode_enabled = true
+size_flags_vertical = 3
+text = "Placeholder view: calls/messages (manual attention)."
+
+[node name="NotesPanel" type="PanelContainer" parent="Root/PanelOverlayLayer"]
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = -640.0
+offset_right = -206.0
+offset_top = 56.0
+offset_bottom = -16.0
+
+[node name="NotesMargin" type="MarginContainer" parent="Root/PanelOverlayLayer/NotesPanel"]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="NotesVBox" type="VBoxContainer" parent="Root/PanelOverlayLayer/NotesPanel/NotesMargin"]
+theme_override_constants/separation = 8
+
+[node name="NotesTitle" type="Label" parent="Root/PanelOverlayLayer/NotesPanel/NotesMargin/NotesVBox"]
+text = "Notes"
+
+[node name="NotesBody" type="RichTextLabel" parent="Root/PanelOverlayLayer/NotesPanel/NotesMargin/NotesVBox"]
+bbcode_enabled = true
+size_flags_vertical = 3
+text = "Placeholder view: jot down what you noticed."
