@@ -170,9 +170,9 @@ func end_session() -> void:
 		else:
 			_add_timeline_line("%0.2fs: Panels never opened — (none)" % sim_clock.current_time)
 
-	# Debrief
+	# Debrief (Trust-safe language: no pass/fail, no gamified tone)
 	var what_happened := ""
-	what_happened += "[b]Final score:[/b] %d\n\n" % score_engine.current_score
+	what_happened += "[b]Learning signal total:[/b] %d\n\n" % score_engine.current_score
 	what_happened += "[b]Events[/b]\n"
 	for line in timeline_lines:
 		what_happened += "• " + line + "\n"
@@ -184,12 +184,16 @@ func end_session() -> void:
 	else:
 		why += "Escalation was available for uncertainty or risk.\n"
 
-	var waste_count: int = rule_engine.waste_log.size()
-	if waste_count > 0:
-		why += "Some moments produced waste signals. Under pressure (time, ambiguity, interruptions), attention misses can stack up.\n"
+	# Replace evaluative terms:
+	# - "Good" -> "Aligned with priorities"
+	# - "Waste" -> "Unfavorable outcome"
+	# - "Score" -> "Learning signal"
+	var unfavorable_count: int = rule_engine.waste_log.size()
+	if unfavorable_count > 0:
+		why += "Some moments produced learning signals indicating an unfavorable outcome under the current conditions.\n"
 		why += "Panel access shows what information was consulted during the session.\n"
 	else:
-		why += "This run produced no waste signals. Consistent checking and clean handoffs reduce rework under pressure.\n"
+		why += "This run did not produce learning signals indicating an unfavorable outcome.\n"
 		why += "Panel access shows what information was consulted during the session.\n"
 
 	var payload := {
@@ -205,7 +209,7 @@ func manual_decision(action: String) -> void:
 
 	var t := sim_clock.current_time
 
-	# 8.6: Escalation logged as Protective Action, never penalized by messaging.
+	# 8.6: Escalation logged as Protective Action (neutral/positive framing; no penalties)
 	if action.begins_with("Protective Action:"):
 		escalation_used_count += 1
 		var esc_line := "%0.2fs: Protective Action — %s" % [t, action.replace("Protective Action:", "").strip_edges()]
@@ -274,9 +278,10 @@ func _emit_boundary_update() -> void:
 
 # Timeline hook used by ScenarioLoader
 func record_rule_result(rule_id: int, produces_waste: bool, timestamp: float) -> void:
-	var tag := "Good"
+	# Trust-safe language: no "good"/"bad"
+	var tag := "Aligned with priorities"
 	if produces_waste:
-		tag = "Waste"
+		tag = "Unfavorable outcome"
 	_add_timeline_line("%0.2fs: Rule %d — %s" % [timestamp, rule_id, tag])
 
 # Pressure APIs
