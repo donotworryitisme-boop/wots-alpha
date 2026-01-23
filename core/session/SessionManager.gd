@@ -7,8 +7,6 @@ signal situation_updated(objective_text: String)
 signal session_ended(debrief_payload: Dictionary)
 signal action_registered(one_line: String)
 signal role_updated(role_id: int)
-
-# Execution 8.5 — Responsibility Boundary Strip
 signal responsibility_boundary_updated(role_id: int, assignment_text: String, window_active: bool)
 
 @warning_ignore("shadowed_global_identifier")
@@ -51,15 +49,16 @@ var loading_time_accum: float = 0.0
 # Score safety (ScoreEngine expects this API)
 var zero_score_mode: bool = false
 
-# --------------------------
-# Attention & Panels (8.4)
+# 8.4 Panels
 var panel_catalog: Array[String] = []
-var panels_ever_opened: Dictionary = {} # name -> true
+var panels_ever_opened: Dictionary = {}
 
-# --------------------------
-# Responsibility Boundary Strip (8.5)
+# 8.5 Strip
 var current_assignment: String = "Unassigned"
 var responsibility_window_active: bool = false
+
+# 8.6 Escalation-as-success
+var escalation_used_count: int = 0
 
 func _ready() -> void:
 	sim_clock = SimClock.new()
@@ -89,12 +88,9 @@ func _ready() -> void:
 	score_engine = ScoreEngine.new()
 	add_child(score_engine)
 
-	# Initial boundary (neutral language)
 	_emit_boundary_update()
 
-# --------------------------
-# 8.4 Panel catalog + logging
-
+# Panels
 func register_panel_catalog(names: Array[String]) -> void:
 	panel_catalog = names.duplicate()
 	panels_ever_opened.clear()
@@ -104,7 +100,6 @@ func register_panel_catalog(names: Array[String]) -> void:
 func panel_opened(name: String) -> void:
 	var t: float = sim_clock.current_time
 	panels_ever_opened[name] = true
-
 	var line := "%0.2fs: Panel opened — %s" % [t, name]
 	action_registered.emit(line)
 	_add_timeline_line(line)
@@ -115,9 +110,7 @@ func panel_closed(name: String) -> void:
 	action_registered.emit(line)
 	_add_timeline_line(line)
 
-# --------------------------
-# Session lifecycle
-
+# Session
 func start_session_with_scenario(scenario_name: String) -> void:
 	if session_active:
 		return
@@ -133,13 +126,12 @@ func start_session_with_scenario(scenario_name: String) -> void:
 	loading_time_accum = 0.0
 	zero_score_mode = false
 	timeline_lines.clear()
+	escalation_used_count = 0
 
-	# Reset panel usage per session (requirement)
 	if panel_catalog.size() > 0:
 		for n in panel_catalog:
 			panels_ever_opened[str(n)] = false
 
-	# Responsibility boundary defaults at start (neutral)
 	current_assignment = "Bay B2B session"
 	responsibility_window_active = true
 	_emit_boundary_update()
@@ -162,13 +154,12 @@ func end_session() -> void:
 	session_active = false
 	score_engine.end_session(self)
 
-	# Responsibility window closes when session ends
 	responsibility_window_active = false
 	_emit_boundary_update()
 
 	_add_timeline_line("%0.2fs: Session ended" % sim_clock.current_time)
 
-	# Panel audit: never opened
+	# Panels never opened
 	if panel_catalog.size() > 0:
 		var never: Array[String] = []
 		for n in panel_catalog:
@@ -179,15 +170,21 @@ func end_session() -> void:
 		else:
 			_add_timeline_line("%0.2fs: Panels never opened — (none)" % sim_clock.current_time)
 
-	# Debrief sections
+	# Debrief
 	var what_happened := ""
 	what_happened += "[b]Final score:[/b] %d\n\n" % score_engine.current_score
 	what_happened += "[b]Events[/b]\n"
 	for line in timeline_lines:
 		what_happened += "• " + line + "\n"
 
-	var waste_count: int = rule_engine.waste_log.size()
+	# 8.6: escalation appears neutrally/positively in debrief
 	var why := ""
+	if escalation_used_count > 0:
+		why += "Escalation used to reduce uncertainty or risk.\n"
+	else:
+		why += "Escalation was available for uncertainty or risk.\n"
+
+	var waste_count: int = rule_engine.waste_log.size()
 	if waste_count > 0:
 		why += "Some moments produced waste signals. Under pressure (time, ambiguity, interruptions), attention misses can stack up.\n"
 		why += "Panel access shows what information was consulted during the session.\n"
@@ -199,20 +196,27 @@ func end_session() -> void:
 		"what_happened": what_happened,
 		"why_it_mattered": why
 	}
-
 	session_ended.emit(payload)
 
-# --------------------------
-# Harness decisions
-
+# Actions
 func manual_decision(action: String) -> void:
 	if not session_active:
 		return
 
+	var t := sim_clock.current_time
+
+	# 8.6: Escalation logged as Protective Action, never penalized by messaging.
+	if action.begins_with("Protective Action:"):
+		escalation_used_count += 1
+		var esc_line := "%0.2fs: Protective Action — %s" % [t, action.replace("Protective Action:", "").strip_edges()]
+		action_registered.emit(esc_line)
+		_add_timeline_line(esc_line)
+		# Still pass through the rule pipeline as a neutral manual decision.
+		action = "Call captain"
+
 	var payload := {"action": action, "objective": current_objective}
 	var ctx := {"scaffold_tier": scaffold_tier_active, "time_pressure": time_pressure, "interruptions": interruptions_since_last_decision}
 
-	var t := sim_clock.current_time
 	var produces_waste := rule_engine.evaluate_event(0, payload, ctx, t)
 	score_engine.apply_rule(0, produces_waste)
 
@@ -220,9 +224,7 @@ func manual_decision(action: String) -> void:
 	action_registered.emit(one_line)
 	_add_timeline_line("%0.2fs: Manual decision — %s" % [t, action])
 
-# --------------------------
 # Scheduling
-
 func schedule_event_in(delay: float, callback: Callable) -> void:
 	event_queue.schedule_event_in(delay, callback, sim_clock)
 
@@ -234,9 +236,7 @@ func _on_tick(_delta_time: float, current_time: float) -> void:
 		event_queue.process_events(current_time)
 		time_updated.emit(sim_clock.current_time, loading_time_accum)
 
-# --------------------------
-# Scaffolding (8.3)
-
+# Scaffolding
 func set_scaffolding(source: String, tier: int) -> void:
 	scaffold_source = source
 	scaffold_tier_scenario = clamp(tier, 1, 3)
@@ -255,18 +255,13 @@ func _tier_for_role(role: int) -> int:
 func publish_hint(hint_text: String) -> void:
 	hint_updated.emit(hint_text)
 
-# --------------------------
 # Objective / situation
-
 func set_current_objective(text: String) -> void:
 	current_objective = text
 	situation_updated.emit(current_objective)
 
-# --------------------------
-# 8.5 Responsibility boundary APIs
-
+# 8.5 boundary APIs
 func set_assignment(text: String) -> void:
-	# Neutral language only.
 	current_assignment = text
 	_emit_boundary_update()
 
@@ -277,18 +272,14 @@ func set_responsibility_window(active: bool) -> void:
 func _emit_boundary_update() -> void:
 	responsibility_boundary_updated.emit(role_manager.get_role(), current_assignment, responsibility_window_active)
 
-# --------------------------
 # Timeline hook used by ScenarioLoader
-
 func record_rule_result(rule_id: int, produces_waste: bool, timestamp: float) -> void:
 	var tag := "Good"
 	if produces_waste:
 		tag = "Waste"
 	_add_timeline_line("%0.2fs: Rule %d — %s" % [timestamp, rule_id, tag])
 
-# --------------------------
-# Pressure APIs (8.2)
-
+# Pressure APIs
 func register_interrupt(_related_rule_id: int, timestamp: float) -> void:
 	interruptions_since_last_decision += 1
 	last_interrupt_at = timestamp
@@ -311,16 +302,13 @@ func build_decision_context(
 	var ctx: Dictionary = {}
 	ctx["rule_id"] = rule_id
 	ctx["now"] = current_time
-
 	ctx["time_slack"] = time_slack
 	ctx["time_pressure"] = time_pressure
 	ctx["decision_time"] = decision_time
 	ctx["decision_window"] = decision_window
 	ctx["deadline"] = decision_time
-
 	ctx["interruptions"] = interruptions_since_last_decision
 	ctx["last_interrupt_at"] = last_interrupt_at
-
 	ctx["ambiguous"] = bool(payload.get("ambiguous", false))
 	ctx["withheld"] = payload.get("_withheld", {})
 
@@ -360,9 +348,7 @@ func _build_hint_for_tier(rule_id: int, ctx: Dictionary, tier: int) -> String:
 		base += " Ignore non-critical noise and re-check last confirmed step."
 	return base
 
-# --------------------------
 # Role
-
 func set_role(role: int) -> void:
 	role_manager.set_role(role)
 	if scaffold_source == "role":
@@ -376,17 +362,13 @@ func get_role() -> int:
 func has_capability(capability: String) -> bool:
 	return role_manager.has_capability(capability)
 
-# --------------------------
 # Zero-score mode API expected by ScoreEngine
-
 func set_zero_score_mode(enabled: bool) -> void:
 	zero_score_mode = enabled
 
 func is_zero_score_mode() -> bool:
 	return zero_score_mode
 
-# --------------------------
 # Internals
-
 func _add_timeline_line(line: String) -> void:
 	timeline_lines.append(line)

@@ -73,6 +73,11 @@ func _ready() -> void:
 	set_enabled(false)
 	_reset_panel_state()
 
+	# Escalation-as-success (8.6): keep this button neutral (no special styling, no warnings).
+	# Just ensure label conveys "call captain" meaning without implying failure.
+	if escalate_button != null:
+		escalate_button.text = "Call captain"
+
 	if trust_button != null:
 		trust_button.pressed.connect(func() -> void:
 			trust_contract_requested.emit()
@@ -86,7 +91,8 @@ func _ready() -> void:
 	if check_button != null:
 		check_button.pressed.connect(func() -> void: _on_decision_pressed("Check transit / lines"))
 	if escalate_button != null:
-		escalate_button.pressed.connect(func() -> void: _on_decision_pressed("Call captain"))
+		# IMPORTANT: log as Protective Action (no penalty framing)
+		escalate_button.pressed.connect(func() -> void: _on_decision_pressed("Protective Action: Call captain"))
 	if proceed_button != null:
 		proceed_button.pressed.connect(func() -> void: _on_decision_pressed("Load what's available"))
 
@@ -303,7 +309,7 @@ func _update_top_time(total_time: float) -> void:
 func _on_role_updated(_role_id: int) -> void:
 	_update_strip_text()
 
-func _on_boundary_updated(role_id: int, assignment_text: String, window_active: bool) -> void:
+func _on_boundary_updated(_role_id: int, assignment_text: String, window_active: bool) -> void:
 	_strip_assignment = assignment_text
 	_strip_window_active = window_active
 	_update_strip_text()
