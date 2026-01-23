@@ -73,8 +73,7 @@ func _ready() -> void:
 	set_enabled(false)
 	_reset_panel_state()
 
-	# Escalation-as-success (8.6): keep this button neutral (no special styling, no warnings).
-	# Just ensure label conveys "call captain" meaning without implying failure.
+	# Escalation-as-success (8.6): neutral label
 	if escalate_button != null:
 		escalate_button.text = "Call captain"
 
@@ -91,7 +90,6 @@ func _ready() -> void:
 	if check_button != null:
 		check_button.pressed.connect(func() -> void: _on_decision_pressed("Check transit / lines"))
 	if escalate_button != null:
-		# IMPORTANT: log as Protective Action (no penalty framing)
 		escalate_button.pressed.connect(func() -> void: _on_decision_pressed("Protective Action: Call captain"))
 	if proceed_button != null:
 		proceed_button.pressed.connect(func() -> void: _on_decision_pressed("Load what's available"))
@@ -125,20 +123,23 @@ func set_enabled(enabled: bool) -> void:
 		situation_panel.visible = false
 
 	_is_active = false
-	_set_setup_guidance()
 
 	if hint_label != null:
 		hint_label.text = ""
 
 	if log_title != null:
-		log_title.text = "Learning summary"
+		log_title.text = "Scenario selection"
 	if log_text != null:
 		log_text.text = ""
+
 	if explain_toggle != null:
 		explain_toggle.visible = false
 		explain_toggle.button_pressed = false
 
 	_close_all_panels(true)
+
+	_set_setup_guidance()
+	_render_setup_scenario_list()
 
 func set_session(session: SessionManager) -> void:
 	_session = session
@@ -147,6 +148,12 @@ func set_session(session: SessionManager) -> void:
 
 	if _session != null and _session.has_method("register_panel_catalog"):
 		_session.call("register_panel_catalog", PANEL_NAMES)
+
+	# Update setup guidance when scenario changes
+	if scenario_dropdown != null:
+		scenario_dropdown.item_selected.connect(func(_idx: int) -> void:
+			_set_setup_guidance()
+		)
 
 	if _session != null:
 		if _session.has_signal("hint_updated"):
@@ -164,6 +171,9 @@ func set_session(session: SessionManager) -> void:
 		if _session.has_signal("responsibility_boundary_updated"):
 			_session.connect("responsibility_boundary_updated", Callable(self, "_on_boundary_updated"))
 
+	_render_setup_scenario_list()
+	_set_setup_guidance()
+
 func _populate_scenarios() -> void:
 	if scenario_dropdown == null or _session == null:
 		return
@@ -177,6 +187,9 @@ func _populate_scenarios() -> void:
 
 	for n in names:
 		scenario_dropdown.add_item(n)
+
+	if scenario_dropdown.item_count > 0:
+		scenario_dropdown.select(0)
 
 func _populate_roles() -> void:
 	if role_dropdown == null:
@@ -218,7 +231,7 @@ func _on_start_pressed() -> void:
 	if log_title != null:
 		log_title.text = "Learning summary"
 	if log_text != null:
-		log_text.text = "[b]What to do:[/b]\nStart the scenario, use actions, then end to review.\n"
+		log_text.text = "[b]What to do:[/b]\nUse actions, open panels as needed, then the run will end on its own.\n"
 	if explain_toggle != null:
 		explain_toggle.visible = false
 		explain_toggle.button_pressed = false
@@ -295,8 +308,18 @@ func _render_debrief(show_why: bool) -> void:
 	log_text.text = bb
 
 func _set_setup_guidance() -> void:
-	if what_to_do_label != null:
-		what_to_do_label.text = "Pick a scenario and role, then start."
+	if what_to_do_label == null:
+		return
+
+	var scenario_name: String = "default"
+	if scenario_dropdown != null and scenario_dropdown.item_count > 0:
+		scenario_name = scenario_dropdown.get_item_text(scenario_dropdown.get_selected_id())
+
+	var desc := ""
+	if _session != null and _session.scenario_loader != null and _session.scenario_loader.has_method("get_scenario_description"):
+		desc = str(_session.scenario_loader.call("get_scenario_description", scenario_name))
+
+	what_to_do_label.text = "Pick a scenario and role, then start.\n\nSelected scenario:\n%s" % (desc if desc != "" else "(no description)")
 
 func _set_active_guidance() -> void:
 	if what_to_do_label != null:
@@ -332,8 +355,37 @@ func _update_strip_text() -> void:
 	if _strip_window_active:
 		window_text = "Active"
 
-	# Neutral language only.
 	role_strip_label.text = "Role: %s | Assignment: %s | Window: %s" % [role_name, _strip_assignment, window_text]
+
+# ------------------------------
+# Scenario selection list (8.7)
+
+func _render_setup_scenario_list() -> void:
+	if _is_active:
+		return
+	if log_title != null:
+		log_title.text = "Scenario selection"
+	if log_text == null:
+		return
+
+	if _session == null or _session.scenario_loader == null:
+		log_text.text = "[b]Scenario selection[/b]\n(Scenario list unavailable)\n"
+		return
+
+	var names: Array[String] = []
+	if _session.scenario_loader.has_method("get_scenario_names"):
+		names = _session.scenario_loader.call("get_scenario_names")
+
+	var bb := "[b]Scenario selection[/b]\n"
+	bb += "Choose a scenario (neutral descriptions):\n\n"
+
+	for n in names:
+		var d := ""
+		if _session.scenario_loader.has_method("get_scenario_description"):
+			d = str(_session.scenario_loader.call("get_scenario_description", n))
+		bb += "• [b]%s[/b] — %s\n" % [n, d]
+
+	log_text.text = bb
 
 # ------------------------------
 # Attention Panels (8.4)
