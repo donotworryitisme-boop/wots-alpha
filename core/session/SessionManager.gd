@@ -8,6 +8,9 @@ signal session_ended(debrief_payload: Dictionary)
 signal action_registered(one_line: String)
 signal role_updated(role_id: int)
 
+# Execution 8.5 — Responsibility Boundary Strip
+signal responsibility_boundary_updated(role_id: int, assignment_text: String, window_active: bool)
+
 @warning_ignore("shadowed_global_identifier")
 const SorterModel  = preload("res://core/domain/SorterModel.gd")
 const LoadingModel = preload("res://core/domain/LoadingModel.gd")
@@ -53,6 +56,11 @@ var zero_score_mode: bool = false
 var panel_catalog: Array[String] = []
 var panels_ever_opened: Dictionary = {} # name -> true
 
+# --------------------------
+# Responsibility Boundary Strip (8.5)
+var current_assignment: String = "Unassigned"
+var responsibility_window_active: bool = false
+
 func _ready() -> void:
 	sim_clock = SimClock.new()
 	add_child(sim_clock)
@@ -81,22 +89,21 @@ func _ready() -> void:
 	score_engine = ScoreEngine.new()
 	add_child(score_engine)
 
+	# Initial boundary (neutral language)
+	_emit_boundary_update()
+
+# --------------------------
+# 8.4 Panel catalog + logging
+
 func register_panel_catalog(names: Array[String]) -> void:
-	# Called by BayUI once to define which panels exist (so we can audit "never opened").
 	panel_catalog = names.duplicate()
 	panels_ever_opened.clear()
 	for n in panel_catalog:
 		panels_ever_opened[str(n)] = false
 
 func panel_opened(name: String) -> void:
-	if not session_active:
-		# Still allow logging even if opened before start, but timestamp will be 0.0.
-		pass
 	var t: float = sim_clock.current_time
-	if panels_ever_opened.has(name):
-		panels_ever_opened[name] = true
-	else:
-		panels_ever_opened[name] = true
+	panels_ever_opened[name] = true
 
 	var line := "%0.2fs: Panel opened — %s" % [t, name]
 	action_registered.emit(line)
@@ -107,6 +114,9 @@ func panel_closed(name: String) -> void:
 	var line := "%0.2fs: Panel closed — %s" % [t, name]
 	action_registered.emit(line)
 	_add_timeline_line(line)
+
+# --------------------------
+# Session lifecycle
 
 func start_session_with_scenario(scenario_name: String) -> void:
 	if session_active:
@@ -124,16 +134,20 @@ func start_session_with_scenario(scenario_name: String) -> void:
 	zero_score_mode = false
 	timeline_lines.clear()
 
-	# Reset panel usage per session (requirement: per session)
+	# Reset panel usage per session (requirement)
 	if panel_catalog.size() > 0:
 		for n in panel_catalog:
 			panels_ever_opened[str(n)] = false
+
+	# Responsibility boundary defaults at start (neutral)
+	current_assignment = "Bay B2B session"
+	responsibility_window_active = true
+	_emit_boundary_update()
 
 	score_engine.start_session()
 
 	publish_hint("")
 	set_current_objective("(waiting for first event)")
-
 	_add_timeline_line("%0.2fs: Session started — scenario: %s" % [sim_clock.current_time, scenario_name])
 
 	scenario_loader.load_scenario(scenario_name, self, rule_engine)
@@ -147,6 +161,10 @@ func end_session() -> void:
 
 	session_active = false
 	score_engine.end_session(self)
+
+	# Responsibility window closes when session ends
+	responsibility_window_active = false
+	_emit_boundary_update()
 
 	_add_timeline_line("%0.2fs: Session ended" % sim_clock.current_time)
 
@@ -171,11 +189,11 @@ func end_session() -> void:
 	var waste_count: int = rule_engine.waste_log.size()
 	var why := ""
 	if waste_count > 0:
-		why += "Some moments produced waste signals. Under pressure (time, ambiguity, interruptions), attention misses stack up.\n"
-		why += "Your panel choices show what information you prioritized during decisions.\n"
+		why += "Some moments produced waste signals. Under pressure (time, ambiguity, interruptions), attention misses can stack up.\n"
+		why += "Panel access shows what information was consulted during the session.\n"
 	else:
 		why += "This run produced no waste signals. Consistent checking and clean handoffs reduce rework under pressure.\n"
-		why += "Your panel choices show what information you used to stay aligned.\n"
+		why += "Panel access shows what information was consulted during the session.\n"
 
 	var payload := {
 		"what_happened": what_happened,
@@ -183,6 +201,9 @@ func end_session() -> void:
 	}
 
 	session_ended.emit(payload)
+
+# --------------------------
+# Harness decisions
 
 func manual_decision(action: String) -> void:
 	if not session_active:
@@ -197,8 +218,10 @@ func manual_decision(action: String) -> void:
 
 	var one_line := "%0.2fs: Action registered: %s" % [t, action]
 	action_registered.emit(one_line)
-
 	_add_timeline_line("%0.2fs: Manual decision — %s" % [t, action])
+
+# --------------------------
+# Scheduling
 
 func schedule_event_in(delay: float, callback: Callable) -> void:
 	event_queue.schedule_event_in(delay, callback, sim_clock)
@@ -238,6 +261,21 @@ func publish_hint(hint_text: String) -> void:
 func set_current_objective(text: String) -> void:
 	current_objective = text
 	situation_updated.emit(current_objective)
+
+# --------------------------
+# 8.5 Responsibility boundary APIs
+
+func set_assignment(text: String) -> void:
+	# Neutral language only.
+	current_assignment = text
+	_emit_boundary_update()
+
+func set_responsibility_window(active: bool) -> void:
+	responsibility_window_active = active
+	_emit_boundary_update()
+
+func _emit_boundary_update() -> void:
+	responsibility_boundary_updated.emit(role_manager.get_role(), current_assignment, responsibility_window_active)
 
 # --------------------------
 # Timeline hook used by ScenarioLoader
@@ -330,6 +368,7 @@ func set_role(role: int) -> void:
 	if scaffold_source == "role":
 		scaffold_tier_active = _tier_for_role(role_manager.get_role())
 	role_updated.emit(role)
+	_emit_boundary_update()
 
 func get_role() -> int:
 	return role_manager.get_role()

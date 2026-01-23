@@ -64,6 +64,10 @@ func load_scenario(name: String, session: SessionManager, rule_engine: RuleEngin
 		session.time_slack = max(float(knobs.get("time_slack", 1.0)), min_slack)
 		session.time_pressure = clamp(1.0 - session.time_slack, 0.0, 1.0)
 
+	# Scenario start assignment (neutral)
+	session.set_assignment("Bay B2B — default assignment")
+	session.set_responsibility_window(true)
+
 	# Schedule scenario events
 	for ev in events:
 		var base_time: float = float(ev.get("time", 0.0))
@@ -145,7 +149,14 @@ func _trigger_rule(
 ) -> void:
 	var current_time: float = session.sim_clock.current_time
 
-	# Update objective text for harness (does not reveal outcomes).
+	# Phase change => update assignment text (neutral, no instruction)
+	var dock_text := "Unspecified"
+	if payload.has("dock"):
+		dock_text = str(payload.get("dock"))
+	session.set_assignment("Loading — %s" % dock_text)
+	session.set_responsibility_window(true)
+
+	# Update objective text for harness
 	session.set_current_objective("Handle Rule %d (pallet %s)" % [rule_id, str(payload.get("pallet_id", "?"))])
 
 	var decision_context: Dictionary = session.build_decision_context(rule_id, payload, current_time, decision_time, decision_window)
@@ -156,7 +167,6 @@ func _trigger_rule(
 	if session.score_engine != null:
 		session.score_engine.apply_rule(rule_id, produces_waste)
 
-	# Harness timeline (replaces UI FeedbackLayer dependency)
 	session.record_rule_result(rule_id, produces_waste, current_time)
 
 	session.publish_hint("")

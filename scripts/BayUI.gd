@@ -61,13 +61,16 @@ var _is_active: bool = false
 var _debrief_what_happened: String = ""
 var _debrief_why_it_mattered: String = ""
 
+# 8.5 strip state
+var _strip_assignment: String = "Unassigned"
+var _strip_window_active: bool = false
+
 # Per-session panel state (open/closed)
 var _panel_state: Dictionary = {} # name -> bool
 var _panel_nodes: Dictionary = {} # name -> PanelContainer
 
 func _ready() -> void:
 	set_enabled(false)
-
 	_reset_panel_state()
 
 	if trust_button != null:
@@ -93,8 +96,8 @@ func _ready() -> void:
 	_init_panel_nodes_and_buttons()
 
 	_set_setup_guidance()
-	_update_role_strip()
 	_update_top_time(0.0)
+	_update_strip_text()
 
 func set_enabled(enabled: bool) -> void:
 	_enabled = enabled
@@ -152,6 +155,8 @@ func set_session(session: SessionManager) -> void:
 			_session.connect("action_registered", Callable(self, "_on_action_registered"))
 		if _session.has_signal("role_updated"):
 			_session.connect("role_updated", Callable(self, "_on_role_updated"))
+		if _session.has_signal("responsibility_boundary_updated"):
+			_session.connect("responsibility_boundary_updated", Callable(self, "_on_boundary_updated"))
 
 func _populate_scenarios() -> void:
 	if scenario_dropdown == null or _session == null:
@@ -189,7 +194,6 @@ func _on_start_pressed() -> void:
 		role_id = role_dropdown.get_selected_id()
 
 	_session.set_role(role_id)
-	_update_role_strip()
 
 	_is_active = true
 	_set_active_guidance()
@@ -213,10 +217,7 @@ func _on_start_pressed() -> void:
 		explain_toggle.visible = false
 		explain_toggle.button_pressed = false
 
-	if _session.has_method("start_session_with_scenario"):
-		_session.call("start_session_with_scenario", scenario_name)
-	else:
-		_session.start_session()
+	_session.call("start_session_with_scenario", scenario_name)
 
 func _on_end_pressed() -> void:
 	if _session == null:
@@ -226,8 +227,7 @@ func _on_end_pressed() -> void:
 func _on_decision_pressed(action: String) -> void:
 	if _session == null:
 		return
-	if _session.has_method("manual_decision"):
-		_session.call("manual_decision", action)
+	_session.call("manual_decision", action)
 
 func _on_hint_updated(hint_text: String) -> void:
 	if hint_label != null:
@@ -301,28 +301,33 @@ func _update_top_time(total_time: float) -> void:
 		top_time_label.text = "Time: %0.2fs" % total_time
 
 func _on_role_updated(_role_id: int) -> void:
-	_update_role_strip()
+	_update_strip_text()
 
-func _update_role_strip() -> void:
+func _on_boundary_updated(role_id: int, assignment_text: String, window_active: bool) -> void:
+	_strip_assignment = assignment_text
+	_strip_window_active = window_active
+	_update_strip_text()
+
+func _update_strip_text() -> void:
 	if role_strip_label == null:
 		return
 
 	var role_name := "Operator"
-	var responsibility := "Execute standard work, keep flow moving"
-
 	if role_dropdown != null:
 		match role_dropdown.get_selected_id():
 			WOTSConfig.Role.OPERATOR:
 				role_name = "Operator"
-				responsibility = "Execute standard work, keep flow moving"
 			WOTSConfig.Role.CAPTAIN:
 				role_name = "Captain"
-				responsibility = "Remove blockers, coordinate priorities"
 			WOTSConfig.Role.TRAINER:
 				role_name = "Trainer"
-				responsibility = "Coach process and safe decisions"
 
-	role_strip_label.text = "Role: %s — Responsibility: %s" % [role_name, responsibility]
+	var window_text := "Not Active"
+	if _strip_window_active:
+		window_text = "Active"
+
+	# Neutral language only.
+	role_strip_label.text = "Role: %s | Assignment: %s | Window: %s" % [role_name, _strip_assignment, window_text]
 
 # ------------------------------
 # Attention Panels (8.4)
@@ -376,7 +381,7 @@ func _set_panel_visible(name: String, visible: bool, silent: bool) -> void:
 		return
 
 	if _session != null:
-		if visible and _session.has_method("panel_opened"):
+		if visible:
 			_session.call("panel_opened", name)
-		elif (not visible) and _session.has_method("panel_closed"):
+		else:
 			_session.call("panel_closed", name)
