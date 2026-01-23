@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/BayUI.gd" id="1"]
+[ext_resource type="Theme" path="res://ui/UITheme.tres" id="2"]
 
 [node name="BayUI" type="CanvasLayer"]
 layer = 5
@@ -9,6 +10,7 @@ script = ExtResource("1")
 [node name="Root" type="Control" parent="."]
 anchor_right = 1.0
 anchor_bottom = 1.0
+theme = ExtResource("2")
 
 [node name="FrameVBox" type="VBoxContainer" parent="Root"]
 anchor_right = 1.0
@@ -34,7 +36,7 @@ text = "Time: 0.00s"
 size_flags_horizontal = 3
 
 [node name="RoleStripLabel" type="Label" parent="Root/FrameVBox/TopBar/TopBarMargin/TopBarHBox"]
-text = "Role: Operator — Responsibility: Standard flow"
+text = "Role: Operator | Assignment: Unassigned | Window: Not Active"
 
 [node name="MainHBox" type="HBoxContainer" parent="Root/FrameVBox"]
 size_flags_vertical = 3
@@ -163,7 +165,7 @@ theme_override_constants/margin_bottom = 12
 theme_override_constants/separation = 8
 
 [node name="LogTitle" type="Label" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel/LogMargin/LogVBox"]
-text = "Learning summary"
+text = "Scenario selection"
 
 [node name="ExplainWhyToggle" type="CheckButton" parent="Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel/LogMargin/LogVBox"]
 text = "Explain the why"
