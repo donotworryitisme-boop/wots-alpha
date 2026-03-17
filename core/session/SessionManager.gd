@@ -1,6 +1,8 @@
 extends Node
 class_name SessionManager
 
+signal inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max: float)
+signal as400_status_updated(total_uats: int, total_col: int, loaded_uats: int, loaded_col: int)
 signal hint_updated(hint_text: String)
 signal time_updated(total_time: float, loading_time: float)
 signal situation_updated(objective_text: String)
@@ -19,7 +21,13 @@ var called_departments_early: bool = false
 var c_and_c_loaded: bool = false
 var time_penalty_applied: bool = false
 # -----------------------------------------------
-
+# --- DYNAMIC INVENTORY VARIABLES ---
+var inv_available: Array = []
+var inv_loaded: Array = []
+var truck_cap_max: float = 36.0
+var truck_cap_used: float = 0.0
+var as400_confirmed: bool = false
+# -----------------------------------
 var sim_clock: SimClock
 var event_queue: EventQueue
 var rule_engine: RuleEngine
@@ -117,20 +125,15 @@ func panel_closed(panel_name: String) -> void:
 
 # Session
 func start_session_with_scenario(scenario_name: String) -> void:
-	if session_active:
-		return
-
+	if session_active: return
 	session_active = true
 	sim_clock.current_time = 0.0
 	
-	# --- NEW: Reset state machine ---
 	current_state = ScenarioState.INIT
 	called_departments_early = false
 	c_and_c_loaded = false
 	time_penalty_applied = false
-	# --------------------------------
 
-	# Reset
 	rule_engine.waste_log.clear()
 	interruptions_since_last_decision = 0
 	last_interrupt_at = -1.0
@@ -141,20 +144,18 @@ func start_session_with_scenario(scenario_name: String) -> void:
 	escalation_used_count = 0
 
 	if panel_catalog.size() > 0:
-		for n in panel_catalog:
-			panels_ever_opened[str(n)] = false
+		for n in panel_catalog: panels_ever_opened[str(n)] = false
 
 	current_assignment = "Bay B2B session"
 	responsibility_window_active = true
 	_emit_boundary_update()
-
 	score_engine.start_session()
-
-	publish_hint("")
-	set_current_objective("(waiting for first event)")
+	
 	_add_timeline_line("%0.2fs: Session started — scenario: %s" % [sim_clock.current_time, scenario_name])
-
 	scenario_loader.load_scenario(scenario_name, self, rule_engine)
+	
+	_generate_inventory(scenario_name) # Pass the name to spawn the right pallets!
+	set_current_objective("Check AS400 expected capacity vs Dock View physical pallets.")
 
 func start_session() -> void:
 	start_session_with_scenario("default")
@@ -218,62 +219,51 @@ func end_session() -> void:
 
 # Actions
 func manual_decision(action: String) -> void:
-	if not session_active:
-		return
-
+	if not session_active: return
 	var t := sim_clock.current_time
 
-	# --- REAL-WORLD LOADING LOGIC ---
-	
-	# Action 1: Proactive Check
 	if action == "Call departments (C&C check)" and current_state <= ScenarioState.PREPARED:
 		called_departments_early = true
 		current_state = ScenarioState.PREPARED
-		set_current_objective("Departments looking for C&C. Ready to start loading.")
-		_add_timeline_line("%0.2fs: Proactive action — Called departments for missing C&C early." % t)
+		set_current_objective("Departments looking for missing pallets. Ready to load.")
+		_add_timeline_line("%0.2fs: Called departments early to find missing pallets." % t)
+		schedule_event_in(3.0, Callable(self, "_reveal_missing_pallets"))
 		
-	# Action 2: Start Loading
 	elif action == "Start Loading" and current_state <= ScenarioState.PREPARED:
 		current_state = ScenarioState.LOADING
-		set_current_objective("Loading bikes/bulky/mecha. Keep an eye on the time.")
-		_add_timeline_line("%0.2fs: Scenario State -> LOADING" % t)
+		set_current_objective("Loading in progress. Use Dock View or Quick Buttons.")
+		_add_timeline_line("%0.2fs: Started Loading Phase." % t)
 
-	# Action 3: Load the missing C&C (Late vs Early)
-	elif action == "Load C&C Pallets" and current_state == ScenarioState.LOADING:
-		c_and_c_loaded = true
-		if called_departments_early:
-			_add_timeline_line("%0.2fs: C&C loaded smoothly because departments were called early." % t)
-		else:
-			# If they didn't call early, they have to wait for them now!
-			time_penalty_applied = true
-			sim_clock.current_time += 15.0 # Add a 15 "minute" delay!
-			_add_timeline_line("%0.2fs: C&C missing! Had to call departments late. 15-minute delay applied." % t)
-		
-		set_current_objective("C&C Loaded. Check AS400 RAQ, then Seal Truck.")
+	elif action == "Confirm AS400":
+		as400_confirmed = true
+		_add_timeline_line("%0.2fs: Confirmed RAQ in AS400." % t)
 
-	# Action 4: Finish the run
 	elif action == "Seal Truck":
 		current_state = ScenarioState.CLOSED
-		
-		if not c_and_c_loaded:
-			_add_timeline_line("%0.2fs: CRITICAL: Truck sealed without mandatory C&C pallets! (RAQ > 0)" % t)
-		else:
-			_add_timeline_line("%0.2fs: Truck sealed successfully. RAQ is 0." % t)
-			
-		set_current_objective("Truck Sealed. Scenario Complete.")
-		end_session() 
-		return # Stop processing further rules for this click
+		if not as400_confirmed and inv_available.size() > 0:
+			_add_timeline_line("%0.2fs: CRITICAL: Sealed truck without confirming RAQ in AS400!" % t)
 
-	# Log the generic action to the timeline
+		var left_priority = 0
+		var left_cc = 0
+		for p in inv_available:
+			if p.type == "C&C": left_cc += 1
+			elif p.p_val <= 0: left_priority += 1
+
+		if left_cc > 0:
+			_add_timeline_line("%0.2fs: CRITICAL FAILURE: Left %d mandatory C&C pallets behind!" % [t, left_cc])
+		elif left_priority > 0:
+			_add_timeline_line("%0.2fs: WARNING: Left %d priority (D/D-) pallets behind while loading D+!" % [t, left_priority])
+		else:
+			_add_timeline_line("%0.2fs: Excellent Load! All priorities respected." % t)
+
+		end_session() 
+		return
+
 	var payload := {"action": action, "objective": current_objective}
 	var ctx := {"scaffold_tier": scaffold_tier_active, "time_pressure": time_pressure, "interruptions": interruptions_since_last_decision}
-
 	var produces_waste := rule_engine.evaluate_event(0, payload, ctx, t)
 	score_engine.apply_rule(0, produces_waste)
-
-	var one_line := "%0.2fs: Action registered: %s" % [t, action]
-	action_registered.emit(one_line)
-
+	action_registered.emit("%0.2fs: Action registered: %s" % [t, action])
 # Scheduling
 func schedule_event_in(delay: float, callback: Callable) -> void:
 	event_queue.schedule_event_in(delay, callback, sim_clock)
@@ -423,3 +413,90 @@ func is_zero_score_mode() -> bool:
 # Internals
 func _add_timeline_line(line: String) -> void:
 	timeline_lines.append(line)
+# ==========================================
+# PHASE 2.5: DYNAMIC INVENTORY & LOADING
+# ==========================================
+func _generate_inventory(scenario_name: String) -> void:
+	inv_available.clear()
+	inv_loaded.clear()
+	truck_cap_used = 0.0
+	as400_confirmed = false
+
+	if scenario_name == "Standard Loading":
+		# Generates exactly 36 capacity worth of pallets.
+		inv_available.append({"id": "CC-01", "type": "C&C", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "missing": true})
+		inv_available.append({"id": "CC-02", "type": "C&C", "promise": "D", "p_val": 0, "collis": 12, "cap": 1.0, "missing": false})
+		inv_available.append({"id": "CC-03", "type": "C&C", "promise": "D", "p_val": 0, "collis": 3, "cap": 1.0, "missing": false})
+		for i in range(2): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "missing": false})
+		for i in range(10): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "missing": false})
+		for i in range(20): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "missing": false})
+	else:
+		# Promise Loading - The Trap (Overcapacity!)
+		inv_available.append({"id": "CC-01", "type": "C&C", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "missing": true})
+		inv_available.append({"id": "CC-02", "type": "C&C", "promise": "D", "p_val": 0, "collis": 12, "cap": 1.0, "missing": false})
+		inv_available.append({"id": "CC-03", "type": "C&C", "promise": "D", "p_val": 0, "collis": 3, "cap": 1.0, "missing": false})
+		for i in range(4): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "promise": "D-", "p_val": -1, "collis": randi() % 8 + 1, "cap": 1.3, "missing": false})
+		for i in range(6): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "promise": "D", "p_val": 0, "collis": randi() % 40 + 1, "cap": 1.0, "missing": false})
+		for i in range(24): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "promise": "D+", "p_val": 1, "collis": 28, "cap": 1.0, "missing": false})
+		for i in range(3): inv_available.append({"id": "MD-" + str(i), "type": "Mecha", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "missing": false})
+
+	_emit_inventory()
+
+func load_pallet_by_id(id: String) -> void:
+	if current_state < ScenarioState.LOADING:
+		_add_timeline_line("Cannot load yet. Start loading first!")
+		return
+
+	var to_load = null
+	for p in inv_available:
+		if p.id == id and not p.missing:
+			to_load = p
+			break
+
+	if to_load == null: return
+
+	if truck_cap_used + to_load.cap > truck_cap_max:
+		_add_timeline_line("Truck is full! Cannot load %s." % to_load.id)
+		return
+
+	inv_available.erase(to_load)
+	inv_loaded.append(to_load)
+	truck_cap_used += to_load.cap
+	_add_timeline_line("Loaded %s (%s) - Promise: %s" % [to_load.id, to_load.type, to_load.promise])
+	_emit_inventory()
+
+func load_random_pallet(type: String) -> void:
+	var candidates = []
+	for p in inv_available:
+		if p.type == type and not p.missing:
+			candidates.append(p)
+	if candidates.size() > 0:
+		var pick = candidates[randi() % candidates.size()]
+		load_pallet_by_id(pick.id)
+	else:
+		_add_timeline_line("No visible %s pallets left to load!" % type)
+
+func _reveal_missing_pallets() -> void:
+	var found = 0
+	for p in inv_available:
+		if p.missing:
+			p.missing = false
+			found += 1
+	if found > 0:
+		_add_timeline_line("Departments delivered %d missing pallets to the dock!" % found)
+		_emit_inventory()
+
+func _emit_inventory() -> void:
+	var total_uats = inv_available.size() + inv_loaded.size()
+	var total_col = 0
+	for p in inv_available: total_col += p.collis
+	for p in inv_loaded: total_col += p.collis
+
+	var loaded_uats = inv_loaded.size()
+	var loaded_col = 0
+	for p in inv_loaded: loaded_col += p.collis
+
+	inventory_updated.emit(inv_available.duplicate(true), inv_loaded.duplicate(true), truck_cap_used, truck_cap_max)
+	as400_status_updated.emit(total_uats, total_col, loaded_uats, loaded_col)
+	if current_state == ScenarioState.LOADING:
+		set_current_objective("Loading in progress. Capacity: %0.1f / %0.1f" % [truck_cap_used, truck_cap_max])
