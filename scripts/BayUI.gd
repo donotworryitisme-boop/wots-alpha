@@ -88,10 +88,35 @@ func _ready() -> void:
 	_update_strip_text()
 	ProjectSettings.set_setting("gui/timers/tooltip_delay_sec", 1.3)
 	_setup_tooltips()
+	# --- NEW: Export Exit Button (Top Right) ---
+	var btn_exit = Button.new()
+	btn_exit.text = " X "
+	btn_exit.tooltip_text = "Exit Application"
+	
+	# Style it to be subtle but visible
+	var sb_exit = StyleBoxFlat.new()
+	sb_exit.bg_color = Color(0.8, 0.2, 0.2, 0.0) # Transparent by default
+	btn_exit.add_theme_stylebox_override("normal", sb_exit)
+	
+	var sb_hover = StyleBoxFlat.new()
+	sb_hover.bg_color = Color(0.8, 0.2, 0.2, 0.8) # Red on hover
+	btn_exit.add_theme_stylebox_override("hover", sb_hover)
+	
+	# Position it in the top right of the screen
+	add_child(btn_exit)
+	btn_exit.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	btn_exit.position += Vector2(-10, 10) # Small offset from the edge
+	
+	# Connect the exit logic
+	btn_exit.pressed.connect(func(): get_tree().quit())
 
 # ==========================================
 # NEW: BUILD THE VICTORY MODAL
 # ==========================================
+func _input(event: InputEvent) -> void:
+	# Pressing 'Escape' will also close the app (standard for full-screen apps)
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		get_tree().quit()
 func _build_debrief_modal() -> void:
 	debrief_overlay = ColorRect.new()
 	debrief_overlay.color = Color(0, 0, 0, 0.75) # Dark dim background
