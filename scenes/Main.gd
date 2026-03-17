@@ -1,60 +1,57 @@
 extends Control
 
+# --- CONSTANTS ---
 const DEBUG_OVERLAY_SCENE: PackedScene = preload("res://debug/DebugOverlay.tscn")
 const TRUST_CONTRACT_SCENE: PackedScene = preload("res://ui/TrustContract.tscn")
-const TRUST_FILE_PATH: String = "user://trust_contract_seen.dat"
+const BAY_UI_SCENE: PackedScene = preload("res://ui/BayUI.tscn")
+# We load the script directly instead of a scene
+const SessionManagerScript = preload("res://core/session/SessionManager.gd")
 
-var _trust_ok: bool = false
+# --- VARIABLES ---
+var _session = null
+var _ui: CanvasLayer = null
+var _trust_contract = null
 
 func _ready() -> void:
-	# Debug overlay only in debug builds.
+	# 1. Boot in Fullscreen
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+	# 2. Debug overlay
 	if OS.is_debug_build():
 		var overlay := DEBUG_OVERLAY_SCENE.instantiate()
 		add_child(overlay)
 
-	var bay_ui := get_node_or_null("BayUI")
-	var session := get_node_or_null("SessionManager")
+	# 3. Setup the Session (as a Node) and UI
+	_session = SessionManagerScript.new()
+	_session.name = "SessionManager"
+	add_child(_session)
 
-	# Wire session into BayUI harness (no new systems).
-	if bay_ui != null and session != null and bay_ui.has_method("set_session"):
-		bay_ui.call("set_session", session)
+	_ui = BAY_UI_SCENE.instantiate()
+	_ui.name = "BayUI"
+	add_child(_ui)
+	_ui.set_session(_session)
+	
+	# Connect the UI's request signal
+	_ui.connect("trust_contract_requested", _on_trust_contract_requested)
 
-	# Allow reopening trust contract from BayUI.
-	if bay_ui != null and bay_ui.has_signal("trust_contract_requested"):
-		bay_ui.connect("trust_contract_requested", Callable(self, "_on_trust_contract_requested"))
-
-	# Gate interaction behind trust contract on first launch.
-	if _trust_contract_seen():
-		_trust_ok = true
-		_enable_bay_ui()
-	else:
-		_show_trust_contract()
-
-func _enable_bay_ui() -> void:
-	# BayUI harness is interactive only after trust contract acceptance.
-	var bay_ui := get_node_or_null("BayUI")
-	if bay_ui != null and bay_ui.has_method("set_enabled"):
-		bay_ui.call("set_enabled", true)
+	# 4. STARTUP: Force the Trust Contract to show immediately
+	_ui.set_enabled(false) 
+	_on_trust_contract_requested()
 
 func _on_trust_contract_requested() -> void:
-	_show_trust_contract()
+	if _trust_contract != null: return 
 
-func _show_trust_contract() -> void:
-	if get_tree().get_nodes_in_group("wots_trust_contract").size() > 0:
-		return
+	_trust_contract = TRUST_CONTRACT_SCENE.instantiate()
+	add_child(_trust_contract)
+	
+	if _trust_contract.has_signal("accepted"):
+		_trust_contract.connect("accepted", _on_trust_contract_confirmed)
 
-	var tc := TRUST_CONTRACT_SCENE.instantiate()
-	add_child(tc)
-
-	if tc.has_method("add_to_group"):
-		tc.add_to_group("wots_trust_contract")
-
-	if tc.has_signal("accepted"):
-		tc.connect("accepted", Callable(self, "_on_trust_contract_accepted"))
-
-func _on_trust_contract_accepted() -> void:
-	_trust_ok = true
-	_enable_bay_ui()
-
-func _trust_contract_seen() -> bool:
-	return FileAccess.file_exists(TRUST_FILE_PATH)
+func _on_trust_contract_confirmed() -> void:
+	if _trust_contract != null:
+		_trust_contract.queue_free()
+		_trust_contract = null
+	
+	# Enable the UI
+	if _ui != null:
+		_ui.set_enabled(true)

@@ -51,6 +51,7 @@ var _strip_assignment: String = "Unassigned"
 var _strip_window_active: bool = false
 var _panel_state: Dictionary = {} 
 var _panel_nodes: Dictionary = {} 
+var panels_ever_opened: Dictionary = {} 
 
 # --- DYNAMIC UI CONTAINERS ---
 var pnl_dock_view: PanelContainer
@@ -59,6 +60,10 @@ var as400_label: RichTextLabel
 var row_mecha: HFlowContainer
 var row_bulky: HFlowContainer
 var row_bikes_cc: HFlowContainer
+
+# --- VICTORY PANEL CONTAINERS ---
+var debrief_overlay: ColorRect
+var lbl_debrief_text: RichTextLabel
 
 func _ready() -> void:
 	set_enabled(false)
@@ -72,6 +77,7 @@ func _ready() -> void:
 		end_button.pressed.connect(_on_end_pressed)
 
 	_build_dynamic_inventory_ui()
+	_build_debrief_modal() # NEW: Build the victory screen
 
 	if explain_toggle != null:
 		explain_toggle.toggled.connect(_on_explain_toggled)
@@ -82,6 +88,59 @@ func _ready() -> void:
 	_update_strip_text()
 	ProjectSettings.set_setting("gui/timers/tooltip_delay_sec", 1.3)
 	_setup_tooltips()
+
+# ==========================================
+# NEW: BUILD THE VICTORY MODAL
+# ==========================================
+func _build_debrief_modal() -> void:
+	debrief_overlay = ColorRect.new()
+	debrief_overlay.color = Color(0, 0, 0, 0.75) # Dark dim background
+	debrief_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	debrief_overlay.visible = false
+	$Root.add_child(debrief_overlay)
+
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	debrief_overlay.add_child(center)
+
+	var pnl = PanelContainer.new()
+	pnl.custom_minimum_size = Vector2(800, 600)
+	center.add_child(pnl)
+
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color(1, 1, 1, 1)
+	sb.corner_radius_top_left = 8
+	sb.corner_radius_top_right = 8
+	sb.corner_radius_bottom_left = 8
+	sb.corner_radius_bottom_right = 8
+	sb.shadow_color = Color(0, 0, 0, 0.15)
+	sb.shadow_size = 20
+	pnl.add_theme_stylebox_override("panel", sb)
+
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 40)
+	margin.add_theme_constant_override("margin_top", 40)
+	margin.add_theme_constant_override("margin_right", 40)
+	margin.add_theme_constant_override("margin_bottom", 40)
+	pnl.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 24)
+	margin.add_child(vbox)
+
+	lbl_debrief_text = RichTextLabel.new()
+	lbl_debrief_text.bbcode_enabled = true
+	lbl_debrief_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(lbl_debrief_text)
+
+	var btn_close = Button.new()
+	btn_close.text = "Close Report & Return"
+	btn_close.custom_minimum_size = Vector2(250, 50)
+	btn_close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn_close.pressed.connect(func(): debrief_overlay.visible = false)
+	vbox.add_child(btn_close)
+
+# ==========================================
 
 func _build_dynamic_inventory_ui() -> void:
 	if check_button == null: return
@@ -128,14 +187,12 @@ func _build_dynamic_inventory_ui() -> void:
 		btn.pressed.connect(func(): if _session != null: _session.call("load_random_pallet", t))
 		quick_row.add_child(btn)
 
-	# Build Dock View Toggle Button
 	btn_dock_view = Button.new()
 	btn_dock_view.text = "Dock View"
 	var toggle_vbox = btn_shift_board.get_parent()
 	toggle_vbox.add_child(btn_dock_view)
 	toggle_vbox.move_child(btn_dock_view, 1)
 
-	# Build Dock View Side Panel
 	pnl_dock_view = pnl_loading_plan.duplicate()
 	pnl_loading_plan.get_parent().add_child(pnl_dock_view)
 	var dv_vbox = pnl_dock_view.get_child(0).get_child(0)
@@ -167,6 +224,7 @@ func _build_dynamic_inventory_ui() -> void:
 	lbl_bikes.text = "Bikes & C&C"
 	map_vbox.add_child(lbl_bikes)
 	map_vbox.add_child(row_bikes_cc)
+
 func set_enabled(enabled: bool) -> void:
 	_enabled = enabled
 	if trust_button != null: trust_button.disabled = false
@@ -182,6 +240,7 @@ func set_enabled(enabled: bool) -> void:
 	if explain_toggle != null:
 		explain_toggle.visible = false
 		explain_toggle.button_pressed = false
+	if debrief_overlay != null: debrief_overlay.visible = false # NEW: Hide overlay on reset
 	_close_all_panels(true)
 	_set_setup_guidance()
 	_render_setup_scenario_list()
@@ -231,7 +290,7 @@ func _on_inventory_updated(avail: Array, _loaded: Array, _cap_used: float, _cap_
 func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(50, 50)
-	btn.text = p_data.id.split("-")[1] # Just show the number inside the box
+	btn.text = p_data.id.split("-")[1] 
 	btn.tooltip_text = "%s\nPromise: %s\nCollis: %d\nCap: %0.1f" % [p_data.type, p_data.promise, p_data.collis, p_data.cap]
 
 	var color = Color(0.2, 0.2, 0.2)
@@ -319,9 +378,12 @@ func _on_session_ended(debrief_payload: Dictionary) -> void:
 	if situation_panel != null: situation_panel.visible = false
 	if start_button != null: start_button.disabled = false
 	if end_button != null: end_button.disabled = true
+	
 	_debrief_what_happened = str(debrief_payload.get("what_happened", ""))
 	_debrief_why_it_mattered = str(debrief_payload.get("why_it_mattered", ""))
-	if log_title != null: log_title.text = "Learning summary"
+	
+	if log_title != null: log_title.text = "Story of the Shift"
+	
 	if explain_toggle != null:
 		explain_toggle.visible = _debrief_why_it_mattered.strip_edges() != ""
 		explain_toggle.button_pressed = false
@@ -331,14 +393,37 @@ func _on_explain_toggled(pressed: bool) -> void:
 	_render_debrief(pressed)
 
 func _render_debrief(show_why: bool) -> void:
-	if log_text == null: return
-	var bb := "[b]Learning summary[/b]\n\n"
-	bb += "[b]What happened[/b]\n"
+	# POPULATE THE NEW VICTORY SCREEN
+	var bb := "[center][font_size=24][color=#0082c3][b]Story of the Shift[/b][/color][/font_size][/center]\n\n"
+	bb += "[b]Timeline of Events[/b]\n"
 	bb += _debrief_what_happened + "\n"
+	
+	bb += "[b]Context Coverage Matrix (Information Visibility)[/b]\n"
+	var opened_panels = []
+	var missed_panels = []
+	for p in PANEL_NAMES:
+		if p != "Dock View":
+			if panels_ever_opened.get(p, false): opened_panels.append(p)
+			else: missed_panels.append(p)
+				
+	bb += "[color=#2ecc71]✔️ Consulted:[/color] " 
+	bb += ", ".join(opened_panels) if opened_panels.size() > 0 else "None"
+	bb += "\n[color=#95a5a6]⬛ Not Consulted:[/color] "
+	bb += ", ".join(missed_panels) if missed_panels.size() > 0 else "None"
+	bb += "\n\n"
+	
 	if show_why and _debrief_why_it_mattered.strip_edges() != "":
-		bb += "\n[b]Why it mattered[/b]\n"
+		bb += "[b]Neutral Pattern Callout[/b]\n"
 		bb += _debrief_why_it_mattered + "\n"
-	log_text.text = bb
+		
+	# Show the popup modal!
+	if lbl_debrief_text != null:
+		lbl_debrief_text.text = bb
+	if debrief_overlay != null:
+		debrief_overlay.visible = true
+		
+	# Also set it to the background log just so it stays there when closed
+	if log_text != null: log_text.text = bb
 
 func _set_setup_guidance() -> void:
 	if what_to_do_label == null: return
@@ -416,6 +501,7 @@ func _init_panel_nodes_and_buttons() -> void:
 
 func _reset_panel_state() -> void:
 	_panel_state.clear()
+	panels_ever_opened.clear()
 	for panel_name in PANEL_NAMES: _panel_state[panel_name] = false
 
 func _close_all_panels(silent: bool) -> void:
@@ -427,6 +513,7 @@ func _toggle_panel(panel_name: String) -> void:
 
 func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) -> void:
 	_panel_state[panel_name] = make_visible
+	if make_visible: panels_ever_opened[panel_name] = true 
 	var node: PanelContainer = _panel_nodes.get(panel_name, null)
 	if node != null: node.visible = make_visible
 	if silent: return
