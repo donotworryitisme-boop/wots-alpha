@@ -9,20 +9,25 @@ signal action_registered(one_line: String)
 signal role_updated(role_id: int)
 signal responsibility_boundary_updated(role_id: int, assignment_text: String, window_active: bool)
 
-@warning_ignore("shadowed_global_identifier")
-const SorterModel  = preload("res://core/domain/SorterModel.gd")
-const LoadingModel = preload("res://core/domain/LoadingModel.gd")
-const ScoreEngine  = preload("res://core/scoring/ScoreEngine.gd")
+
+
+# --- NEW: Scenario State Machine & Variables ---
+enum ScenarioState { INIT, ASSIGNED, PREPARED, LOADING, CLOSABLE, CLOSED }
+var current_state: int = ScenarioState.INIT
+
+var called_departments_early: bool = false
+var c_and_c_loaded: bool = false
+var time_penalty_applied: bool = false
+# -----------------------------------------------
 
 var sim_clock: SimClock
 var event_queue: EventQueue
 var rule_engine: RuleEngine
-var scenario_loader: ScenarioLoader
+var scenario_loader
 var sorter_model: SorterModel
 var loading_model: LoadingModel
 var role_manager: RoleManager
-var score_engine: ScoreEngine
-
+var score_engine
 # Alpha-safe harness timeline
 var timeline_lines: Array[String] = []
 
@@ -97,16 +102,16 @@ func register_panel_catalog(names: Array[String]) -> void:
 	for n in panel_catalog:
 		panels_ever_opened[str(n)] = false
 
-func panel_opened(name: String) -> void:
+func panel_opened(panel_name: String) -> void:
 	var t: float = sim_clock.current_time
-	panels_ever_opened[name] = true
-	var line := "%0.2fs: Panel opened — %s" % [t, name]
+	panels_ever_opened[panel_name] = true
+	var line := "%0.2fs: Panel opened — %s" % [t, panel_name]
 	action_registered.emit(line)
 	_add_timeline_line(line)
 
-func panel_closed(name: String) -> void:
+func panel_closed(panel_name: String) -> void:
 	var t: float = sim_clock.current_time
-	var line := "%0.2fs: Panel closed — %s" % [t, name]
+	var line := "%0.2fs: Panel closed — %s" % [t, panel_name]
 	action_registered.emit(line)
 	_add_timeline_line(line)
 
@@ -117,6 +122,13 @@ func start_session_with_scenario(scenario_name: String) -> void:
 
 	session_active = true
 	sim_clock.current_time = 0.0
+	
+	# --- NEW: Reset state machine ---
+	current_state = ScenarioState.INIT
+	called_departments_early = false
+	c_and_c_loaded = false
+	time_penalty_applied = false
+	# --------------------------------
 
 	# Reset
 	rule_engine.waste_log.clear()
@@ -202,6 +214,8 @@ func end_session() -> void:
 	}
 	session_ended.emit(payload)
 
+
+
 # Actions
 func manual_decision(action: String) -> void:
 	if not session_active:
@@ -209,15 +223,48 @@ func manual_decision(action: String) -> void:
 
 	var t := sim_clock.current_time
 
-	# 8.6: Escalation logged as Protective Action (neutral/positive framing; no penalties)
-	if action.begins_with("Protective Action:"):
-		escalation_used_count += 1
-		var esc_line := "%0.2fs: Protective Action — %s" % [t, action.replace("Protective Action:", "").strip_edges()]
-		action_registered.emit(esc_line)
-		_add_timeline_line(esc_line)
-		# Still pass through the rule pipeline as a neutral manual decision.
-		action = "Call captain"
+	# --- REAL-WORLD LOADING LOGIC ---
+	
+	# Action 1: Proactive Check
+	if action == "Call departments (C&C check)" and current_state <= ScenarioState.PREPARED:
+		called_departments_early = true
+		current_state = ScenarioState.PREPARED
+		set_current_objective("Departments looking for C&C. Ready to start loading.")
+		_add_timeline_line("%0.2fs: Proactive action — Called departments for missing C&C early." % t)
+		
+	# Action 2: Start Loading
+	elif action == "Start Loading" and current_state <= ScenarioState.PREPARED:
+		current_state = ScenarioState.LOADING
+		set_current_objective("Loading bikes/bulky/mecha. Keep an eye on the time.")
+		_add_timeline_line("%0.2fs: Scenario State -> LOADING" % t)
 
+	# Action 3: Load the missing C&C (Late vs Early)
+	elif action == "Load C&C Pallets" and current_state == ScenarioState.LOADING:
+		c_and_c_loaded = true
+		if called_departments_early:
+			_add_timeline_line("%0.2fs: C&C loaded smoothly because departments were called early." % t)
+		else:
+			# If they didn't call early, they have to wait for them now!
+			time_penalty_applied = true
+			sim_clock.current_time += 15.0 # Add a 15 "minute" delay!
+			_add_timeline_line("%0.2fs: C&C missing! Had to call departments late. 15-minute delay applied." % t)
+		
+		set_current_objective("C&C Loaded. Check AS400 RAQ, then Seal Truck.")
+
+	# Action 4: Finish the run
+	elif action == "Seal Truck":
+		current_state = ScenarioState.CLOSED
+		
+		if not c_and_c_loaded:
+			_add_timeline_line("%0.2fs: CRITICAL: Truck sealed without mandatory C&C pallets! (RAQ > 0)" % t)
+		else:
+			_add_timeline_line("%0.2fs: Truck sealed successfully. RAQ is 0." % t)
+			
+		set_current_objective("Truck Sealed. Scenario Complete.")
+		end_session() 
+		return # Stop processing further rules for this click
+
+	# Log the generic action to the timeline
 	var payload := {"action": action, "objective": current_objective}
 	var ctx := {"scaffold_tier": scaffold_tier_active, "time_pressure": time_pressure, "interruptions": interruptions_since_last_decision}
 
@@ -226,7 +273,6 @@ func manual_decision(action: String) -> void:
 
 	var one_line := "%0.2fs: Action registered: %s" % [t, action]
 	action_registered.emit(one_line)
-	_add_timeline_line("%0.2fs: Manual decision — %s" % [t, action])
 
 # Scheduling
 func schedule_event_in(delay: float, callback: Callable) -> void:
