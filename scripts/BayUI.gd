@@ -96,6 +96,15 @@ func _ready() -> void:
 
 	if explain_toggle != null:
 		explain_toggle.toggled.connect(_on_explain_toggled)
+		_init_panel_nodes_and_buttons()
+
+	_set_setup_guidance()
+	_update_top_time(0.0)
+	_update_strip_text()
+	
+	# Apply 1.3s delay and setup tooltips
+	ProjectSettings.set_setting("gui/timers/tooltip_delay_sec", 1.3)
+	_setup_tooltips()
 
 	_init_panel_nodes_and_buttons()
 
@@ -443,3 +452,18 @@ func _set_panel_visible(name: String, visible: bool, silent: bool) -> void:
 			_session.call("panel_opened", name)
 		else:
 			_session.call("panel_closed", name)
+func _setup_tooltips() -> void:
+	if btn_shift_board != null:
+		btn_shift_board.tooltip_text = "Shift Board\nProvides staffing, breaks, and key tasks."
+	if btn_loading_plan != null:
+		btn_loading_plan.tooltip_text = "Loading Plan\nShows planned loads, priorities, and constraints."
+	if btn_as400 != null:
+		btn_as400.tooltip_text = "AS400\nSystem lookups and current status."
+	if btn_trailer_capacity != null:
+		btn_trailer_capacity.tooltip_text = "Trailer Capacity\nDisplays cube/weight and remaining space."
+	if btn_raq != null:
+		btn_raq.tooltip_text = "RAQ\nShows Requests, Adjustments, and Questions."
+	if btn_phone != null:
+		btn_phone.tooltip_text = "Phone\nIncoming calls and messages needing attention."
+	if btn_notes != null:
+		btn_notes.tooltip_text = "Notes\nScratchpad to jot down what you noticed."

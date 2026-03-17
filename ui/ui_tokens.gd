@@ -1,27 +1,22 @@
 extends Node
 class_name UITokens
 
-# Execution 8.8.1 — UI Token Sheet (single source of truth)
-# NOTE: This is foundational. UI scenes should rely on the Theme + these constants.
 # Neutral naming; no gameplay implications.
+# Colors - ALIGNED WITH WOTS UI/UX COUNCIL (Light Industrial Theme)
+const COLOR_BG: Color = Color(0.96, 0.96, 0.95, 1.0)          # Warm light gray
+const COLOR_SURFACE: Color = Color(1.0, 1.0, 1.0, 1.0)        # Off-white / Pure white panels
+const COLOR_BORDER: Color = Color(0.85, 0.86, 0.88, 1.0)      # Soft divider lines
+const COLOR_TEXT_PRIMARY: Color = Color(0.12, 0.13, 0.15, 1.0)# Near black
+const COLOR_TEXT_META: Color = Color(0.45, 0.48, 0.52, 1.0)   # Muted gray
+const COLOR_ACCENT_BLUE: Color = Color(0.0, 0.51, 0.76, 1.0)  # Decathlon Blue (#0082C3)
 
-# Colors
-const COLOR_BG: Color = Color(0.06, 0.07, 0.08, 1.0)
-const COLOR_SURFACE: Color = Color(0.10, 0.11, 0.13, 1.0)
-const COLOR_BORDER: Color = Color(0.22, 0.24, 0.28, 1.0)
-const COLOR_TEXT_PRIMARY: Color = Color(0.94, 0.95, 0.97, 1.0)
-const COLOR_TEXT_META: Color = Color(0.70, 0.73, 0.78, 1.0)
-const COLOR_ACCENT_BLUE: Color = Color(0.25, 0.75, 1.00, 1.0)
-
-# Spacing / radii
+# Spacing / radii (Strict 8px Grid)
 const SPACING_8: int = 8
 const SPACING_16: int = 16
 const SPACING_24: int = 24
-const RADIUS: int = 8
+const RADIUS: int = 6 # Slightly tighter radius for a more professional/industrial feel
 
-# Fonts (Godot built-in default font family)
-# We keep this as a lightweight token sheet without introducing new font assets.
-# Sizes are applied in UITheme.tres.
+# Fonts
 const FONT_BODY_SIZE: int = 16
 const FONT_BODY_MEDIUM_SIZE: int = 16
 const FONT_META_SIZE: int = 13

@@ -1,79 +1,88 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=3 format=3 uid="uid://boq1abrvkgbbw"]
 
-[ext_resource type="Script" path="res://scripts/TrustContract.gd" id="1"]
-[ext_resource type="Theme" path="res://ui/UITheme.tres" id="2"]
+[ext_resource type="Script" uid="uid://dbg8uk1qnu80w" path="res://scripts/TrustContract.gd" id="1"]
+[ext_resource type="Theme" uid="uid://cf64j1rmwrhb1" path="res://ui/UITheme.tres" id="2"]
 
 [node name="TrustContract" type="CanvasLayer"]
 layer = 10
 script = ExtResource("1")
 
 [node name="Dimmer" type="ColorRect" parent="."]
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-mouse_filter = 0
 color = Color(0, 0, 0, 0.65)
 
 [node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 theme = ExtResource("2")
 
 [node name="Center" type="CenterContainer" parent="Root"]
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
 [node name="Panel" type="PanelContainer" parent="Root/Center"]
 custom_minimum_size = Vector2(980, 560)
+layout_mode = 2
 mouse_filter = 2
 
 [node name="Margin" type="MarginContainer" parent="Root/Center/Panel"]
+layout_mode = 2
+mouse_filter = 2
 theme_override_constants/margin_left = 24
 theme_override_constants/margin_top = 24
 theme_override_constants/margin_right = 24
 theme_override_constants/margin_bottom = 24
-mouse_filter = 2
 
 [node name="VBox" type="VBoxContainer" parent="Root/Center/Panel/Margin"]
-theme_override_constants/separation = 18
+layout_mode = 2
 mouse_filter = 2
+theme_override_constants/separation = 18
 
 [node name="Title" type="Label" parent="Root/Center/Panel/Margin/VBox"]
-text = "Trust Contract"
+layout_mode = 2
 mouse_filter = 0
+text = "Trust Contract"
 
 [node name="BodyPanel" type="PanelContainer" parent="Root/Center/Panel/Margin/VBox"]
 custom_minimum_size = Vector2(0, 340)
+layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
 [node name="BodyMargin" type="MarginContainer" parent="Root/Center/Panel/Margin/VBox/BodyPanel"]
+layout_mode = 2
+mouse_filter = 2
 theme_override_constants/margin_left = 18
 theme_override_constants/margin_top = 18
 theme_override_constants/margin_right = 18
 theme_override_constants/margin_bottom = 18
-mouse_filter = 2
 
 [node name="Body" type="RichTextLabel" parent="Root/Center/Panel/Margin/VBox/BodyPanel/BodyMargin"]
-bbcode_enabled = true
-scroll_active = true
+layout_mode = 2
 size_flags_vertical = 3
-mouse_filter = 0
+bbcode_enabled = true
 
 [node name="Spacer" type="Control" parent="Root/Center/Panel/Margin/VBox"]
+layout_mode = 2
 size_flags_vertical = 3
-mouse_filter = 0
 
 [node name="ButtonCenter" type="CenterContainer" parent="Root/Center/Panel/Margin/VBox"]
 custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
 mouse_filter = 2
 
 [node name="AcceptButton" type="Button" parent="Root/Center/Panel/Margin/VBox/ButtonCenter"]
 custom_minimum_size = Vector2(460, 76)
-text = "I Understand"
+layout_mode = 2
 mouse_filter = 2
-focus_mode = 2
 mouse_default_cursor_shape = 2
+text = "I Understand"
 
 [connection signal="pressed" from="Root/Center/Panel/Margin/VBox/ButtonCenter/AcceptButton" to="." method="_on_accept_pressed"]
