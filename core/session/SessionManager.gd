@@ -46,6 +46,7 @@ var panels_ever_opened: Dictionary = {}
 var current_assignment: String = "Unassigned"
 var responsibility_window_active: bool = false
 var escalation_used_count: int = 0
+var is_paused: bool = false
 
 # --- DYNAMIC INVENTORY VARIABLES ---
 var inv_available: Array = []
@@ -260,9 +261,12 @@ func schedule_event_at(time: float, callback: Callable) -> void:
 	event_queue.schedule_event_at(time, callback)
 
 func _on_tick(_delta_time: float, current_time: float) -> void:
-	if session_active:
+	if session_active and not is_paused:
 		event_queue.process_events(current_time)
 		time_updated.emit(sim_clock.current_time, loading_time_accum)
+
+func set_pause_state(state: bool) -> void:
+	is_paused = state
 
 func set_scaffolding(source: String, tier: int) -> void:
 	scaffold_source = source

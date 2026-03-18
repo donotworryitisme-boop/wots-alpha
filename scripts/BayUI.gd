@@ -2,7 +2,6 @@ extends CanvasLayer
 
 signal trust_contract_requested
 
-# Removed RAQ from here
 const PANEL_NAMES: Array[String] = [
 	"Dock View", "Shift Board", "Loading Plan", "AS400", "Trailer Capacity", "Phone", "Notes"
 ]
@@ -34,13 +33,15 @@ var _strip_window_active: bool = false
 var _panel_state: Dictionary = {} 
 var _panel_nodes: Dictionary = {} 
 var panels_ever_opened: Dictionary = {} 
+var _current_scenario_name: String = ""
 
+# --- PORTAL & STAGE CONTAINERS ---
 var portal_overlay: ColorRect
 var portal_scenario_dropdown: OptionButton
 
 var top_actions_hbox: HBoxContainer
 var stage_hbox: HBoxContainer
-var lbl_standby: Label # NEW: The Standby Text
+var lbl_standby: Label 
 var pnl_dock_stage: PanelContainer
 var pnl_as400_stage: PanelContainer
 
@@ -56,6 +57,39 @@ var raq_vbox: VBoxContainer
 var debrief_overlay: ColorRect
 var lbl_debrief_text: RichTextLabel
 
+# --- NEW: SOP KNOWLEDGE BASE CONTAINERS ---
+var sop_overlay: ColorRect
+var sop_search_input: LineEdit
+var sop_results_vbox: VBoxContainer
+var sop_content_label: RichTextLabel
+
+var sop_database: Array = [
+	{
+		"title": "What is Click & Collect (C&C)?",
+		"tags": ["click", "collect", "c&c", "white", "customer"],
+		"content": "[font_size=22][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nThese pallets contain items directly ordered by customers waiting at the store. \n\n[color=#e74c3c][b]THE RULE:[/b][/color] They MUST be loaded [b]LAST[/b] onto the truck (closest to the doors) so they are the very first things taken off at the destination store. If you load them early, the store has to empty the whole truck to give customers their orders.",
+		"scenarios": ["Standard Loading", "Promise Loading"]
+	},
+	{
+		"title": "How to check if I have all C&C pallets?",
+		"tags": ["check", "click", "missing", "raq", "as400"],
+		"content": "[font_size=22][color=#0082c3][b]Verifying Click & Collect[/b][/color][/font_size]\n\nNever guess if you have all your C&C pallets. Verify it:\n\n1. Open the [b]AS400[/b] panel.\n2. Look at the [b]RAQ UATs[/b] list.\n3. Count the white [b]C&C[/b] entries at the bottom of the list.\n4. Compare that number to the physical white pallets sitting in the [b]Dock View[/b].\n5. If the AS400 says you should have 3, but you only see 2 on the floor, click [b]Call Departments[/b] immediately to find the missing pallet before you seal the truck.",
+		"scenarios": ["Standard Loading", "Promise Loading"]
+	},
+	{
+		"title": "What is the standard loading sequence?",
+		"tags": ["load", "sequence", "truck", "order", "standard", "first"],
+		"content": "[font_size=22][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe physical order in which you put things into the truck is critical for safe transit and efficient unloading.\n\n[b]Load in this exact order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] - Yellow\n2. [color=#2ecc71][b]Bikes[/b][/color] - Green\n3. [color=#e67e22][b]Bulky[/b][/color] - Orange\n4. [color=#3498db][b]Mecha[/b][/color] - Blue\n5. [color=#95a5a6][b]Click & Collect[/b][/color] - White (Always last!)",
+		"scenarios": ["Standard Loading", "Promise Loading"]
+	},
+	{
+		"title": "How do Promise Dates work? (D, D+, D-)",
+		"tags": ["promise", "date", "d+", "d-", "priority", "capacity", "full"],
+		"content": "[font_size=22][color=#0082c3][b]Promise Dates & Capacity[/b][/color][/font_size]\n\nWhen you have more pallets than the truck can hold, you must leave some behind. You decide what stays based on the Promise Date.\n\n[color=#e74c3c][b]D-[/b] : Overdue.[/color] CRITICAL priority. Must be loaded.\n[color=#f1c40f][b]D[/b]  : Due today.[/color] High priority. Must be loaded.\n[color=#95a5a6][b]D+[/b] : Due tomorrow.[/color] Low priority. \n\n[b]The Rule:[/b] Load ALL of your D- and D pallets first (following the standard sequence). Only load D+ pallets if you still have empty spaces left in the truck after all priority pallets are loaded.",
+		"scenarios": ["Promise Loading"] # PROGRESSIVE DISCLOSURE!
+	}
+]
+
 func _ready() -> void:
 	var bg = ColorRect.new()
 	bg.color = Color(0.12, 0.14, 0.16) 
@@ -70,13 +104,13 @@ func _ready() -> void:
 	var old_log = $Root/FrameVBox/MainHBox/Workspace/WorkspaceVBox/LogPanel
 	if old_log: old_log.visible = false
 
-	# Hide the old RAQ Button visually from the sidebar
 	var old_raq_btn = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/RAQBtn
 	if old_raq_btn: old_raq_btn.visible = false
 
 	_build_start_portal()
 	_build_operational_layout()
 	_build_debrief_modal()
+	_build_sop_modal() # NEW!
 
 	_update_top_time(0.0)
 	_update_strip_text()
@@ -87,7 +121,179 @@ func _input(event: InputEvent) -> void:
 		get_tree().quit()
 
 # ==========================================
-# 1. THE NEW START PORTAL
+# 1. SOP KNOWLEDGE BASE MODAL
+# ==========================================
+func _build_sop_modal() -> void:
+	sop_overlay = ColorRect.new()
+	sop_overlay.color = Color(0, 0, 0, 0.9) 
+	sop_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sop_overlay.visible = false
+	$Root.add_child(sop_overlay)
+
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sop_overlay.add_child(center)
+
+	var pnl = PanelContainer.new()
+	pnl.custom_minimum_size = Vector2(1000, 650)
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color(0.95, 0.95, 0.95, 1)
+	sb.corner_radius_top_left = 8
+	sb.corner_radius_top_right = 8
+	sb.corner_radius_bottom_left = 8
+	sb.corner_radius_bottom_right = 8
+	pnl.add_theme_stylebox_override("panel", sb)
+	center.add_child(pnl)
+
+	var main_vbox = VBoxContainer.new()
+	pnl.add_child(main_vbox)
+	
+	# Top Header Bar
+	var header_bg = ColorRect.new()
+	header_bg.custom_minimum_size = Vector2(0, 80)
+	header_bg.color = Color(0.08, 0.12, 0.18)
+	main_vbox.add_child(header_bg)
+	
+	var header_hbox = HBoxContainer.new()
+	header_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	header_bg.add_child(header_hbox)
+	
+	var title_margin = MarginContainer.new()
+	title_margin.add_theme_constant_override("margin_left", 20)
+	header_hbox.add_child(title_margin)
+	
+	var title = Label.new()
+	title.text = "SOP Knowledge Base"
+	title.add_theme_font_size_override("font_size", 24)
+	title_margin.add_child(title)
+	
+	var spacer = Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_hbox.add_child(spacer)
+	
+	var btn_close = Button.new()
+	btn_close.text = " Resume Shift "
+	btn_close.custom_minimum_size = Vector2(150, 40)
+	btn_close.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var close_sb = StyleBoxFlat.new()
+	close_sb.bg_color = Color(0.8, 0.2, 0.2)
+	close_sb.corner_radius_top_left = 4
+	close_sb.corner_radius_bottom_right = 4
+	btn_close.add_theme_stylebox_override("normal", close_sb)
+	btn_close.pressed.connect(_close_sop_modal)
+	
+	var close_margin = MarginContainer.new()
+	close_margin.add_theme_constant_override("margin_right", 20)
+	close_margin.add_child(btn_close)
+	header_hbox.add_child(close_margin)
+
+	# Main Split Pane (Left: Search/List, Right: Content)
+	var split_hbox = HBoxContainer.new()
+	split_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vbox.add_child(split_hbox)
+
+	# Left Panel
+	var left_pnl = PanelContainer.new()
+	left_pnl.custom_minimum_size = Vector2(350, 0)
+	var left_sb = StyleBoxFlat.new()
+	left_sb.bg_color = Color(0.9, 0.9, 0.9)
+	left_pnl.add_theme_stylebox_override("panel", left_sb)
+	split_hbox.add_child(left_pnl)
+	
+	var left_margin = MarginContainer.new()
+	left_margin.add_theme_constant_override("margin_left", 15)
+	left_margin.add_theme_constant_override("margin_top", 15)
+	left_margin.add_theme_constant_override("margin_right", 15)
+	left_margin.add_theme_constant_override("margin_bottom", 15)
+	left_pnl.add_child(left_margin)
+	
+	var left_vbox = VBoxContainer.new()
+	left_vbox.add_theme_constant_override("separation", 15)
+	left_margin.add_child(left_vbox)
+	
+	sop_search_input = LineEdit.new()
+	sop_search_input.placeholder_text = "Search SOPs (e.g., 'click')"
+	sop_search_input.custom_minimum_size = Vector2(0, 40)
+	sop_search_input.text_changed.connect(_on_sop_search_changed)
+	left_vbox.add_child(sop_search_input)
+	
+	var scroll_res = ScrollContainer.new()
+	scroll_res.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left_vbox.add_child(scroll_res)
+	
+	sop_results_vbox = VBoxContainer.new()
+	sop_results_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_res.add_child(sop_results_vbox)
+
+	# Right Panel (Content)
+	var right_margin = MarginContainer.new()
+	right_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_margin.add_theme_constant_override("margin_left", 30)
+	right_margin.add_theme_constant_override("margin_top", 30)
+	right_margin.add_theme_constant_override("margin_right", 30)
+	split_hbox.add_child(right_margin)
+	
+	sop_content_label = RichTextLabel.new()
+	sop_content_label.bbcode_enabled = true
+	sop_content_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sop_content_label.add_theme_color_override("default_color", Color.BLACK)
+	sop_content_label.text = "[color=#95a5a6]Select an article from the left to read the standard operating procedure.[/color]"
+	right_margin.add_child(sop_content_label)
+
+func _open_sop_modal() -> void:
+	if _session != null:
+		_session.call("set_pause_state", true) # FREEZE TIME
+	sop_search_input.text = ""
+	sop_content_label.text = "[color=#95a5a6]Select an article from the left to read the standard operating procedure.[/color]"
+	_on_sop_search_changed("") # Load fresh list based on current scenario
+	sop_overlay.visible = true
+
+func _close_sop_modal() -> void:
+	if _session != null:
+		_session.call("set_pause_state", false) # RESUME TIME
+	sop_overlay.visible = false
+
+func _on_sop_search_changed(query: String) -> void:
+	for child in sop_results_vbox.get_children():
+		child.queue_free()
+		
+	var q = query.to_lower()
+	for article in sop_database:
+		# Progressive Disclosure Check!
+		if not article.scenarios.has(_current_scenario_name):
+			continue # Hide advanced articles if in basic scenario
+			
+		var match_found = false
+		if q == "": match_found = true
+		elif q in article.title.to_lower(): match_found = true
+		else:
+			for tag in article.tags:
+				if q in tag.to_lower(): match_found = true
+				
+		if match_found:
+			var btn = Button.new()
+			btn.text = article.title
+			btn.custom_minimum_size = Vector2(0, 45)
+			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			
+			var btn_sb = StyleBoxFlat.new()
+			btn_sb.bg_color = Color.WHITE
+			btn_sb.border_width_bottom = 1
+			btn_sb.border_color = Color(0.8, 0.8, 0.8)
+			
+			var btn_hover = btn_sb.duplicate()
+			btn_hover.bg_color = Color(0.9, 0.95, 1.0) # Light blue hover
+			
+			btn.add_theme_stylebox_override("normal", btn_sb)
+			btn.add_theme_stylebox_override("hover", btn_hover)
+			btn.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2))
+			btn.add_theme_color_override("font_hover_color", Color(0.0, 0.5, 0.8))
+			
+			btn.pressed.connect(func(): sop_content_label.text = article.content)
+			sop_results_vbox.add_child(btn)
+
+# ==========================================
+# 2. START PORTAL
 # ==========================================
 func _build_start_portal() -> void:
 	portal_overlay = ColorRect.new()
@@ -151,7 +357,6 @@ func _build_start_portal() -> void:
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(spacer)
 
-	# --- UPDATED: BEGIN SHIFT BUTTON ---
 	var btn_start = Button.new()
 	btn_start.text = "Begin Shift"
 	btn_start.custom_minimum_size = Vector2(0, 60)
@@ -169,7 +374,7 @@ func _build_start_portal() -> void:
 	start_sb_normal.border_color = Color(0.8, 0.8, 0.8)
 	
 	var start_sb_hover = StyleBoxFlat.new()
-	start_sb_hover.bg_color = Color(0.18, 0.8, 0.44) # Decathlon Green
+	start_sb_hover.bg_color = Color(0.18, 0.8, 0.44) 
 	start_sb_hover.corner_radius_top_left = 6
 	start_sb_hover.corner_radius_top_right = 6
 	start_sb_hover.corner_radius_bottom_left = 6
@@ -183,7 +388,6 @@ func _build_start_portal() -> void:
 	btn_start.pressed.connect(_on_portal_start_pressed)
 	vbox.add_child(btn_start)
 	
-	# --- CLOSE APPLICATION BUTTON ---
 	var btn_quit = Button.new()
 	btn_quit.text = "Close Application"
 	btn_quit.custom_minimum_size = Vector2(0, 40)
@@ -201,7 +405,7 @@ func _build_start_portal() -> void:
 	quit_sb_normal.border_color = Color(0.8, 0.8, 0.8)
 	
 	var quit_sb_hover = StyleBoxFlat.new()
-	quit_sb_hover.bg_color = Color(0.8, 0.2, 0.2) # Danger Red
+	quit_sb_hover.bg_color = Color(0.8, 0.2, 0.2) 
 	quit_sb_hover.corner_radius_top_left = 6
 	quit_sb_hover.corner_radius_top_right = 6
 	quit_sb_hover.corner_radius_bottom_left = 6
@@ -216,7 +420,7 @@ func _build_start_portal() -> void:
 	vbox.add_child(btn_quit)
 
 # ==========================================
-# 2. BUILD THE OPERATIONAL STAGE
+# 3. OPERATIONAL STAGE
 # ==========================================
 func _build_operational_layout() -> void:
 	top_actions_hbox = HBoxContainer.new()
@@ -241,6 +445,24 @@ func _build_operational_layout() -> void:
 	btn_seal.custom_minimum_size = Vector2(200, 40)
 	btn_seal.pressed.connect(func(): _on_decision_pressed("Seal Truck"))
 	top_actions_hbox.add_child(btn_seal)
+	
+	# Push the SOP button to the far right
+	var top_spacer = Control.new()
+	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_actions_hbox.add_child(top_spacer)
+	
+	var btn_sop = Button.new()
+	btn_sop.text = " Help & SOPs "
+	btn_sop.custom_minimum_size = Vector2(150, 40)
+	var sop_sb = StyleBoxFlat.new()
+	sop_sb.bg_color = Color(0.2, 0.4, 0.8) # Blue info button
+	sop_sb.corner_radius_top_left = 6
+	sop_sb.corner_radius_top_right = 6
+	sop_sb.corner_radius_bottom_left = 6
+	sop_sb.corner_radius_bottom_right = 6
+	btn_sop.add_theme_stylebox_override("normal", sop_sb)
+	btn_sop.pressed.connect(_open_sop_modal)
+	top_actions_hbox.add_child(btn_sop)
 
 	stage_hbox = HBoxContainer.new()
 	stage_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL 
@@ -249,13 +471,12 @@ func _build_operational_layout() -> void:
 	stage_hbox.visible = false
 	workspace_vbox.add_child(stage_hbox)
 	
-	# NEW: Standby Label
 	lbl_standby = Label.new()
 	lbl_standby.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl_standby.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lbl_standby.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_standby.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl_standby.text = "Shift Started.\n\nSelect a tool from the Panels menu to begin operations."
+	lbl_standby.text = "Shift Started.\n\nSelect a tool from the Panels menu to begin operations.\n\n(If you don't know what to do, click '? Help & SOPs' in the top right.)"
 	lbl_standby.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	lbl_standby.add_theme_font_size_override("font_size", 24)
 	stage_hbox.add_child(lbl_standby)
@@ -356,7 +577,7 @@ func _build_dock_stage() -> void:
 
 	truck_cap_label = RichTextLabel.new()
 	truck_cap_label.bbcode_enabled = true
-	truck_cap_label.scroll_active = false # KILLS THE SCROLLBAR
+	truck_cap_label.scroll_active = false 
 	truck_cap_label.fit_content = true
 	truck_cap_label.text = "[center][color=#7f8fa6]Capacity: 0.0 / 36.0[/color]\n[b][color=#f5f6fa]Spaces Left: 36.0[/color][/b][/center]"
 	truck_vbox.add_child(truck_cap_label)
@@ -474,7 +695,7 @@ func _on_portal_start_pressed() -> void:
 	var scenario_name: String = "default"
 	if portal_scenario_dropdown != null: scenario_name = portal_scenario_dropdown.get_item_text(portal_scenario_dropdown.get_selected_id())
 	
-	# Hardcoded Operator role since we removed the dropdown
+	_current_scenario_name = scenario_name # Save for SOP filters
 	_session.set_role(WOTSConfig.Role.OPERATOR)
 	_is_active = true
 	
@@ -484,7 +705,7 @@ func _on_portal_start_pressed() -> void:
 	
 	_reset_panel_state()
 	_close_all_panels(true)
-	lbl_standby.visible = true # Show standby text immediately
+	lbl_standby.visible = true 
 	
 	_session.call("start_session_with_scenario", scenario_name)
 
@@ -533,7 +754,6 @@ func _populate_scenarios() -> void:
 		names = _session.scenario_loader.call("get_scenario_names")
 	else: names = ["default"]
 	
-	# Force Standard Loading to be first in the list
 	if names.has("Standard Loading"):
 		names.erase("Standard Loading")
 		names.push_front("Standard Loading")
@@ -563,7 +783,6 @@ func _update_strip_text() -> void:
 	if role_strip_label == null: return
 	var window_text := "Not Active"
 	if _strip_window_active: window_text = "Active"
-	# Role hidden from text string to reduce clutter
 	role_strip_label.text = "Assignment: %s | Window: %s" % [_strip_assignment, window_text]
 
 func _on_as400_updated(t_uats: int, t_col: int, l_uats: int, l_col: int) -> void:
@@ -741,7 +960,6 @@ func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) ->
 	var node = _panel_nodes.get(panel_name, null)
 	if node != null: node.visible = make_visible
 
-	# Hide Standby Label if ANY panel is open
 	if lbl_standby != null:
 		var any_open = false
 		for p in _panel_state.keys():
