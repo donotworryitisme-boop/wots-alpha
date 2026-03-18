@@ -54,6 +54,7 @@ var truck_cap_max: float = 36.0
 var truck_cap_used: float = 0.0
 var as400_confirmed: bool = false
 var time_elapsed: float = 0.0 # Minutes
+var unloaded_count: int = 0 # Track mistakes!
 var service_center_count: int = 6
 
 func _ready() -> void:
@@ -64,7 +65,6 @@ func _ready() -> void:
 	sim_clock.connect("tick", Callable(self, "_on_tick"))
 	rule_engine = RuleEngine.new()
 	add_child(rule_engine)
-	# NOTE: Ensure these class files exist and are correct in your project!
 	scenario_loader = load("res://core/scenarios/ScenarioLoader.gd").new()
 	add_child(scenario_loader)
 	sorter_model = load("res://core/domain/SorterModel.gd").new()
@@ -112,6 +112,7 @@ func start_session_with_scenario(scenario_name: String) -> void:
 	zero_score_mode = false
 	timeline_lines.clear()
 	escalation_used_count = 0
+	unloaded_count = 0
 	if panel_catalog.size() > 0:
 		for n in panel_catalog: panels_ever_opened[str(n)] = false
 	current_assignment = "Bay B2B session"
@@ -136,16 +137,19 @@ func end_session() -> void:
 	_emit_boundary_update()
 	_add_timeline_line("%0.2fs: Session ended" % sim_clock.current_time)
 	
-	if panel_catalog.size() > 0:
-		var never: Array[String] = []
-		for n in panel_catalog:
-			if not bool(panels_ever_opened.get(str(n), false)): never.append(str(n))
-		if never.size() > 0: _add_timeline_line("%0.2fs: Panels never opened — %s" % [sim_clock.current_time, ", ".join(never)])
-	
 	var what_happened := "[b]Events[/b]\n"
 	for line in timeline_lines: what_happened += "• " + line + "\n"
 	
-	var why := "Review your operational decisions below.\n"
+	# NEW: TIME CALCULATION & WARNINGS
+	var why := "Estimated Total Loading Time: [b]%0.1f minutes[/b].\n" % time_elapsed
+	
+	if unloaded_count > 0:
+		var waste_time = unloaded_count * 1.1
+		if unloaded_count >= 3:
+			why += "\n[color=#e74c3c]⚠️ REWORK WARNING: You pulled %d pallets off the truck during loading. This added %0.1f minutes of wasted rework time. Plan your sequence carefully before loading.[/color]\n" % [unloaded_count, waste_time]
+		else:
+			why += "\n[color=#f39c12]Note: You pulled %d pallets off the truck, adding %0.1f minutes of rework.[/color]\n" % [unloaded_count, waste_time]
+
 	var payload := {"what_happened": what_happened, "why_it_mattered": why}
 	session_ended.emit(payload)
 
@@ -167,16 +171,19 @@ func manual_decision(action: String) -> void:
 				schedule_event_in(3.0, Callable(self, "_reveal_missing_pallets"))
 			else:
 				sim_clock.current_time += 2.0
+				time_elapsed += 2.0
 				current_state = ScenarioState.PREPARED
 				_add_timeline_line("%0.2fs: ⚠️ Called departments, but all pallets were already on dock. (+2m time wasted)" % t)
 				
 		elif current_state == ScenarioState.LOADING:
 			if any_missing:
 				sim_clock.current_time += 15.0
+				time_elapsed += 15.0
 				_add_timeline_line("%0.2fs: ❌ Called departments LATE for missing pallets. (+15m penalty)" % t)
 				_reveal_missing_pallets()
 			else:
 				sim_clock.current_time += 2.0
+				time_elapsed += 2.0
 				_add_timeline_line("%0.2fs: ⚠️ Called departments late, but nothing was missing. (+2m time wasted)" % t)
 
 	elif action == "Start Loading" and current_state <= ScenarioState.PREPARED:
@@ -193,15 +200,13 @@ func manual_decision(action: String) -> void:
 		if not as400_confirmed and inv_available.size() > 0:
 			_add_timeline_line("%0.2fs: ❌ AS400: Sealed truck without confirming final RAQ!" % t)
 
-		# 1. Count what was left behind
 		var left_priority = 0
 		var left_cc = 0
 		for p in inv_available:
 			if p.type == "C&C": left_cc += 1
-			elif p.p_val <= 0: left_priority += 1
+			elif p.p_val <= 0 and p.promise != "N/A": left_priority += 1
 
-		# 2. Check the Loading Order (Bikes -> Bulky -> Mecha -> C&C)
-		var type_ranks = {"Bikes": 0, "Bulky": 1, "Mecha": 2, "C&C": 3}
+		var type_ranks = {"ServiceCenter": 0, "Bikes": 1, "Bulky": 2, "Mecha": 3, "C&C": 4}
 		var order_broken = false
 		var last_rank = -1
 		for p in inv_loaded:
@@ -213,14 +218,12 @@ func manual_decision(action: String) -> void:
 
 		var flawless = true
 		
-		# --- Check C&C ---
 		if left_cc > 0:
 			_add_timeline_line("%0.2fs: ❌ CRITICAL: Left %d mandatory C&C pallets behind!" % [t, left_cc])
 			flawless = false
 		else:
 			_add_timeline_line("%0.2fs: ✔️ C&C Pallets: All mandatory C&C successfully loaded." % t)
 
-		# --- Check Promise Dates ---
 		var loaded_d_plus = false
 		for p in inv_loaded:
 			if p.p_val > 0: loaded_d_plus = true
@@ -231,9 +234,8 @@ func manual_decision(action: String) -> void:
 		elif left_priority == 0:
 			_add_timeline_line("%0.2fs: ✔️ PROMISE DATES: All priority pallets (D/D-) successfully loaded." % t)
 
-		# --- Check Loading Order ---
 		if order_broken:
-			_add_timeline_line("%0.2fs: ❌ LOADING ORDER: Pallets loaded out of sequence! Correct order is Bikes -> Bulky -> Mecha -> C&C. This delays unloading." % t)
+			_add_timeline_line("%0.2fs: ❌ LOADING ORDER: Pallets loaded out of sequence! This delays unloading." % t)
 			flawless = false
 		elif inv_loaded.size() > 0:
 			_add_timeline_line("%0.2fs: ✔️ LOADING ORDER: Perfect physical sequence used." % t)
@@ -273,37 +275,28 @@ func _tier_for_role(role: int) -> int:
 	if role == WOTSConfig.Role.CAPTAIN: return 2
 	return 3
 
-func publish_hint(hint_text: String) -> void:
-	hint_updated.emit(hint_text)
-
+func publish_hint(hint_text: String) -> void: hint_updated.emit(hint_text)
 func set_current_objective(text: String) -> void:
 	current_objective = text
 	situation_updated.emit(current_objective)
-
 func set_assignment(text: String) -> void:
 	current_assignment = text
 	_emit_boundary_update()
-
 func set_responsibility_window(active: bool) -> void:
 	responsibility_window_active = active
 	_emit_boundary_update()
-
 func _emit_boundary_update() -> void:
 	responsibility_boundary_updated.emit(role_manager.get_role(), current_assignment, responsibility_window_active)
-
 func record_rule_result(rule_id: int, produces_waste: bool, timestamp: float) -> void:
 	var tag := "Aligned with priorities"
 	if produces_waste: tag = "Unfavorable outcome"
 	_add_timeline_line("%0.2fs: Rule %d — %s" % [timestamp, rule_id, tag])
-
 func register_interrupt(_related_rule_id: int, timestamp: float) -> void:
 	interruptions_since_last_decision += 1
 	last_interrupt_at = timestamp
 	_add_timeline_line("%0.2fs: Interrupt (non-critical noise)" % timestamp)
-
 func register_info_reveal(revealed: Dictionary, timestamp: float) -> void:
 	_add_timeline_line("%0.2fs: Info reveal: %s" % [timestamp, str(revealed)])
-
 func consume_interruptions() -> void:
 	interruptions_since_last_decision = 0
 	last_interrupt_at = -1.0
@@ -358,9 +351,6 @@ func set_zero_score_mode(enabled: bool) -> void: zero_score_mode = enabled
 func is_zero_score_mode() -> bool: return zero_score_mode
 func _add_timeline_line(line: String) -> void: timeline_lines.append(line)
 
-# ==========================================
-# PHASE 2.5: DYNAMIC INVENTORY & LOADING
-# ==========================================
 func _generate_inventory(scenario_name: String) -> void:
 	inv_available.clear()
 	inv_loaded.clear()
@@ -371,14 +361,13 @@ func _generate_inventory(scenario_name: String) -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.randomize()
 
-	# 1. Add Service Center (Realistic count: 1 to 3)
 	service_center_count = rng.randi_range(1, 3)
 	for i in range(service_center_count):
 		inv_available.append({
 			"id": "SC-" + str(i), 
 			"type": "ServiceCenter", 
 			"code": "N/A",
-			"promise": "D", 
+			"promise": "N/A", 
 			"p_val": 0,
 			"collis": 1, 
 			"cap": 0.5, 
@@ -386,36 +375,30 @@ func _generate_inventory(scenario_name: String) -> void:
 			"missing": false
 		})
 
-	# 2. Add C&C (Realistic count: 2 to 4)
 	var cc_count = rng.randi_range(2, 4)
 	var missing_idx = -1
-	# 50% chance one of the C&C pallets is missing
 	if rng.randf() > 0.5: missing_idx = rng.randi_range(0, cc_count - 1)
 	
 	for i in range(cc_count):
 		inv_available.append({
-			"id": "CC-" + str(i+1),
-			"type": "C&C",
-			"code": "MAP",
-			"promise": "D",
-			"p_val": 0,
-			"collis": rng.randi_range(3, 12),
-			"cap": 1.0,
-			"is_uat": true,
+			"id": "CC-" + str(i+1), "type": "C&C", "code": "MAP", "promise": "D", 
+			"p_val": 0, "collis": rng.randi_range(3, 12), "cap": 1.0, "is_uat": true, 
 			"missing": (i == missing_idx)
 		})
 
-	# 3. Add standard pallets based on Scenario
 	if scenario_name == "Standard Loading":
 		for i in range(2): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "code": "MAG", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "is_uat": true, "missing": false})
 		for i in range(10): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "code": "MAP", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "is_uat": true, "missing": false})
 		for i in range(16): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
 	else:
-		# Promise Loading (The Priority Trap)
-		for i in range(4): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "code": "MAG", "promise": "D-", "p_val": -1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
-		for i in range(6): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "code": "MAG", "promise": "D", "p_val": 0, "collis": 15, "cap": 1.0, "is_uat": true, "missing": false})
-		for i in range(20): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D+", "p_val": 1, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
-		for i in range(3): inv_available.append({"id": "MD-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(2): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "code": "MAG", "promise": "D-", "p_val": -1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
+		for i in range(2): inv_available.append({"id": "B-" + str(i+2), "type": "Bikes", "code": "MAG", "promise": "D+", "p_val": 1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
+		
+		for i in range(3): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "code": "MAG", "promise": "D", "p_val": 0, "collis": 15, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(3): inv_available.append({"id": "BLK-" + str(i+3), "type": "Bulky", "code": "MAG", "promise": "D+", "p_val": 1, "collis": 15, "cap": 1.0, "is_uat": true, "missing": false})
+		
+		for i in range(15): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D+", "p_val": 1, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(8): inv_available.append({"id": "MD-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
 
 	inv_available.shuffle()
 	_emit_inventory()
@@ -431,28 +414,51 @@ func load_pallet_by_id(id: String) -> void:
 			to_load = p
 			break
 
-	# 1. Safety Check: Does it exist?
 	if to_load == null: return
 
-	# 2. Sequence Check: Service Center First
 	var sc_left = false
 	for p in inv_available:
 		if p.type == "ServiceCenter" and not p.missing: sc_left = true
 	
 	if sc_left and to_load.type != "ServiceCenter":
-		_add_timeline_line("⚠️ Sequence Warning: Loading pallets before Service Center stands.")
+		_add_timeline_line("⚠️ Sequence Warning: Loaded %s before Service Center stands." % to_load.id)
 
-	# 3. Capacity Check
 	if truck_cap_used + to_load.cap > truck_cap_max:
 		_add_timeline_line("Truck is full! Cannot load %s." % to_load.id)
 		return
 
-	# 4. Load it!
 	inv_available.erase(to_load)
 	inv_loaded.append(to_load)
 	truck_cap_used += to_load.cap
-	time_elapsed += 1.1 # Standard loading time economy
+	time_elapsed += 1.1 
 	_add_timeline_line("Loaded %s (%s) - Promise: %s" % [to_load.id, to_load.type, to_load.promise])
+	_emit_inventory()
+
+# --- NEW: UNLOAD FUNCTION ---
+func unload_pallet_by_id(id: String) -> void:
+	if current_state < ScenarioState.LOADING: return
+	
+	var idx = -1
+	for i in range(inv_loaded.size()):
+		if inv_loaded[i].id == id:
+			idx = i
+			break
+			
+	if idx == -1: return
+	
+	# LIFO CHECK: You can only physically reach the last 3 pallets loaded (the tail)
+	if idx < inv_loaded.size() - 3:
+		_add_timeline_line("⚠️ Cannot unload %s. It is blocked by pallets in front of it! You must unload the tail first." % id)
+		return
+	
+	var to_unload = inv_loaded[idx]
+	inv_loaded.erase(to_unload)
+	inv_available.append(to_unload)
+	truck_cap_used -= to_unload.cap
+	time_elapsed += 1.1 # Penalty for pulling it off
+	unloaded_count += 1
+	
+	_add_timeline_line("⚠️ Unloaded %s (%s) back to the dock." % [to_unload.id, to_unload.type])
 	_emit_inventory()
 
 func load_random_pallet(type: String) -> void:
