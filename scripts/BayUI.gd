@@ -61,7 +61,6 @@ var as400_terminal_input: LineEdit
 var as400_state: int = 0
 var last_avail_cache: Array = []
 
-# --- DESTINATIONS CHEAT SHEET ---
 var store_destinations: Array = [
 	{"name": "ALEXANDRIUM", "code": "2093"},
 	{"name": "ALKMAAR", "code": "1570"},
@@ -95,55 +94,77 @@ var tutorial_label: RichTextLabel
 var tutorial_active: bool = false
 var tutorial_step: int = -1
 
-# --- EXPANDED SOP DATABASE ---
+# --- PROGRESSIVE SOP DATABASE ---
 var sop_database: Array = [
 	{
 		"title": "AS400: Login & Shortcuts",
 		"tags": ["as400", "login", "password", "f3", "f10", "terminal"],
 		"content": "[font_size=22][color=#0082c3][b]AS400: Login & Shortcuts[/b][/color][/font_size]\n\nThe AS400 is your primary system for checking the RAQ.\n\n[b]Login Sequence:[/b]\n1. User: [b]BAYB2B[/b]\n2. Password: [b]123456[/b]\n\n[b]Shortcuts:[/b]\n• Press [b]F3[/b] on your keyboard to go back a screen.\n• Press [b]F10[/b] to confirm the RAQ when you are finished loading.",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
+		"new_in": "0. Tutorial"
 	},
 	{
 		"title": "AS400: How to find the RAQ List",
 		"tags": ["as400", "navigate", "raq", "menu", "list"],
 		"content": "[font_size=22][color=#0082c3][b]AS400: Navigation[/b][/color][/font_size]\n\nTo find the RAQ (Rest à Quai / Remaining to Load) list, type the following numbers in the AS400 menu and press Enter after each:\n\n1. [b]50[/b] (Expeditions)\n2. [b]01[/b] (Gestion des RAQ)\n3. [b]02[/b] (RAQ Par Camion)\n4. [b]05[/b] (Afficher RAQ Actuel)",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
+		"new_in": "0. Tutorial"
 	},
 	{
 		"title": "Colis Numbers: How to read Department Prefixes",
 		"tags": ["colis", "number", "prefix", "identify", "department"],
 		"content": "[font_size=22][color=#0082c3][b]Colis Number Identification[/b][/color][/font_size]\n\nYou can identify exactly where a pallet came from based on the first 4 digits of its 20-digit Colis number.\n\n[b]Department Prefixes:[/b]\n• [color=#3498db][b]8486[/b][/color] - Sorter Bay B2B / Mecha\n• [color=#e67e22][b]8490[/b][/color] - Bulky\n• [color=#2ecc71][b]8489[/b][/color] - Bikes\n• [color=#f1c40f][b]0035[/b][/color] - Service Center\n• [color=#95a5a6][b]White Numbers[/b][/color] - Click & Collect (C&C Log)\n\nAlways check the tooltip when hovering over a pallet to verify its Colis prefix matches what you expect.",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
+		"new_in": "0. Tutorial"
 	},
 	{
 		"title": "C&C (Click & Collect): What is it?",
 		"tags": ["click", "collect", "c&c", "white", "customer", "last"],
 		"content": "[font_size=22][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nThese pallets contain items directly ordered by customers waiting at the store. \n\n[color=#e74c3c][b]THE RULE:[/b][/color] They MUST be loaded [b]LAST[/b] onto the truck (closest to the doors) so they are the very first things taken off at the destination store. If you load them early, the store has to empty the whole truck to give customers their orders.",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
+		"new_in": "0. Tutorial"
 	},
 	{
 		"title": "C&C: How to check for missing pallets",
 		"tags": ["check", "click", "missing", "raq", "as400", "compare"],
 		"content": "[font_size=22][color=#0082c3][b]Verifying Click & Collect[/b][/color][/font_size]\n\nNever guess if you have all your C&C pallets. Verify it:\n\n1. Open the [b]AS400[/b] panel and go to the RAQ list.\n2. Count the white [b]C&C[/b] entries at the bottom of the list.\n3. Compare that number to the physical white pallets sitting in the [b]Dock View[/b].\n4. If the AS400 says you should have 3, but you only see 2 on the floor, click [b]Call Departments[/b] immediately to find the missing pallet before you seal the truck.",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
+		"new_in": "0. Tutorial"
 	},
 	{
 		"title": "Loading: The Standard Sequence",
 		"tags": ["load", "sequence", "truck", "order", "standard", "first"],
 		"content": "[font_size=22][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe physical order in which you put things into the truck is critical for safe transit and efficient unloading.\n\n[b]Load in this exact order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] - Yellow\n2. [color=#2ecc71][b]Bikes[/b][/color] - Green\n3. [color=#e67e22][b]Bulky[/b][/color] - Orange\n4. [color=#3498db][b]Mecha[/b][/color] - Blue\n5. [color=#95a5a6][b]Click & Collect[/b][/color] - White (Always last!)",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
+		"new_in": "0. Tutorial"
 	},
 	{
 		"title": "Loading: How to load and unload pallets",
 		"tags": ["load", "unload", "truck", "click", "penalty", "dock", "mistake"],
 		"content": "[font_size=22][color=#0082c3][b]Loading & Unloading Mechanics[/b][/color][/font_size]\n\n[b]Loading:[/b]\nHover over a pallet in the Dock View to scan it. Click the pallet to load it onto the truck.\n\n[b]Unloading (Mistakes):[/b]\nIf you make a sequence mistake, you can pull pallets back onto the dock by clicking them [i]inside[/i] the truck capacity grid.\n\n[color=#e74c3c][b]WARNING:[/b][/color]\n1. You can only reach the [b]last 3 pallets[/b] loaded (LIFO - Last In, First Out). Pallets buried deeper are locked.\n2. Every pallet you pull off the truck costs you a [b]1.1 minute time penalty[/b] for rework!",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
+		"new_in": "0. Tutorial"
+	},
+	{
+		"title": "Pallet Sizes & Truck Capacity",
+		"tags": ["capacity", "space", "size", "bulky", "mecha", "bikes"],
+		"content": "[font_size=22][color=#0082c3][b]Pallet Capacities[/b][/color][/font_size]\n\nNot all pallets take up the same space in the truck! The truck holds a maximum of [b]36.0 spaces[/b].\n\n• [color=#f1c40f][b]Service Center:[/b][/color] 0.5 spaces\n• [color=#2ecc71][b]Bikes:[/b][/color] 1.3 spaces (They overlap slightly!)\n• [b]Mecha/Bulky/C&C:[/b] 1.0 space\n\nKeep an eye on the [b]Trailer Capacity[/b] readout to see exactly how much room you have left.",
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
+		"new_in": "0. Tutorial"
+	},
+	{
+		"title": "Shift Summary & Debrief",
+		"tags": ["summary", "debrief", "score", "mistakes", "time"],
+		"content": "[font_size=22][color=#0082c3][b]Shift Summary[/b][/color][/font_size]\n\nWhen you Seal the Truck, the simulator reviews your shift.\n\nIt checks:\n• Did you load the exact correct sequence?\n• Did you prioritize Promise Dates correctly?\n• Did you remember the Click & Collect pallets?\n\nYou will receive a summary explaining what you did perfectly, and what operational errors were detected. Review this to improve!",
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
+		"new_in": "0. Tutorial"
 	},
 	{
 		"title": "Promise Dates: Capacity & Priority",
 		"tags": ["promise", "date", "d+", "d-", "priority", "capacity", "full"],
 		"content": "[font_size=22][color=#0082c3][b]Promise Dates & Capacity[/b][/color][/font_size]\n\nWhen you have more pallets than the truck can hold, you must leave some behind. You decide what stays based on the Promise Date.\n\n[color=#e74c3c][b]D-[/b] : Overdue.[/color] CRITICAL priority. Must be loaded.\n[color=#f1c40f][b]D[/b]  : Due today.[/color] High priority. Must be loaded.\n[color=#95a5a6][b]D+[/b] : Due tomorrow.[/color] Low priority. \n\n[b]The Rule:[/b] Load ALL of your D- and D pallets first (following the standard sequence). Only load D+ pallets if you still have empty spaces left in the truck after all priority pallets are loaded.",
-		"scenarios": ["2. Priority Loading"] 
+		"scenarios": ["2. Priority Loading"],
+		"new_in": "2. Priority Loading"
 	}
 ]
 
@@ -210,7 +231,7 @@ func _build_tutorial_ui() -> void:
 	screen_margin.add_child(aligner)
 	
 	var tut_panel = PanelContainer.new()
-	tut_panel.custom_minimum_size = Vector2(900, 120)
+	tut_panel.custom_minimum_size = Vector2(1000, 120)
 	tut_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER 
 	var sb = StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.08, 0.1, 0.95)
@@ -264,16 +285,19 @@ func _update_tutorial_ui() -> void:
 		3: t += "This is the RAQ. Notice the [color=#bdc3c7]White text[/color] at the bottom—these are your Click & Collect (C&C) pallets! Now, open the [color=#f1c40f][b]Dock View[/b][/color] panel."
 		4: t += "Compare the White C&C pallets in the AS400 to the Dock View. One is missing! Click [color=#f1c40f][b]Call Departments (C&C Check)[/b][/color] at the top to find it."
 		5: t += "Good! The missing pallet was found and brought to the dock. Now, click [color=#f1c40f][b]Start Loading[/b][/color] to begin the physical loading process."
-		6: t += "Here are your physical pallets. Always load [color=#f1c40f]Yellow Service Center[/color] pallets first. Click a yellow pallet to load it into the truck."
-		7: t += "Perfect! The next priority in the sequence is [color=#2ecc71]Green Bikes[/color]. Click a green pallet to load it."
-		8: t += "Awesome! The core sequence is: [b]Yellow[/b] -> [b]Green[/b] -> [b]Orange[/b] -> [b]Blue[/b] -> [b]White (C&C LAST!)[/b].\n[color=#95a5a6]Finish loading all the remaining pallets into the truck now.[/color]"
-		9: t += "All pallets loaded! Now open the [color=#f1c40f][b]AS400[/b][/color] panel and press [color=#f1c40f][b]F10[/b][/color] on your keyboard to confirm the RAQ."
-		10: t += "Validation Effectuée! The system is updated. Finally, click [color=#f1c40f][b]Seal Truck & Print Papers[/b][/color] at the top to end your shift."
+		6: t += "Look at the [b]Capacity[/b] panel. Pallets have different sizes (Bikes = 1.3, Service = 0.5). Keep an eye on your Spaces Left! Let's learn to fix mistakes. Click any [color=#3498db]Blue Mecha[/color] pallet to intentionally load it out of order."
+		7: t += "Oops! Mecha is the wrong sequence. Click the [color=#3498db]Blue[/color] pallet [b]inside the truck grid[/b] to remove it. In real shifts, removing a pallet adds a 1.1-minute rework penalty!"
+		8: t += "Good recovery. Now, let's do it right. Always load [color=#f1c40f]Yellow Service Center[/color] pallets first. Click a yellow pallet to load it."
+		9: t += "Perfect! Next is [color=#2ecc71]Green Bikes[/color]. Click a green pallet to load it."
+		10: t += "Awesome! Before you finish, click [color=#3498db][b]Help & SOPs[/b][/color] in the top right. Time stops when this is open! Check out how new, important articles are highlighted."
+		11: t += "Great! All the tutorial info is stored there. Now, finish loading all remaining pallets onto the truck (Yellow -> Green -> Orange -> Blue -> White C&C)."
+		12: t += "All pallets loaded! Open the [color=#f1c40f][b]AS400[/b][/color] and press [color=#f1c40f][b]F10[/b][/color] on your keyboard to confirm the RAQ."
+		13: t += "Validation Effectuée! Click [color=#f1c40f][b]Seal Truck & Print Papers[/b][/color]. You'll see a Shift Summary explaining what you did right or wrong. Finish your shift!"
 	
 	t += "[/font_size]"
 	tutorial_label.text = t
 	
-	if tutorial_step > 10:
+	if tutorial_step > 13:
 		tut_canvas.visible = false
 
 func _flash_tutorial_warning(msg: String) -> void:
@@ -281,11 +305,10 @@ func _flash_tutorial_warning(msg: String) -> void:
 	var t = "[font_size=20][color=#e74c3c][b]⚠️ INCORRECT ACTION[/b][/color]\n"
 	t += "[color=#e74c3c]" + msg + "[/color][/font_size]"
 	tutorial_label.text = t
-	
 	get_tree().create_timer(2.5).timeout.connect(_update_tutorial_ui)
 
 # ==========================================
-# 1. SOP KNOWLEDGE BASE MODAL
+# 1. PROGRESSIVE SOP KNOWLEDGE BASE MODAL
 # ==========================================
 func _build_sop_modal() -> void:
 	sop_overlay = ColorRect.new()
@@ -355,7 +378,7 @@ func _build_sop_modal() -> void:
 	main_vbox.add_child(split_hbox)
 
 	var left_pnl = PanelContainer.new()
-	left_pnl.custom_minimum_size = Vector2(350, 0)
+	left_pnl.custom_minimum_size = Vector2(400, 0)
 	var left_sb = StyleBoxFlat.new()
 	left_sb.bg_color = Color(0.9, 0.9, 0.9)
 	left_pnl.add_theme_stylebox_override("panel", left_sb)
@@ -373,7 +396,7 @@ func _build_sop_modal() -> void:
 	left_margin.add_child(left_vbox)
 	
 	sop_search_input = LineEdit.new()
-	sop_search_input.placeholder_text = "Search SOPs..."
+	sop_search_input.placeholder_text = "Search SOPs (e.g., 'click')"
 	sop_search_input.custom_minimum_size = Vector2(0, 40)
 	sop_search_input.text_changed.connect(_on_sop_search_changed)
 	left_vbox.add_child(sop_search_input)
@@ -406,6 +429,11 @@ func _open_sop_modal() -> void:
 	sop_content_label.text = "[color=#95a5a6]Select an article from the left to read the standard operating procedure.[/color]"
 	_on_sop_search_changed("") 
 	sop_overlay.visible = true
+	
+	# TUTORIAL HOOK
+	if tutorial_active and tutorial_step == 10:
+		tutorial_step = 11
+		_update_tutorial_ui()
 
 func _close_sop_modal() -> void:
 	if _session != null: _session.call("set_pause_state", false) 
@@ -416,6 +444,9 @@ func _on_sop_search_changed(query: String) -> void:
 		child.queue_free()
 		
 	var q = query.to_lower()
+	var new_arts = []
+	var old_arts = []
+	
 	for article in sop_database:
 		if not article.scenarios.has(_current_scenario_name):
 			continue 
@@ -428,26 +459,42 @@ func _on_sop_search_changed(query: String) -> void:
 				if q in tag.to_lower(): match_found = true
 				
 		if match_found:
-			var btn = Button.new()
-			btn.text = article.title
-			btn.custom_minimum_size = Vector2(0, 45)
-			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			
-			var btn_sb = StyleBoxFlat.new()
+			if article.get("new_in", "") == _current_scenario_name:
+				new_arts.append(article)
+			else:
+				old_arts.append(article)
+				
+	var create_btn = func(art, is_new):
+		var btn = Button.new()
+		var prefix = "✨ NEW: " if is_new else ""
+		btn.text = prefix + art.title
+		btn.custom_minimum_size = Vector2(0, 45)
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		
+		var btn_sb = StyleBoxFlat.new()
+		btn_sb.border_width_bottom = 1
+		btn_sb.border_color = Color(0.8, 0.8, 0.8)
+		if is_new:
+			btn_sb.bg_color = Color(1.0, 0.98, 0.8) 
+		else:
 			btn_sb.bg_color = Color.WHITE
-			btn_sb.border_width_bottom = 1
-			btn_sb.border_color = Color(0.8, 0.8, 0.8)
-			
-			var btn_hover = btn_sb.duplicate()
-			btn_hover.bg_color = Color(0.9, 0.95, 1.0) 
-			
-			btn.add_theme_stylebox_override("normal", btn_sb)
-			btn.add_theme_stylebox_override("hover", btn_hover)
-			btn.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2))
-			btn.add_theme_color_override("font_hover_color", Color(0.0, 0.5, 0.8))
-			
-			btn.pressed.connect(func(): sop_content_label.text = article.content)
-			sop_results_vbox.add_child(btn)
+		
+		var btn_hover = btn_sb.duplicate()
+		btn_hover.bg_color = Color(0.9, 0.95, 1.0) 
+		
+		btn.add_theme_stylebox_override("normal", btn_sb)
+		btn.add_theme_stylebox_override("hover", btn_hover)
+		
+		var t_color = Color(0.7, 0.4, 0.0) if is_new else Color(0.2, 0.2, 0.2)
+		btn.add_theme_color_override("font_color", t_color)
+		btn.add_theme_color_override("font_hover_color", Color(0.0, 0.5, 0.8))
+		
+		btn.pressed.connect(func(): sop_content_label.text = art.content)
+		sop_results_vbox.add_child(btn)
+		
+	# Render highlighted new articles at the top!
+	for a in new_arts: create_btn.call(a, true)
+	for a in old_arts: create_btn.call(a, false)
 
 # ==========================================
 # 2. START PORTAL
@@ -834,13 +881,13 @@ func _build_as400_stage() -> void:
 	_render_as400_screen()
 
 func _confirm_as400_raq() -> void:
-	# TUTORIAL GUARDRAIL FOR F10
+	# TUTORIAL GUARDRAIL
 	if tutorial_active:
-		if tutorial_step < 9:
+		if tutorial_step < 12:
 			_flash_tutorial_warning("Finish loading all pallets into the truck before confirming the RAQ!")
 			return
-		elif tutorial_step == 9:
-			tutorial_step = 10
+		elif tutorial_step == 12:
+			tutorial_step = 13
 			_update_tutorial_ui()
 
 	if _session != null:
@@ -1099,7 +1146,7 @@ func _populate_scenarios() -> void:
 		portal_scenario_dropdown.select(0)
 
 func _on_decision_pressed(action: String) -> void:
-	# THE FIX: TUTORIAL GUARDRAIL
+	# TUTORIAL GUARDRAIL
 	if tutorial_active:
 		if tutorial_step < 4:
 			_flash_tutorial_warning("Follow the guide! We aren't ready for this yet.")
@@ -1118,7 +1165,7 @@ func _on_decision_pressed(action: String) -> void:
 			else:
 				tutorial_step = 6
 				_update_tutorial_ui()
-		elif tutorial_step < 10 and action == "Seal Truck":
+		elif tutorial_step < 13 and action == "Seal Truck":
 			_flash_tutorial_warning("You haven't finished the loading and AS400 validation yet!")
 			return
 			
@@ -1175,20 +1222,32 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 	if tutorial_active:
 		if tutorial_step == 6:
 			for p in loaded:
-				if p.type == "ServiceCenter":
+				if p.type == "Mecha":
 					tutorial_step = 7
 					_update_tutorial_ui()
 					break
 		elif tutorial_step == 7:
+			var has_mecha = false
 			for p in loaded:
-				if p.type == "Bikes":
-					tutorial_step = 8
+				if p.type == "Mecha": has_mecha = true
+			if not has_mecha:
+				tutorial_step = 8
+				_update_tutorial_ui()
+		elif tutorial_step == 8:
+			for p in loaded:
+				if p.type == "ServiceCenter":
+					tutorial_step = 9
 					_update_tutorial_ui()
 					break
-		elif tutorial_step == 8:
-			# If there are no more pallets available on the dock, move to F10 step!
+		elif tutorial_step == 9:
+			for p in loaded:
+				if p.type == "Bikes":
+					tutorial_step = 10
+					_update_tutorial_ui()
+					break
+		elif tutorial_step == 11:
 			if avail.is_empty():
-				tutorial_step = 9
+				tutorial_step = 12
 				_update_tutorial_ui()
 
 func _get_type_color(p_type: String) -> Color:
@@ -1237,7 +1296,12 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 		btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
 		btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]")
 		
-		btn.pressed.connect(func(): if _session != null: _session.call("unload_pallet_by_id", p.id))
+		btn.pressed.connect(func(): 
+			if tutorial_active and tutorial_step != 7:
+				_flash_tutorial_warning("Don't unload anything right now, follow the guide!")
+				return
+			if _session != null: _session.call("unload_pallet_by_id", p.id)
+		)
 		truck_grid.add_child(btn)
 
 func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
@@ -1287,11 +1351,20 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 			if tutorial_step < 6:
 				_flash_tutorial_warning("We aren't ready to load pallets yet. Follow the guide!")
 				return
-			if tutorial_step == 6 and p_data.type != "ServiceCenter":
+			if tutorial_step == 6 and p_data.type != "Mecha":
+				_flash_tutorial_warning("Click a Blue Mecha pallet so we can learn how to fix mistakes!")
+				return
+			if tutorial_step == 7:
+				_flash_tutorial_warning("Remove the Blue Mecha pallet from the truck first by clicking it in the Trailer Capacity panel!")
+				return
+			if tutorial_step == 8 and p_data.type != "ServiceCenter":
 				_flash_tutorial_warning("Wait! You must load the Yellow Service Center pallet first.")
 				return
-			if tutorial_step == 7 and p_data.type != "Bikes":
+			if tutorial_step == 9 and p_data.type != "Bikes":
 				_flash_tutorial_warning("Wait! You must load the Green Bikes pallet next.")
+				return
+			if tutorial_step == 10:
+				_flash_tutorial_warning("Click 'Help & SOPs' in the top right before continuing!")
 				return
 				
 		if _session != null: _session.call("load_pallet_by_id", p_data.id)
