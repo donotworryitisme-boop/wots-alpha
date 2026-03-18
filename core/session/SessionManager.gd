@@ -365,48 +365,70 @@ func _generate_inventory(scenario_name: String) -> void:
 	var rng = RandomNumberGenerator.new()
 	rng.randomize()
 
+	# 1. Service Center (0035 prefix for Colis, usually no UAT since they are loose stands)
 	service_center_count = rng.randi_range(1, 3)
 	for i in range(service_center_count):
 		inv_available.append({
-			"id": "SC-" + str(i), 
-			"type": "ServiceCenter", 
-			"code": "N/A",
-			"promise": "N/A", 
-			"p_val": 0,
-			"collis": 1, 
-			"cap": 0.5, 
-			"is_uat": false, 
-			"missing": false
+			"id": "SC-" + str(i), # No standard UAT for SC
+			"colis_id": _generate_real_colis("ServiceCenter", rng),
+			"type": "ServiceCenter", "code": "N/A", "promise": "N/A", 
+			"p_val": 0, "collis": 1, "cap": 0.5, "is_uat": false, "missing": false
 		})
 
+	# 2. C&C Pallets
 	var cc_count = rng.randi_range(2, 4)
 	var missing_idx = -1
 	if rng.randf() > 0.5: missing_idx = rng.randi_range(0, cc_count - 1)
 	
 	for i in range(cc_count):
 		inv_available.append({
-			"id": "CC-" + str(i+1), "type": "C&C", "code": "MAP", "promise": "D", 
+			"id": _generate_real_uat(rng), 
+			"colis_id": _generate_real_colis("C&C", rng),
+			"type": "C&C", "code": "MAP", "promise": "D", 
 			"p_val": 0, "collis": rng.randi_range(3, 12), "cap": 1.0, "is_uat": true, 
 			"missing": (i == missing_idx)
 		})
 
+	# 3. Standard Pallets
 	if scenario_name == "Standard Loading":
-		for i in range(2): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "code": "MAG", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "is_uat": true, "missing": false})
-		for i in range(10): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "code": "MAP", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "is_uat": true, "missing": false})
-		for i in range(16): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(2): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bikes", rng), "type": "Bikes", "code": "MAG", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "is_uat": true, "missing": false})
+		for i in range(10): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bulky", rng), "type": "Bulky", "code": "MAP", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(16): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
 	else:
-		for i in range(2): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "code": "MAG", "promise": "D-", "p_val": -1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
-		for i in range(2): inv_available.append({"id": "B-" + str(i+2), "type": "Bikes", "code": "MAG", "promise": "D+", "p_val": 1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
-		
-		for i in range(3): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "code": "MAG", "promise": "D", "p_val": 0, "collis": 15, "cap": 1.0, "is_uat": true, "missing": false})
-		for i in range(3): inv_available.append({"id": "BLK-" + str(i+3), "type": "Bulky", "code": "MAG", "promise": "D+", "p_val": 1, "collis": 15, "cap": 1.0, "is_uat": true, "missing": false})
-		
-		for i in range(15): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D+", "p_val": 1, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
-		for i in range(8): inv_available.append({"id": "MD-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
+		# Promise Loading
+		for i in range(2): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bikes", rng), "type": "Bikes", "code": "MAG", "promise": "D-", "p_val": -1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
+		for i in range(2): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bikes", rng), "type": "Bikes", "code": "MAG", "promise": "D+", "p_val": 1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
+		for i in range(3): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bulky", rng), "type": "Bulky", "code": "MAG", "promise": "D", "p_val": 0, "collis": 15, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(3): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bulky", rng), "type": "Bulky", "code": "MAG", "promise": "D+", "p_val": 1, "collis": 15, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(15): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D+", "p_val": 1, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(8): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
 
 	inv_available.shuffle()
 	_emit_inventory()
 
+# --- NEW: REALISTIC UAT (15-digit) & COLIS (20-digit) GENERATORS ---
+
+func _generate_real_uat(rng: RandomNumberGenerator) -> String:
+	# Based on screenshot: 00900084 + 7 random digits
+	var suffix = ""
+	for i in range(7):
+		suffix += str(rng.randi_range(0, 9))
+	return "00900084" + suffix
+
+func _generate_real_colis(pallet_type: String, rng: RandomNumberGenerator) -> String:
+	var prefix = "8486" # Fallback
+	
+	if pallet_type == "Mecha" or pallet_type == "C&C": prefix = "8486" # Sorter Bay B2B
+	elif pallet_type == "Bulky": prefix = "8490"
+	elif pallet_type == "Bikes": prefix = "8489"
+	elif pallet_type == "ServiceCenter": prefix = "0035"
+	
+	# Generate 16 random digits to complete the 20-digit Colis number
+	var suffix = ""
+	for i in range(16):
+		suffix += str(rng.randi_range(0, 9))
+		
+	return prefix + suffix
 func load_pallet_by_id(id: String) -> void:
 	if current_state < ScenarioState.LOADING:
 		_add_timeline_line("Cannot load yet. Start loading first!")

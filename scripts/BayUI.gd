@@ -51,19 +51,63 @@ var row_bikes_cc: HFlowContainer
 var truck_grid: GridContainer
 var truck_cap_label: RichTextLabel 
 var lbl_hover_info: RichTextLabel 
-var as400_summary_label: RichTextLabel
-var raq_vbox: VBoxContainer
 
 var debrief_overlay: ColorRect
 var lbl_debrief_text: RichTextLabel
 
-# --- NEW: SOP KNOWLEDGE BASE CONTAINERS ---
+# --- AS400 TERMINAL VARIABLES ---
+var as400_terminal_display: RichTextLabel
+var as400_terminal_input: LineEdit
+var as400_state: int = 0
+var last_avail_cache: Array = []
+
+# --- DESTINATIONS CHEAT SHEET ---
+var store_destinations: Array = [
+	{"name": "ALEXANDRIUM", "code": "2093"},
+	{"name": "ALKMAAR", "code": "1570"},
+	{"name": "AMSTERDAM NOORD", "code": "2226"},
+	{"name": "APELDOORN", "code": "896"},
+	{"name": "ARENA", "code": "256"},
+	{"name": "ARNHEM", "code": "1089"},
+	{"name": "BEST", "code": "664"},
+	{"name": "BREDA", "code": "1088"},
+	{"name": "DEN BOSCH", "code": "3619"},
+	{"name": "DEN HAAG", "code": "1186"},
+	{"name": "EINDHOVEN", "code": "1185"},
+	{"name": "ENSCHEDE", "code": "2092"},
+	{"name": "GRONINGEN", "code": "2224"},
+	{"name": "ROERMOND", "code": "2094"},
+	{"name": "TILBURG", "code": "2013"},
+	{"name": "UTRECHT THE WALL", "code": "2095"}
+]
+var current_dest_name: String = "ALKMAAR"
+var current_dest_code: String = "1570"
+
+# --- SOP CONTAINERS ---
 var sop_overlay: ColorRect
 var sop_search_input: LineEdit
 var sop_results_vbox: VBoxContainer
 var sop_content_label: RichTextLabel
 
 var sop_database: Array = [
+	{
+		"title": "How to log in and use the AS400 terminal?",
+		"tags": ["as400", "login", "password", "navigate", "f3", "f10"],
+		"content": "[font_size=22][color=#0082c3][b]AS400 Terminal Guide[/b][/color][/font_size]\n\nThe AS400 is your primary system for checking the RAQ.\n\n[b]Login Sequence:[/b]\n1. User: [b]BAYB2B[/b]\n2. Password: [b]123456[/b]\n\n[b]Navigation Sequence to RAQ:[/b]\nType the following numbers and press Enter after each: [b]50[/b] (Expeditions) -> [b]01[/b] (Gestion des RAQ) -> [b]02[/b] (RAQ Par Camion) -> [b]05[/b] (Afficher RAQ Actuel).\n\n[b]Shortcuts:[/b]\n• Press [b]F3[/b] on your keyboard to go back a screen.\n• Press [b]F10[/b] to confirm the RAQ when you are finished loading.",
+		"scenarios": ["Standard Loading", "Promise Loading"]
+	},
+	{
+		"title": "How do I physically load and unload the truck?",
+		"tags": ["load", "unload", "truck", "click", "penalty", "dock"],
+		"content": "[font_size=22][color=#0082c3][b]Loading & Unloading Mechanics[/b][/color][/font_size]\n\n[b]Loading:[/b]\nHover over a pallet in the Dock View to scan it. Click the pallet to load it onto the truck.\n\n[b]Unloading (Mistakes):[/b]\nIf you make a sequence mistake, you can pull pallets back onto the dock by clicking them [i]inside[/i] the truck capacity grid.\n\n[color=#e74c3c][b]WARNING:[/b][/color]\n1. You can only reach the [b]last 3 pallets[/b] loaded (LIFO - Last In, First Out). Pallets buried deeper are locked.\n2. Every pallet you pull off the truck costs you a [b]1.1 minute time penalty[/b] for rework!",
+		"scenarios": ["Standard Loading", "Promise Loading"]
+	},
+	{
+		"title": "How to read Colis numbers (Department Prefixes)",
+		"tags": ["colis", "number", "prefix", "identify", "department"],
+		"content": "[font_size=22][color=#0082c3][b]Colis Number Identification[/b][/color][/font_size]\n\nYou can identify exactly where a pallet came from based on the first 4 digits of its 20-digit Colis number.\n\n[b]Department Prefixes:[/b]\n• [color=#3498db][b]8486[/b][/color] - Sorter Bay B2B / Mecha\n• [color=#e67e22][b]8490[/b][/color] - Bulky\n• [color=#2ecc71][b]8489[/b][/color] - Bikes\n• [color=#f1c40f][b]0035[/b][/color] - Service Center\n• [color=#95a5a6][b]White Numbers[/b][/color] - Click & Collect (C&C Log)\n\nAlways check the tooltip when hovering over a pallet to verify its Colis prefix matches what you expect.",
+		"scenarios": ["Standard Loading", "Promise Loading"]
+	},
 	{
 		"title": "What is Click & Collect (C&C)?",
 		"tags": ["click", "collect", "c&c", "white", "customer"],
@@ -73,7 +117,7 @@ var sop_database: Array = [
 	{
 		"title": "How to check if I have all C&C pallets?",
 		"tags": ["check", "click", "missing", "raq", "as400"],
-		"content": "[font_size=22][color=#0082c3][b]Verifying Click & Collect[/b][/color][/font_size]\n\nNever guess if you have all your C&C pallets. Verify it:\n\n1. Open the [b]AS400[/b] panel.\n2. Look at the [b]RAQ UATs[/b] list.\n3. Count the white [b]C&C[/b] entries at the bottom of the list.\n4. Compare that number to the physical white pallets sitting in the [b]Dock View[/b].\n5. If the AS400 says you should have 3, but you only see 2 on the floor, click [b]Call Departments[/b] immediately to find the missing pallet before you seal the truck.",
+		"content": "[font_size=22][color=#0082c3][b]Verifying Click & Collect[/b][/color][/font_size]\n\nNever guess if you have all your C&C pallets. Verify it:\n\n1. Open the [b]AS400[/b] panel.\n2. Navigate to the RAQ list.\n3. Count the white [b]C&C[/b] entries at the bottom of the list.\n4. Compare that number to the physical white pallets sitting in the [b]Dock View[/b].\n5. If the AS400 says you should have 3, but you only see 2 on the floor, click [b]Call Departments[/b] immediately to find the missing pallet before you seal the truck.",
 		"scenarios": ["Standard Loading", "Promise Loading"]
 	},
 	{
@@ -86,7 +130,7 @@ var sop_database: Array = [
 		"title": "How do Promise Dates work? (D, D+, D-)",
 		"tags": ["promise", "date", "d+", "d-", "priority", "capacity", "full"],
 		"content": "[font_size=22][color=#0082c3][b]Promise Dates & Capacity[/b][/color][/font_size]\n\nWhen you have more pallets than the truck can hold, you must leave some behind. You decide what stays based on the Promise Date.\n\n[color=#e74c3c][b]D-[/b] : Overdue.[/color] CRITICAL priority. Must be loaded.\n[color=#f1c40f][b]D[/b]  : Due today.[/color] High priority. Must be loaded.\n[color=#95a5a6][b]D+[/b] : Due tomorrow.[/color] Low priority. \n\n[b]The Rule:[/b] Load ALL of your D- and D pallets first (following the standard sequence). Only load D+ pallets if you still have empty spaces left in the truck after all priority pallets are loaded.",
-		"scenarios": ["Promise Loading"] # PROGRESSIVE DISCLOSURE!
+		"scenarios": ["Promise Loading"] 
 	}
 ]
 
@@ -110,15 +154,26 @@ func _ready() -> void:
 	_build_start_portal()
 	_build_operational_layout()
 	_build_debrief_modal()
-	_build_sop_modal() # NEW!
+	_build_sop_modal()
 
 	_update_top_time(0.0)
 	_update_strip_text()
 	ProjectSettings.set_setting("gui/timers/tooltip_delay_sec", 0.0)
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		get_tree().quit()
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_ESCAPE:
+			get_tree().quit()
+		elif event.keycode == KEY_F3:
+			if pnl_as400_stage != null and pnl_as400_stage.visible:
+				if as400_state > 0:
+					if as400_state == 7: as400_state = 6 
+					elif as400_state == 6: as400_state = 5 
+					else: as400_state -= 1
+					_render_as400_screen()
+		elif event.keycode == KEY_F10:
+			if pnl_as400_stage != null and pnl_as400_stage.visible:
+				_confirm_as400_raq()
 
 # ==========================================
 # 1. SOP KNOWLEDGE BASE MODAL
@@ -148,7 +203,6 @@ func _build_sop_modal() -> void:
 	var main_vbox = VBoxContainer.new()
 	pnl.add_child(main_vbox)
 	
-	# Top Header Bar
 	var header_bg = ColorRect.new()
 	header_bg.custom_minimum_size = Vector2(0, 80)
 	header_bg.color = Color(0.08, 0.12, 0.18)
@@ -187,12 +241,10 @@ func _build_sop_modal() -> void:
 	close_margin.add_child(btn_close)
 	header_hbox.add_child(close_margin)
 
-	# Main Split Pane (Left: Search/List, Right: Content)
 	var split_hbox = HBoxContainer.new()
 	split_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	main_vbox.add_child(split_hbox)
 
-	# Left Panel
 	var left_pnl = PanelContainer.new()
 	left_pnl.custom_minimum_size = Vector2(350, 0)
 	var left_sb = StyleBoxFlat.new()
@@ -225,7 +277,6 @@ func _build_sop_modal() -> void:
 	sop_results_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_res.add_child(sop_results_vbox)
 
-	# Right Panel (Content)
 	var right_margin = MarginContainer.new()
 	right_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right_margin.add_theme_constant_override("margin_left", 30)
@@ -241,16 +292,14 @@ func _build_sop_modal() -> void:
 	right_margin.add_child(sop_content_label)
 
 func _open_sop_modal() -> void:
-	if _session != null:
-		_session.call("set_pause_state", true) # FREEZE TIME
+	if _session != null: _session.call("set_pause_state", true)
 	sop_search_input.text = ""
 	sop_content_label.text = "[color=#95a5a6]Select an article from the left to read the standard operating procedure.[/color]"
-	_on_sop_search_changed("") # Load fresh list based on current scenario
+	_on_sop_search_changed("") 
 	sop_overlay.visible = true
 
 func _close_sop_modal() -> void:
-	if _session != null:
-		_session.call("set_pause_state", false) # RESUME TIME
+	if _session != null: _session.call("set_pause_state", false) 
 	sop_overlay.visible = false
 
 func _on_sop_search_changed(query: String) -> void:
@@ -259,9 +308,8 @@ func _on_sop_search_changed(query: String) -> void:
 		
 	var q = query.to_lower()
 	for article in sop_database:
-		# Progressive Disclosure Check!
 		if not article.scenarios.has(_current_scenario_name):
-			continue # Hide advanced articles if in basic scenario
+			continue 
 			
 		var match_found = false
 		if q == "": match_found = true
@@ -282,7 +330,7 @@ func _on_sop_search_changed(query: String) -> void:
 			btn_sb.border_color = Color(0.8, 0.8, 0.8)
 			
 			var btn_hover = btn_sb.duplicate()
-			btn_hover.bg_color = Color(0.9, 0.95, 1.0) # Light blue hover
+			btn_hover.bg_color = Color(0.9, 0.95, 1.0) 
 			
 			btn.add_theme_stylebox_override("normal", btn_sb)
 			btn.add_theme_stylebox_override("hover", btn_hover)
@@ -446,7 +494,6 @@ func _build_operational_layout() -> void:
 	btn_seal.pressed.connect(func(): _on_decision_pressed("Seal Truck"))
 	top_actions_hbox.add_child(btn_seal)
 	
-	# Push the SOP button to the far right
 	var top_spacer = Control.new()
 	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_actions_hbox.add_child(top_spacer)
@@ -455,7 +502,7 @@ func _build_operational_layout() -> void:
 	btn_sop.text = " Help & SOPs "
 	btn_sop.custom_minimum_size = Vector2(150, 40)
 	var sop_sb = StyleBoxFlat.new()
-	sop_sb.bg_color = Color(0.2, 0.4, 0.8) # Blue info button
+	sop_sb.bg_color = Color(0.2, 0.4, 0.8) 
 	sop_sb.corner_radius_top_left = 6
 	sop_sb.corner_radius_top_right = 6
 	sop_sb.corner_radius_bottom_left = 6
@@ -476,7 +523,7 @@ func _build_operational_layout() -> void:
 	lbl_standby.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lbl_standby.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_standby.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl_standby.text = "Shift Started.\n\nSelect a tool from the Panels menu to begin operations.\n\n(If you don't know what to do, click '? Help & SOPs' in the top right.)"
+	lbl_standby.text = "Shift Started.\n\nSelect a tool from the Panels menu to begin operations.\n\n(If you don't know what to do, click 'Help & SOPs' in the top right.)"
 	lbl_standby.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	lbl_standby.add_theme_font_size_override("font_size", 24)
 	stage_hbox.add_child(lbl_standby)
@@ -511,7 +558,7 @@ func _build_dock_stage() -> void:
 	
 	lbl_hover_info = RichTextLabel.new()
 	lbl_hover_info.bbcode_enabled = true
-	lbl_hover_info.custom_minimum_size = Vector2(0, 60) 
+	lbl_hover_info.custom_minimum_size = Vector2(0, 75) 
 	lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]"
 	dock_vbox.add_child(lbl_hover_info)
 	
@@ -589,6 +636,9 @@ func _build_dock_stage() -> void:
 	truck_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	truck_vbox.add_child(truck_grid)
 
+# ==========================================
+# THE AS400 TERMINAL OVERHAUL
+# ==========================================
 func _build_as400_stage() -> void:
 	pnl_as400_stage = PanelContainer.new()
 	pnl_as400_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -596,47 +646,194 @@ func _build_as400_stage() -> void:
 	pnl_as400_stage.visible = false 
 	
 	var as400_sb = StyleBoxFlat.new()
-	as400_sb.bg_color = Color(0.12, 0.12, 0.15) 
+	as400_sb.bg_color = Color(0, 0, 0) 
 	pnl_as400_stage.add_theme_stylebox_override("panel", as400_sb)
 	stage_hbox.add_child(pnl_as400_stage)
-
-	var as400_tabs = TabContainer.new()
-	pnl_as400_stage.add_child(as400_tabs)
-
-	var tab_summary = MarginContainer.new()
-	tab_summary.name = "Summary"
-	tab_summary.add_theme_constant_override("margin_left", 15)
-	tab_summary.add_theme_constant_override("margin_top", 15)
-	as400_tabs.add_child(tab_summary)
 	
-	as400_summary_label = RichTextLabel.new()
-	as400_summary_label.bbcode_enabled = true
-	tab_summary.add_child(as400_summary_label)
+	var as400_vbox = VBoxContainer.new()
+	pnl_as400_stage.add_child(as400_vbox)
 
-	var tab_raq = MarginContainer.new()
-	tab_raq.name = "RAQ UATs"
-	tab_raq.add_theme_constant_override("margin_left", 15)
-	tab_raq.add_theme_constant_override("margin_top", 15)
-	as400_tabs.add_child(tab_raq)
-
-	var raq_scroll = ScrollContainer.new()
-	tab_raq.add_child(raq_scroll)
+	var scroll = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	as400_vbox.add_child(scroll)
 	
-	var raq_content = VBoxContainer.new()
-	raq_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	raq_scroll.add_child(raq_content)
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 15)
+	margin.add_theme_constant_override("margin_top", 15)
+	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL 
+	scroll.add_child(margin)
+
+	as400_terminal_display = RichTextLabel.new()
+	as400_terminal_display.bbcode_enabled = true
+	as400_terminal_display.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	as400_terminal_display.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	as400_terminal_display.text = ""
+	as400_terminal_display.mouse_filter = Control.MOUSE_FILTER_IGNORE 
+	as400_terminal_display.focus_mode = Control.FOCUS_NONE # Stops focus stealing
+	margin.add_child(as400_terminal_display)
+
+	var input_bg = ColorRect.new()
+	input_bg.color = Color(0, 0, 0)
+	input_bg.custom_minimum_size = Vector2(0, 40)
+	as400_vbox.add_child(input_bg)
+	
+	var input_hbox = HBoxContainer.new()
+	input_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	input_bg.add_child(input_hbox)
+	
+	var prompt = Label.new()
+	prompt.text = " > "
+	prompt.add_theme_font_size_override("font_size", 20)
+	prompt.add_theme_color_override("font_color", Color(0, 1, 0)) 
+	input_hbox.add_child(prompt)
+	
+	as400_terminal_input = LineEdit.new()
+	as400_terminal_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var input_sb = StyleBoxEmpty.new()
+	as400_terminal_input.add_theme_stylebox_override("normal", input_sb)
+	as400_terminal_input.add_theme_stylebox_override("focus", input_sb)
+	as400_terminal_input.add_theme_color_override("font_color", Color(0, 1, 0))
+	as400_terminal_input.add_theme_font_size_override("font_size", 20)
+	
+	# THE NUCLEAR OPTION: Intercept the Enter key before Godot processes it!
+	as400_terminal_input.gui_input.connect(func(event: InputEvent):
+		if event is InputEventKey and event.pressed and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
+			_on_as400_input_submitted(as400_terminal_input.text)
+			as400_terminal_input.accept_event() # This deletes the keystroke! Godot won't drop focus.
+	)
+	input_hbox.add_child(as400_terminal_input)
+
+	var btn_hbox = HBoxContainer.new()
+	as400_vbox.add_child(btn_hbox)
 	
 	var btn_confirm = Button.new()
-	btn_confirm.text = "Confirm AS400"
+	btn_confirm.text = " [F10] Confirm RAQ "
 	btn_confirm.custom_minimum_size = Vector2(0, 40)
-	btn_confirm.pressed.connect(func(): _on_decision_pressed("Confirm AS400"))
-	raq_content.add_child(btn_confirm)
+	btn_confirm.focus_mode = Control.FOCUS_NONE # Stops button from stealing focus
+	var btn_sb = StyleBoxFlat.new()
+	btn_sb.bg_color = Color(0.2, 0.2, 0.2)
+	btn_confirm.add_theme_stylebox_override("normal", btn_sb)
+	btn_confirm.pressed.connect(_confirm_as400_raq)
+	btn_hbox.add_child(btn_confirm)
 	
-	raq_content.add_child(HSeparator.new())
-	
-	raq_vbox = VBoxContainer.new()
-	raq_content.add_child(raq_vbox)
+	pnl_as400_stage.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.pressed:
+			if as400_terminal_input != null:
+				as400_terminal_input.call_deferred("grab_focus")
+	)
 
+	_render_as400_screen()
+
+func _confirm_as400_raq() -> void:
+	if _session != null:
+		_session.call("manual_decision", "Confirm AS400")
+	if as400_state == 6:
+		as400_state = 7
+		_render_as400_screen()
+
+func _render_as400_screen() -> void:
+	if as400_terminal_display == null: return
+	
+	var t = "[font_size=18]" 
+	
+	if as400_state == 0:
+		t += "[color=#00ffff]SIGN ON[/color]\n\n"
+		t += "[color=#00ff00]System : DECA_AS400\n\nUser     : [/color]"
+		as400_terminal_input.placeholder_text = "Type 'BAYB2B' and press Enter"
+	
+	elif as400_state == 1:
+		t += "[color=#00ffff]SIGN ON[/color]\n\n"
+		t += "[color=#00ff00]System : DECA_AS400\n\nUser     : BAYB2B\nPassword : [/color]"
+		as400_terminal_input.placeholder_text = "Type '123456' and press Enter"
+		
+	elif as400_state == 2:
+		t += "[color=#00ffff]MAIN MENU[/color]\n\n"
+		t += "[color=#00ff00] 50 - Expeditions\n 80 - Reception\n 90 - System\n\nSelection : [/color]"
+		as400_terminal_input.placeholder_text = "Type '50'"
+		
+	elif as400_state == 3:
+		t += "[color=#00ffff]EXPEDITIONS[/color]\n\n"
+		t += "[color=#00ff00] 01 - Gestion des RAQ\n 02 - Impression\n\nSelection : [/color]"
+		as400_terminal_input.placeholder_text = "Type '01'"
+		
+	elif as400_state == 4:
+		t += "[color=#00ffff]GESTION DES RAQ[/color]\n\n"
+		t += "[color=#00ff00] 02 - RAQ Par Camion\n 03 - RAQ Par Magasin\n\nSelection : [/color]"
+		as400_terminal_input.placeholder_text = "Type '02'"
+		
+	elif as400_state == 5:
+		t += "[color=#00ffff]RAQ PAR CAMION[/color]\n\n"
+		t += "[color=#00ff00] 05 - Afficher RAQ Actuel\n\nSelection : [/color]"
+		as400_terminal_input.placeholder_text = "Type '05'"
+		
+	elif as400_state == 6:
+		as400_terminal_input.placeholder_text = "Wait for scan, F10 to confirm, F3 to exit"
+		t += "[color=#00ff00]Expediteur   :  14   390  CAR TILBURG EXPE\n"
+		t += "Destinataire :   7  %-5s %s\n\n[/color]" % [current_dest_code, current_dest_name]
+		t += "[color=#00ffff]5=Detail Colis/UAT   7=Validation UAT transit vocal[/color]\n\n"
+		t += "[color=#00ff00]? N° U.A.T             Flx Uni NBC SE EM Colis                  Dt Col CCC/\n"
+		t += "                               CFP    CD                        Dt Exp Adresse[/color]\n"
+		
+		var regular_uats = []
+		var cc_uats = []
+		for p in last_avail_cache:
+			if p.is_uat:
+				if p.type == "C&C": cc_uats.append(p)
+				else: regular_uats.append(p)
+				
+		for p in regular_uats:
+			var uat = p.id
+			var colis = p.get("colis_id", "N/A")
+			t += "[color=#00ffff]  %-20s MAG 02* 47 90    %-20s 250924[/color]\n" % [uat, colis]
+			
+		for p in cc_uats:
+			var uat = p.id
+			var colis = p.get("colis_id", "N/A")
+			t += "[color=#ffffff]  %-20s MAG 61* 14 90    %-20s 250924[/color]\n" % [uat, colis]
+					
+		t += "\n[color=#3498db]F3=Sortie  F5=Ttes UAT  F7=UAT non Adressées  F8=UAT Adressées  F9=CCC/ADR\nF10=NBC/CFP  F11=EM/CD  F15=Tri F&R[/color]\n"
+		
+	elif as400_state == 7:
+		as400_terminal_input.placeholder_text = "F3=Sortie (Type F3 to exit)"
+		t += "[color=#00ff00]Expediteur   :  14   390  CAR TILBURG EXPE\n"
+		t += "Destinataire :   7  %-5s %s\n\n[/color]" % [current_dest_code, current_dest_name]
+		t += "[color=#f1c40f]**************************************************\n"
+		t += "* *\n"
+		t += "* VALIDATION EFFECTUEE                 *\n"
+		t += "* (RAQ CONFIRMED)                      *\n"
+		t += "* *\n"
+		t += "**************************************************[/color]\n\n"
+		t += "[color=#00ffff]You may now physically Seal the Truck.[/color]\n"
+
+	t += "[/font_size]"
+	as400_terminal_display.text = t
+
+func _on_as400_input_submitted(text: String) -> void:
+	var input = text.strip_edges().to_upper()
+	as400_terminal_input.text = ""
+	
+	if as400_state == 0 and input == "BAYB2B": as400_state = 1
+	elif as400_state == 1 and input == "123456": as400_state = 2
+	elif as400_state == 2 and input == "50": as400_state = 3
+	elif as400_state == 3 and input == "01": as400_state = 4
+	elif as400_state == 4 and input == "02": as400_state = 5
+	elif as400_state == 5 and input == "05": as400_state = 6
+	elif as400_state == 6 and input == "F3": as400_state = 5 
+	elif as400_state == 7 and input == "F3": as400_state = 6 
+	
+	_render_as400_screen()
+	
+	# THE BULLETPROOF FOCUS HACK
+	# Wait exactly 0.05 seconds for Godot to finish its internal UI updates, THEN steal focus.
+	get_tree().create_timer(0.05).timeout.connect(func():
+		if as400_terminal_input != null and as400_terminal_input.is_visible_in_tree():
+			as400_terminal_input.grab_focus()
+	)
+
+# ==========================================
+# THE VICTORY MODAL
+# ==========================================
 func _build_debrief_modal() -> void:
 	debrief_overlay = ColorRect.new()
 	debrief_overlay.color = Color(0, 0, 0, 0.9) 
@@ -695,9 +892,13 @@ func _on_portal_start_pressed() -> void:
 	var scenario_name: String = "default"
 	if portal_scenario_dropdown != null: scenario_name = portal_scenario_dropdown.get_item_text(portal_scenario_dropdown.get_selected_id())
 	
-	_current_scenario_name = scenario_name # Save for SOP filters
+	_current_scenario_name = scenario_name 
 	_session.set_role(WOTSConfig.Role.OPERATOR)
 	_is_active = true
+	
+	var dest = store_destinations[randi() % store_destinations.size()]
+	current_dest_name = dest.name
+	current_dest_code = dest.code
 	
 	portal_overlay.visible = false
 	top_actions_hbox.visible = true
@@ -706,6 +907,9 @@ func _on_portal_start_pressed() -> void:
 	_reset_panel_state()
 	_close_all_panels(true)
 	lbl_standby.visible = true 
+	
+	as400_state = 0
+	_render_as400_screen()
 	
 	_session.call("start_session_with_scenario", scenario_name)
 
@@ -744,7 +948,6 @@ func set_session(session) -> void:
 		if _session.has_signal("role_updated"): _session.connect("role_updated", Callable(self, "_on_role_updated"))
 		if _session.has_signal("responsibility_boundary_updated"): _session.connect("responsibility_boundary_updated", Callable(self, "_on_boundary_updated"))
 		if _session.has_signal("inventory_updated"): _session.connect("inventory_updated", Callable(self, "_on_inventory_updated"))
-		if _session.has_signal("as400_status_updated"): _session.connect("as400_status_updated", Callable(self, "_on_as400_updated"))
 
 func _populate_scenarios() -> void:
 	if portal_scenario_dropdown == null or _session == null: return
@@ -785,11 +988,12 @@ func _update_strip_text() -> void:
 	if _strip_window_active: window_text = "Active"
 	role_strip_label.text = "Assignment: %s | Window: %s" % [_strip_assignment, window_text]
 
-func _on_as400_updated(t_uats: int, t_col: int, l_uats: int, l_col: int) -> void:
-	if as400_summary_label != null:
-		as400_summary_label.text = "[font_size=18][color=#2ecc71]EXPECTED: %d UATs | %d Collis[/color]\n\n[color=#95a5a6]LOADED: %d UATs | %d Collis[/color][/font_size]" % [t_uats, t_col, l_uats, l_col]
-
 func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max: float) -> void:
+	last_avail_cache = avail.duplicate(true)
+	
+	if as400_state == 6:
+		_render_as400_screen() 
+
 	if truck_cap_label != null:
 		var spaces_left = cap_max - cap_used
 		var color_hex = "#f5f6fa" 
@@ -809,27 +1013,6 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 		_draw_pallet(p, row)
 		
 	_update_truck_visualizer(loaded)
-	
-	if raq_vbox != null:
-		for child in raq_vbox.get_children(): child.queue_free()
-		var regular_uats = []
-		var cc_uats = []
-		for p in avail:
-			if p.is_uat:
-				if p.type == "C&C": cc_uats.append(p)
-				else: regular_uats.append(p)
-		
-		for p in regular_uats:
-			var lbl = Label.new()
-			lbl.text = "UAT: " + p.id + " (" + p.type + ")"
-			lbl.add_theme_color_override("font_color", Color(0.18, 0.8, 0.44))
-			raq_vbox.add_child(lbl)
-			
-		for p in cc_uats:
-			var lbl = Label.new()
-			lbl.text = "UAT: " + p.id + " (" + p.type + ")"
-			lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-			raq_vbox.add_child(lbl)
 
 func _get_type_color(p_type: String) -> Color:
 	if p_type == "C&C": return Color(1.0, 1.0, 1.0) 
@@ -866,7 +1049,7 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 		
 		if is_reachable:
 			sb_hover.border_color = Color(0.9, 0.2, 0.2) 
-			hover_text = "[font_size=18][color=#e74c3c][b]⚠️ UNLOAD PALLET[/b][/color]\nClick to return [b]%s[/b] to dock.\n[b]Penalty:[/b] +1.1 Minutes[/font_size]" % p.id
+			hover_text = "[font_size=18][color=#e74c3c][b]⚠️ UNLOAD PALLET[/b][/color]\nClick to return [b]%s[/b] to dock.\nColis: %s\n[b]Penalty:[/b] +1.1 Minutes[/font_size]" % [p.id, p.get("colis_id", "N/A")]
 		else:
 			sb_hover.border_color = Color(0.5, 0.5, 0.5) 
 			hover_text = "[font_size=18][color=#95a5a6][b]🔒 BLOCKED[/b][/color]\n[b]%s[/b] is blocked by pallets in front of it. Unload the tail first.[/font_size]" % p.id
@@ -914,7 +1097,9 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 
 	var code_str = ""
 	if p_data.has("code"): code_str = " | Code: " + p_data.code
-	var hover_text = "[font_size=18][color=#0082c3][b]SCAN DATA:[/b][/color] Type: [b]%s[/b]%s\nPromise Date: [b]%s[/b] | Collis: %d | Capacity Space: %0.1f[/font_size]" % [p_data.type, code_str, p_data.promise, p_data.collis, p_data.cap]
+	var colis_str = p_data.get("colis_id", "N/A")
+	
+	var hover_text = "[font_size=18][color=#0082c3][b]SCAN DATA:[/b][/color] Type: [b]%s[/b]%s\nU.A.T: [b]%s[/b] | Colis: [b]%s[/b]\nPromise Date: [b]%s[/b] | Collis Count: %d | Cap Space: %0.1f[/font_size]" % [p_data.type, code_str, p_data.id, colis_str, p_data.promise, p_data.collis, p_data.cap]
 	
 	btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
 	btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]")
@@ -965,6 +1150,9 @@ func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) ->
 		for p in _panel_state.keys():
 			if _panel_state[p]: any_open = true
 		lbl_standby.visible = not any_open
+
+	if panel_name == "AS400" and make_visible and as400_terminal_input != null:
+		as400_terminal_input.call_deferred("grab_focus")
 
 func _setup_tooltips() -> void:
 	pass
