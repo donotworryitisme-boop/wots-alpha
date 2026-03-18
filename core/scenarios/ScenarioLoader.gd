@@ -2,15 +2,20 @@ extends Node
 class_name ScenarioLoader
 
 var scenarios: Dictionary = {
-	"Standard Loading": {
-		"description": "Standard loading workflow. Quick load pallets to fit exactly 36 capacity. No tricky priority dates.",
-		"scaffold_tier": 1,
-		"scaffold_source": "scenario"
+	"0. Tutorial": {
+		"description": "Guided onboarding. Learn how to open the AS400, scan pallets, and load the truck in the correct sequence.",
+		"scaffold_source": "scenario",
+		"scaffold_tier": 1
 	},
-	"Promise Loading": {
-		"description": "Priority Trap! You have more pallets than the truck can hold. Check promise dates (D-, D, D+) carefully.",
-		"scaffold_tier": 1,
-		"scaffold_source": "scenario"
+	"1. Standard Loading": {
+		"description": "A standard day on the dock. Use the AS400 to verify your UATs and load the truck in the correct sequence.",
+		"scaffold_source": "role",
+		"scaffold_tier": 2
+	},
+	"2. Priority Loading": {
+		"description": "High volume day. You have more pallets than truck capacity. Pay strict attention to Promise Dates (D, D+, D-).",
+		"scaffold_source": "role",
+		"scaffold_tier": 3
 	}
 }
 

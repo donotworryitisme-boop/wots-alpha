@@ -375,10 +375,15 @@ func _generate_inventory(scenario_name: String) -> void:
 			"p_val": 0, "collis": 1, "cap": 0.5, "is_uat": false, "missing": false
 		})
 
-	# 2. C&C Pallets
+# 2. C&C Pallets
 	var cc_count = rng.randi_range(2, 4)
 	var missing_idx = -1
-	if rng.randf() > 0.5: missing_idx = rng.randi_range(0, cc_count - 1)
+	
+	# THE FIX: Guarantee a missing pallet in the tutorial!
+	if scenario_name == "0. Tutorial":
+		missing_idx = 0 
+	elif rng.randf() > 0.5: 
+		missing_idx = rng.randi_range(0, cc_count - 1)
 	
 	for i in range(cc_count):
 		inv_available.append({
@@ -390,12 +395,12 @@ func _generate_inventory(scenario_name: String) -> void:
 		})
 
 	# 3. Standard Pallets
-	if scenario_name == "Standard Loading":
+	if scenario_name == "1. Standard Loading" or scenario_name == "0. Tutorial":
 		for i in range(2): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bikes", rng), "type": "Bikes", "code": "MAG", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "is_uat": true, "missing": false})
 		for i in range(10): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bulky", rng), "type": "Bulky", "code": "MAP", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "is_uat": true, "missing": false})
 		for i in range(16): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
 	else:
-		# Promise Loading
+		# Promise Loading (Now "2. Priority Loading")
 		for i in range(2): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bikes", rng), "type": "Bikes", "code": "MAG", "promise": "D-", "p_val": -1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
 		for i in range(2): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bikes", rng), "type": "Bikes", "code": "MAG", "promise": "D+", "p_val": 1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
 		for i in range(3): inv_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bulky", rng), "type": "Bulky", "code": "MAG", "promise": "D", "p_val": 0, "collis": 15, "cap": 1.0, "is_uat": true, "missing": false})

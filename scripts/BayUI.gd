@@ -89,48 +89,61 @@ var sop_search_input: LineEdit
 var sop_results_vbox: VBoxContainer
 var sop_content_label: RichTextLabel
 
+# --- TUTORIAL SYSTEM ---
+var tut_canvas: CanvasLayer
+var tutorial_label: RichTextLabel
+var tutorial_active: bool = false
+var tutorial_step: int = -1
+
+# --- EXPANDED SOP DATABASE ---
 var sop_database: Array = [
 	{
-		"title": "How to log in and use the AS400 terminal?",
-		"tags": ["as400", "login", "password", "navigate", "f3", "f10"],
-		"content": "[font_size=22][color=#0082c3][b]AS400 Terminal Guide[/b][/color][/font_size]\n\nThe AS400 is your primary system for checking the RAQ.\n\n[b]Login Sequence:[/b]\n1. User: [b]BAYB2B[/b]\n2. Password: [b]123456[/b]\n\n[b]Navigation Sequence to RAQ:[/b]\nType the following numbers and press Enter after each: [b]50[/b] (Expeditions) -> [b]01[/b] (Gestion des RAQ) -> [b]02[/b] (RAQ Par Camion) -> [b]05[/b] (Afficher RAQ Actuel).\n\n[b]Shortcuts:[/b]\n• Press [b]F3[/b] on your keyboard to go back a screen.\n• Press [b]F10[/b] to confirm the RAQ when you are finished loading.",
-		"scenarios": ["Standard Loading", "Promise Loading"]
+		"title": "AS400: Login & Shortcuts",
+		"tags": ["as400", "login", "password", "f3", "f10", "terminal"],
+		"content": "[font_size=22][color=#0082c3][b]AS400: Login & Shortcuts[/b][/color][/font_size]\n\nThe AS400 is your primary system for checking the RAQ.\n\n[b]Login Sequence:[/b]\n1. User: [b]BAYB2B[/b]\n2. Password: [b]123456[/b]\n\n[b]Shortcuts:[/b]\n• Press [b]F3[/b] on your keyboard to go back a screen.\n• Press [b]F10[/b] to confirm the RAQ when you are finished loading.",
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
 	},
 	{
-		"title": "How do I physically load and unload the truck?",
-		"tags": ["load", "unload", "truck", "click", "penalty", "dock"],
-		"content": "[font_size=22][color=#0082c3][b]Loading & Unloading Mechanics[/b][/color][/font_size]\n\n[b]Loading:[/b]\nHover over a pallet in the Dock View to scan it. Click the pallet to load it onto the truck.\n\n[b]Unloading (Mistakes):[/b]\nIf you make a sequence mistake, you can pull pallets back onto the dock by clicking them [i]inside[/i] the truck capacity grid.\n\n[color=#e74c3c][b]WARNING:[/b][/color]\n1. You can only reach the [b]last 3 pallets[/b] loaded (LIFO - Last In, First Out). Pallets buried deeper are locked.\n2. Every pallet you pull off the truck costs you a [b]1.1 minute time penalty[/b] for rework!",
-		"scenarios": ["Standard Loading", "Promise Loading"]
+		"title": "AS400: How to find the RAQ List",
+		"tags": ["as400", "navigate", "raq", "menu", "list"],
+		"content": "[font_size=22][color=#0082c3][b]AS400: Navigation[/b][/color][/font_size]\n\nTo find the RAQ (Rest à Quai / Remaining to Load) list, type the following numbers in the AS400 menu and press Enter after each:\n\n1. [b]50[/b] (Expeditions)\n2. [b]01[/b] (Gestion des RAQ)\n3. [b]02[/b] (RAQ Par Camion)\n4. [b]05[/b] (Afficher RAQ Actuel)",
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
 	},
 	{
-		"title": "How to read Colis numbers (Department Prefixes)",
+		"title": "Colis Numbers: How to read Department Prefixes",
 		"tags": ["colis", "number", "prefix", "identify", "department"],
 		"content": "[font_size=22][color=#0082c3][b]Colis Number Identification[/b][/color][/font_size]\n\nYou can identify exactly where a pallet came from based on the first 4 digits of its 20-digit Colis number.\n\n[b]Department Prefixes:[/b]\n• [color=#3498db][b]8486[/b][/color] - Sorter Bay B2B / Mecha\n• [color=#e67e22][b]8490[/b][/color] - Bulky\n• [color=#2ecc71][b]8489[/b][/color] - Bikes\n• [color=#f1c40f][b]0035[/b][/color] - Service Center\n• [color=#95a5a6][b]White Numbers[/b][/color] - Click & Collect (C&C Log)\n\nAlways check the tooltip when hovering over a pallet to verify its Colis prefix matches what you expect.",
-		"scenarios": ["Standard Loading", "Promise Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
 	},
 	{
-		"title": "What is Click & Collect (C&C)?",
-		"tags": ["click", "collect", "c&c", "white", "customer"],
+		"title": "C&C (Click & Collect): What is it?",
+		"tags": ["click", "collect", "c&c", "white", "customer", "last"],
 		"content": "[font_size=22][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nThese pallets contain items directly ordered by customers waiting at the store. \n\n[color=#e74c3c][b]THE RULE:[/b][/color] They MUST be loaded [b]LAST[/b] onto the truck (closest to the doors) so they are the very first things taken off at the destination store. If you load them early, the store has to empty the whole truck to give customers their orders.",
-		"scenarios": ["Standard Loading", "Promise Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
 	},
 	{
-		"title": "How to check if I have all C&C pallets?",
-		"tags": ["check", "click", "missing", "raq", "as400"],
-		"content": "[font_size=22][color=#0082c3][b]Verifying Click & Collect[/b][/color][/font_size]\n\nNever guess if you have all your C&C pallets. Verify it:\n\n1. Open the [b]AS400[/b] panel.\n2. Navigate to the RAQ list.\n3. Count the white [b]C&C[/b] entries at the bottom of the list.\n4. Compare that number to the physical white pallets sitting in the [b]Dock View[/b].\n5. If the AS400 says you should have 3, but you only see 2 on the floor, click [b]Call Departments[/b] immediately to find the missing pallet before you seal the truck.",
-		"scenarios": ["Standard Loading", "Promise Loading"]
+		"title": "C&C: How to check for missing pallets",
+		"tags": ["check", "click", "missing", "raq", "as400", "compare"],
+		"content": "[font_size=22][color=#0082c3][b]Verifying Click & Collect[/b][/color][/font_size]\n\nNever guess if you have all your C&C pallets. Verify it:\n\n1. Open the [b]AS400[/b] panel and go to the RAQ list.\n2. Count the white [b]C&C[/b] entries at the bottom of the list.\n3. Compare that number to the physical white pallets sitting in the [b]Dock View[/b].\n4. If the AS400 says you should have 3, but you only see 2 on the floor, click [b]Call Departments[/b] immediately to find the missing pallet before you seal the truck.",
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
 	},
 	{
-		"title": "What is the standard loading sequence?",
+		"title": "Loading: The Standard Sequence",
 		"tags": ["load", "sequence", "truck", "order", "standard", "first"],
 		"content": "[font_size=22][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe physical order in which you put things into the truck is critical for safe transit and efficient unloading.\n\n[b]Load in this exact order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] - Yellow\n2. [color=#2ecc71][b]Bikes[/b][/color] - Green\n3. [color=#e67e22][b]Bulky[/b][/color] - Orange\n4. [color=#3498db][b]Mecha[/b][/color] - Blue\n5. [color=#95a5a6][b]Click & Collect[/b][/color] - White (Always last!)",
-		"scenarios": ["Standard Loading", "Promise Loading"]
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
 	},
 	{
-		"title": "How do Promise Dates work? (D, D+, D-)",
+		"title": "Loading: How to load and unload pallets",
+		"tags": ["load", "unload", "truck", "click", "penalty", "dock", "mistake"],
+		"content": "[font_size=22][color=#0082c3][b]Loading & Unloading Mechanics[/b][/color][/font_size]\n\n[b]Loading:[/b]\nHover over a pallet in the Dock View to scan it. Click the pallet to load it onto the truck.\n\n[b]Unloading (Mistakes):[/b]\nIf you make a sequence mistake, you can pull pallets back onto the dock by clicking them [i]inside[/i] the truck capacity grid.\n\n[color=#e74c3c][b]WARNING:[/b][/color]\n1. You can only reach the [b]last 3 pallets[/b] loaded (LIFO - Last In, First Out). Pallets buried deeper are locked.\n2. Every pallet you pull off the truck costs you a [b]1.1 minute time penalty[/b] for rework!",
+		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"]
+	},
+	{
+		"title": "Promise Dates: Capacity & Priority",
 		"tags": ["promise", "date", "d+", "d-", "priority", "capacity", "full"],
 		"content": "[font_size=22][color=#0082c3][b]Promise Dates & Capacity[/b][/color][/font_size]\n\nWhen you have more pallets than the truck can hold, you must leave some behind. You decide what stays based on the Promise Date.\n\n[color=#e74c3c][b]D-[/b] : Overdue.[/color] CRITICAL priority. Must be loaded.\n[color=#f1c40f][b]D[/b]  : Due today.[/color] High priority. Must be loaded.\n[color=#95a5a6][b]D+[/b] : Due tomorrow.[/color] Low priority. \n\n[b]The Rule:[/b] Load ALL of your D- and D pallets first (following the standard sequence). Only load D+ pallets if you still have empty spaces left in the truck after all priority pallets are loaded.",
-		"scenarios": ["Promise Loading"] 
+		"scenarios": ["2. Priority Loading"] 
 	}
 ]
 
@@ -155,6 +168,7 @@ func _ready() -> void:
 	_build_operational_layout()
 	_build_debrief_modal()
 	_build_sop_modal()
+	_build_tutorial_ui()
 
 	_update_top_time(0.0)
 	_update_strip_text()
@@ -174,6 +188,101 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_F10:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
 				_confirm_as400_raq()
+
+# ==========================================
+# TUTORIAL UI SYSTEM WITH GUARDRAILS
+# ==========================================
+func _build_tutorial_ui() -> void:
+	tut_canvas = CanvasLayer.new()
+	tut_canvas.layer = 100 
+	tut_canvas.visible = false
+	self.add_child(tut_canvas)
+	
+	var screen_margin = MarginContainer.new()
+	screen_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	screen_margin.add_theme_constant_override("margin_bottom", 50)
+	screen_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tut_canvas.add_child(screen_margin)
+	
+	var aligner = VBoxContainer.new()
+	aligner.alignment = BoxContainer.ALIGNMENT_END 
+	aligner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	screen_margin.add_child(aligner)
+	
+	var tut_panel = PanelContainer.new()
+	tut_panel.custom_minimum_size = Vector2(900, 120)
+	tut_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER 
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.08, 0.1, 0.95)
+	sb.border_width_left = 3
+	sb.border_width_top = 3
+	sb.border_width_right = 3
+	sb.border_width_bottom = 3
+	sb.border_color = Color(0.18, 0.8, 0.44) 
+	sb.corner_radius_top_left = 8
+	sb.corner_radius_top_right = 8
+	sb.corner_radius_bottom_left = 8
+	sb.corner_radius_bottom_right = 8
+	sb.shadow_color = Color(0, 0, 0, 0.8)
+	sb.shadow_size = 15
+	tut_panel.add_theme_stylebox_override("panel", sb)
+	aligner.add_child(tut_panel)
+	
+	var tut_margin = MarginContainer.new()
+	tut_margin.add_theme_constant_override("margin_left", 20)
+	tut_margin.add_theme_constant_override("margin_top", 15)
+	tut_margin.add_theme_constant_override("margin_right", 20)
+	tut_margin.add_theme_constant_override("margin_bottom", 15)
+	tut_panel.add_child(tut_margin)
+	
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 20)
+	tut_margin.add_child(hbox)
+	
+	var icon_lbl = Label.new()
+	icon_lbl.text = "🎓"
+	icon_lbl.add_theme_font_size_override("font_size", 45)
+	hbox.add_child(icon_lbl)
+	
+	tutorial_label = RichTextLabel.new()
+	tutorial_label.bbcode_enabled = true
+	tutorial_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tutorial_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	tutorial_label.fit_content = true 
+	tutorial_label.custom_minimum_size = Vector2(0, 80)
+	hbox.add_child(tutorial_label)
+
+func _update_tutorial_ui() -> void:
+	if not tutorial_active or tutorial_label == null: return
+	
+	var t = "[font_size=20][color=#2ecc71][b]TRAINING GUIDE[/b][/color]\n"
+	
+	match tutorial_step:
+		0: t += "Welcome to the dock! Your very first step is checking the RAQ list. Open the [color=#f1c40f][b]AS400[/b][/color] from the right panel menu."
+		1: t += "Great. Now log in to the terminal. Type [color=#f1c40f]BAYB2B[/color] and press Enter, then type the password [color=#f1c40f]123456[/color] and press Enter."
+		2: t += "You are in! Navigate to the RAQ list by typing this sequence: [color=#f1c40f]50[/color] -> [color=#f1c40f]01[/color] -> [color=#f1c40f]02[/color] -> [color=#f1c40f]05[/color]."
+		3: t += "This is the RAQ. Notice the [color=#bdc3c7]White text[/color] at the bottom—these are your Click & Collect (C&C) pallets! Now, open the [color=#f1c40f][b]Dock View[/b][/color] panel."
+		4: t += "Compare the White C&C pallets in the AS400 to the Dock View. One is missing! Click [color=#f1c40f][b]Call Departments (C&C Check)[/b][/color] at the top to find it."
+		5: t += "Good! The missing pallet was found and brought to the dock. Now, click [color=#f1c40f][b]Start Loading[/b][/color] to begin the physical loading process."
+		6: t += "Here are your physical pallets. Always load [color=#f1c40f]Yellow Service Center[/color] pallets first. Click a yellow pallet to load it into the truck."
+		7: t += "Perfect! The next priority in the sequence is [color=#2ecc71]Green Bikes[/color]. Click a green pallet to load it."
+		8: t += "Awesome! The core sequence is: [b]Yellow[/b] -> [b]Green[/b] -> [b]Orange[/b] -> [b]Blue[/b] -> [b]White (C&C LAST!)[/b].\n[color=#95a5a6]Finish loading all the remaining pallets into the truck now.[/color]"
+		9: t += "All pallets loaded! Now open the [color=#f1c40f][b]AS400[/b][/color] panel and press [color=#f1c40f][b]F10[/b][/color] on your keyboard to confirm the RAQ."
+		10: t += "Validation Effectuée! The system is updated. Finally, click [color=#f1c40f][b]Seal Truck & Print Papers[/b][/color] at the top to end your shift."
+	
+	t += "[/font_size]"
+	tutorial_label.text = t
+	
+	if tutorial_step > 10:
+		tut_canvas.visible = false
+
+func _flash_tutorial_warning(msg: String) -> void:
+	if not tutorial_active or tutorial_label == null: return
+	var t = "[font_size=20][color=#e74c3c][b]⚠️ INCORRECT ACTION[/b][/color]\n"
+	t += "[color=#e74c3c]" + msg + "[/color][/font_size]"
+	tutorial_label.text = t
+	
+	get_tree().create_timer(2.5).timeout.connect(_update_tutorial_ui)
 
 # ==========================================
 # 1. SOP KNOWLEDGE BASE MODAL
@@ -264,7 +373,7 @@ func _build_sop_modal() -> void:
 	left_margin.add_child(left_vbox)
 	
 	sop_search_input = LineEdit.new()
-	sop_search_input.placeholder_text = "Search SOPs (e.g., 'click')"
+	sop_search_input.placeholder_text = "Search SOPs..."
 	sop_search_input.custom_minimum_size = Vector2(0, 40)
 	sop_search_input.text_changed.connect(_on_sop_search_changed)
 	left_vbox.add_child(sop_search_input)
@@ -670,7 +779,7 @@ func _build_as400_stage() -> void:
 	as400_terminal_display.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	as400_terminal_display.text = ""
 	as400_terminal_display.mouse_filter = Control.MOUSE_FILTER_IGNORE 
-	as400_terminal_display.focus_mode = Control.FOCUS_NONE # Stops focus stealing
+	as400_terminal_display.focus_mode = Control.FOCUS_NONE 
 	margin.add_child(as400_terminal_display)
 
 	var input_bg = ColorRect.new()
@@ -696,11 +805,10 @@ func _build_as400_stage() -> void:
 	as400_terminal_input.add_theme_color_override("font_color", Color(0, 1, 0))
 	as400_terminal_input.add_theme_font_size_override("font_size", 20)
 	
-	# THE NUCLEAR OPTION: Intercept the Enter key before Godot processes it!
 	as400_terminal_input.gui_input.connect(func(event: InputEvent):
 		if event is InputEventKey and event.pressed and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
 			_on_as400_input_submitted(as400_terminal_input.text)
-			as400_terminal_input.accept_event() # This deletes the keystroke! Godot won't drop focus.
+			as400_terminal_input.accept_event() 
 	)
 	input_hbox.add_child(as400_terminal_input)
 
@@ -710,7 +818,7 @@ func _build_as400_stage() -> void:
 	var btn_confirm = Button.new()
 	btn_confirm.text = " [F10] Confirm RAQ "
 	btn_confirm.custom_minimum_size = Vector2(0, 40)
-	btn_confirm.focus_mode = Control.FOCUS_NONE # Stops button from stealing focus
+	btn_confirm.focus_mode = Control.FOCUS_NONE 
 	var btn_sb = StyleBoxFlat.new()
 	btn_sb.bg_color = Color(0.2, 0.2, 0.2)
 	btn_confirm.add_theme_stylebox_override("normal", btn_sb)
@@ -726,6 +834,15 @@ func _build_as400_stage() -> void:
 	_render_as400_screen()
 
 func _confirm_as400_raq() -> void:
+	# TUTORIAL GUARDRAIL FOR F10
+	if tutorial_active:
+		if tutorial_step < 9:
+			_flash_tutorial_warning("Finish loading all pallets into the truck before confirming the RAQ!")
+			return
+		elif tutorial_step == 9:
+			tutorial_step = 10
+			_update_tutorial_ui()
+
 	if _session != null:
 		_session.call("manual_decision", "Confirm AS400")
 	if as400_state == 6:
@@ -824,12 +941,14 @@ func _on_as400_input_submitted(text: String) -> void:
 	
 	_render_as400_screen()
 	
-	# THE BULLETPROOF FOCUS HACK
-	# Wait exactly 0.05 seconds for Godot to finish its internal UI updates, THEN steal focus.
-	get_tree().create_timer(0.05).timeout.connect(func():
-		if as400_terminal_input != null and as400_terminal_input.is_visible_in_tree():
-			as400_terminal_input.grab_focus()
-	)
+	# TUTORIAL HOOK
+	if tutorial_active:
+		if tutorial_step == 1 and as400_state == 2:
+			tutorial_step = 2
+			_update_tutorial_ui()
+		elif tutorial_step == 2 and as400_state == 6:
+			tutorial_step = 3
+			_update_tutorial_ui()
 
 # ==========================================
 # THE VICTORY MODAL
@@ -906,10 +1025,21 @@ func _on_portal_start_pressed() -> void:
 	
 	_reset_panel_state()
 	_close_all_panels(true)
-	lbl_standby.visible = true 
 	
 	as400_state = 0
 	_render_as400_screen()
+	
+	# TUTORIAL TRIGGER
+	if _current_scenario_name == "0. Tutorial":
+		tutorial_active = true
+		tutorial_step = 0
+		tut_canvas.visible = true
+		_update_tutorial_ui()
+		lbl_standby.visible = false
+	else:
+		tutorial_active = false
+		tut_canvas.visible = false
+		lbl_standby.visible = true
 	
 	_session.call("start_session_with_scenario", scenario_name)
 
@@ -917,6 +1047,7 @@ func _on_session_ended(debrief_payload: Dictionary) -> void:
 	_is_active = false
 	_debrief_what_happened = str(debrief_payload.get("what_happened", ""))
 	_debrief_why_it_mattered = str(debrief_payload.get("why_it_mattered", ""))
+	if tutorial_active: tut_canvas.visible = false
 	_render_debrief()
 
 func _on_debrief_closed() -> void:
@@ -952,19 +1083,45 @@ func set_session(session) -> void:
 func _populate_scenarios() -> void:
 	if portal_scenario_dropdown == null or _session == null: return
 	portal_scenario_dropdown.clear()
-	var names: Array[String] = []
-	if _session.scenario_loader != null and _session.scenario_loader.has_method("get_scenario_names"):
-		names = _session.scenario_loader.call("get_scenario_names")
-	else: names = ["default"]
 	
-	if names.has("Standard Loading"):
-		names.erase("Standard Loading")
-		names.push_front("Standard Loading")
+	var names: Array[String] = [
+		"0. Tutorial", 
+		"1. Standard Loading", 
+		"2. Priority Loading"
+	]
+	
+	names.sort() 
 		
-	for n in names: portal_scenario_dropdown.add_item(n)
-	if portal_scenario_dropdown.item_count > 0: portal_scenario_dropdown.select(0)
+	for n in names: 
+		portal_scenario_dropdown.add_item(n)
+		
+	if portal_scenario_dropdown.item_count > 0: 
+		portal_scenario_dropdown.select(0)
 
 func _on_decision_pressed(action: String) -> void:
+	# THE FIX: TUTORIAL GUARDRAIL
+	if tutorial_active:
+		if tutorial_step < 4:
+			_flash_tutorial_warning("Follow the guide! We aren't ready for this yet.")
+			return
+		if tutorial_step == 4:
+			if action != "Call departments (C&C check)":
+				_flash_tutorial_warning("Count the C&C pallets first and click 'Call Departments'!")
+				return
+			else:
+				tutorial_step = 5
+				_update_tutorial_ui()
+		elif tutorial_step == 5:
+			if action != "Start Loading":
+				_flash_tutorial_warning("Now click 'Start Loading' to begin!")
+				return
+			else:
+				tutorial_step = 6
+				_update_tutorial_ui()
+		elif tutorial_step < 10 and action == "Seal Truck":
+			_flash_tutorial_warning("You haven't finished the loading and AS400 validation yet!")
+			return
+			
 	if _session == null: return
 	_session.call("manual_decision", action)
 
@@ -1013,6 +1170,26 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 		_draw_pallet(p, row)
 		
 	_update_truck_visualizer(loaded)
+	
+	# TUTORIAL HOOK
+	if tutorial_active:
+		if tutorial_step == 6:
+			for p in loaded:
+				if p.type == "ServiceCenter":
+					tutorial_step = 7
+					_update_tutorial_ui()
+					break
+		elif tutorial_step == 7:
+			for p in loaded:
+				if p.type == "Bikes":
+					tutorial_step = 8
+					_update_tutorial_ui()
+					break
+		elif tutorial_step == 8:
+			# If there are no more pallets available on the dock, move to F10 step!
+			if avail.is_empty():
+				tutorial_step = 9
+				_update_tutorial_ui()
 
 func _get_type_color(p_type: String) -> Color:
 	if p_type == "C&C": return Color(1.0, 1.0, 1.0) 
@@ -1104,7 +1281,21 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
 	btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]")
 
-	btn.pressed.connect(func(): if _session != null: _session.call("load_pallet_by_id", p_data.id))
+	btn.pressed.connect(func(): 
+		# TUTORIAL GUARDRAIL
+		if tutorial_active:
+			if tutorial_step < 6:
+				_flash_tutorial_warning("We aren't ready to load pallets yet. Follow the guide!")
+				return
+			if tutorial_step == 6 and p_data.type != "ServiceCenter":
+				_flash_tutorial_warning("Wait! You must load the Yellow Service Center pallet first.")
+				return
+			if tutorial_step == 7 and p_data.type != "Bikes":
+				_flash_tutorial_warning("Wait! You must load the Green Bikes pallet next.")
+				return
+				
+		if _session != null: _session.call("load_pallet_by_id", p_data.id)
+	)
 	parent.add_child(btn)
 
 func _init_panel_nodes_and_buttons(btn_dock_view: Button) -> void:
@@ -1135,6 +1326,15 @@ func _close_all_panels(silent: bool) -> void:
 	for panel_name in PANEL_NAMES: _set_panel_visible(panel_name, false, silent)
 
 func _toggle_panel(panel_name: String) -> void:
+	# TUTORIAL GUARDRAIL
+	if tutorial_active:
+		if tutorial_step < 3 and panel_name != "AS400":
+			_flash_tutorial_warning("Please open the AS400 panel first!")
+			return
+		if tutorial_step == 3 and panel_name != "Dock View" and panel_name != "AS400":
+			_flash_tutorial_warning("Please open the Dock View next!")
+			return
+
 	var is_open: bool = bool(_panel_state.get(panel_name, false))
 	_set_panel_visible(panel_name, not is_open, false)
 
@@ -1153,6 +1353,12 @@ func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) ->
 
 	if panel_name == "AS400" and make_visible and as400_terminal_input != null:
 		as400_terminal_input.call_deferred("grab_focus")
-
-func _setup_tooltips() -> void:
-	pass
+		
+	# TUTORIAL HOOK
+	if tutorial_active:
+		if tutorial_step == 0 and panel_name == "AS400" and make_visible:
+			tutorial_step = 1
+			_update_tutorial_ui()
+		elif tutorial_step == 3 and panel_name == "Dock View" and make_visible:
+			tutorial_step = 4
+			_update_tutorial_ui()
