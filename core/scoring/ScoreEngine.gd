@@ -15,7 +15,7 @@ func start_session() -> void:
 	# Reset the score at the start of each session.
 	current_score = 0
 
-func apply_rule(rule_id: int, produces_waste: bool) -> void:
+func apply_rule(rule_id: int, _produces_waste: bool) -> void:
 	# Adjust score based on the rule ID. Additional logic could use produces_waste.
 	if points_by_rule_id.has(rule_id):
 		current_score += points_by_rule_id[rule_id]

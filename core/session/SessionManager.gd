@@ -53,6 +53,8 @@ var inv_loaded: Array = []
 var truck_cap_max: float = 36.0
 var truck_cap_used: float = 0.0
 var as400_confirmed: bool = false
+var time_elapsed: float = 0.0 # Minutes
+var service_center_count: int = 6
 
 func _ready() -> void:
 	sim_clock = SimClock.new()
@@ -363,34 +365,59 @@ func _generate_inventory(scenario_name: String) -> void:
 	inv_available.clear()
 	inv_loaded.clear()
 	truck_cap_used = 0.0
+	time_elapsed = 0.0
 	as400_confirmed = false
 
 	var rng = RandomNumberGenerator.new()
 	rng.randomize()
 
+	# 1. Add Service Center (Realistic count: 1 to 3)
+	service_center_count = rng.randi_range(1, 3)
+	for i in range(service_center_count):
+		inv_available.append({
+			"id": "SC-" + str(i), 
+			"type": "ServiceCenter", 
+			"code": "N/A",
+			"promise": "D", 
+			"p_val": 0,
+			"collis": 1, 
+			"cap": 0.5, 
+			"is_uat": false, 
+			"missing": false
+		})
+
+	# 2. Add C&C (Realistic count: 2 to 4)
+	var cc_count = rng.randi_range(2, 4)
+	var missing_idx = -1
+	# 50% chance one of the C&C pallets is missing
+	if rng.randf() > 0.5: missing_idx = rng.randi_range(0, cc_count - 1)
+	
+	for i in range(cc_count):
+		inv_available.append({
+			"id": "CC-" + str(i+1),
+			"type": "C&C",
+			"code": "MAP",
+			"promise": "D",
+			"p_val": 0,
+			"collis": rng.randi_range(3, 12),
+			"cap": 1.0,
+			"is_uat": true,
+			"missing": (i == missing_idx)
+		})
+
+	# 3. Add standard pallets based on Scenario
 	if scenario_name == "Standard Loading":
-		# 50% chance one C&C pallet is missing randomly!
-		var missing_cc = rng.randf() > 0.5
-		inv_available.append({"id": "CC-01", "type": "C&C", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "missing": missing_cc})
-		inv_available.append({"id": "CC-02", "type": "C&C", "promise": "D", "p_val": 0, "collis": 12, "cap": 1.0, "missing": false})
-		inv_available.append({"id": "CC-03", "type": "C&C", "promise": "D", "p_val": 0, "collis": 3, "cap": 1.0, "missing": false})
-		for i in range(2): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "missing": false})
-		for i in range(10): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "missing": false})
-		for i in range(20): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "missing": false})
+		for i in range(2): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "code": "MAG", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "is_uat": true, "missing": false})
+		for i in range(10): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "code": "MAP", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(16): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
 	else:
-		# Promise Loading - Randomize 0 to 2 missing C&C pallets
-		var cc_missing_count = rng.randi_range(0, 2)
-		inv_available.append({"id": "CC-01", "type": "C&C", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "missing": cc_missing_count > 0})
-		inv_available.append({"id": "CC-02", "type": "C&C", "promise": "D", "p_val": 0, "collis": 12, "cap": 1.0, "missing": cc_missing_count > 1})
-		inv_available.append({"id": "CC-03", "type": "C&C", "promise": "D", "p_val": 0, "collis": 3, "cap": 1.0, "missing": false})
-		for i in range(4): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "promise": "D-", "p_val": -1, "collis": randi() % 8 + 1, "cap": 1.3, "missing": false})
-		for i in range(6): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "promise": "D", "p_val": 0, "collis": randi() % 40 + 1, "cap": 1.0, "missing": false})
-		for i in range(24): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "promise": "D+", "p_val": 1, "collis": 28, "cap": 1.0, "missing": false})
-		for i in range(3): inv_available.append({"id": "MD-" + str(i), "type": "Mecha", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "missing": false})
+		# Promise Loading (The Priority Trap)
+		for i in range(4): inv_available.append({"id": "B-" + str(i), "type": "Bikes", "code": "MAG", "promise": "D-", "p_val": -1, "collis": 6, "cap": 1.3, "is_uat": true, "missing": false})
+		for i in range(6): inv_available.append({"id": "BLK-" + str(i), "type": "Bulky", "code": "MAG", "promise": "D", "p_val": 0, "collis": 15, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(20): inv_available.append({"id": "M-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D+", "p_val": 1, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
+		for i in range(3): inv_available.append({"id": "MD-" + str(i), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false})
 
-	# SHUFFLE THE ARRAY SO PALLETS ARE COMPLETELY MIXED ON THE DOCK VIEW!
 	inv_available.shuffle()
-
 	_emit_inventory()
 
 func load_pallet_by_id(id: String) -> void:
@@ -404,15 +431,27 @@ func load_pallet_by_id(id: String) -> void:
 			to_load = p
 			break
 
+	# 1. Safety Check: Does it exist?
 	if to_load == null: return
 
+	# 2. Sequence Check: Service Center First
+	var sc_left = false
+	for p in inv_available:
+		if p.type == "ServiceCenter" and not p.missing: sc_left = true
+	
+	if sc_left and to_load.type != "ServiceCenter":
+		_add_timeline_line("⚠️ Sequence Warning: Loading pallets before Service Center stands.")
+
+	# 3. Capacity Check
 	if truck_cap_used + to_load.cap > truck_cap_max:
 		_add_timeline_line("Truck is full! Cannot load %s." % to_load.id)
 		return
 
+	# 4. Load it!
 	inv_available.erase(to_load)
 	inv_loaded.append(to_load)
 	truck_cap_used += to_load.cap
+	time_elapsed += 1.1 # Standard loading time economy
 	_add_timeline_line("Loaded %s (%s) - Promise: %s" % [to_load.id, to_load.type, to_load.promise])
 	_emit_inventory()
 

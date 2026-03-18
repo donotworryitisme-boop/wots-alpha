@@ -60,6 +60,8 @@ var as400_label: RichTextLabel
 var row_mecha: HFlowContainer
 var row_bulky: HFlowContainer
 var row_bikes_cc: HFlowContainer
+var truck_grid: GridContainer
+var lbl_hover_info: RichTextLabel # NEW: Instant Hover Data Bar
 
 # --- VICTORY PANEL CONTAINERS ---
 var debrief_overlay: ColorRect
@@ -69,57 +71,43 @@ func _ready() -> void:
 	set_enabled(false)
 	_reset_panel_state()
 
-	if trust_button != null:
-		trust_button.pressed.connect(func() -> void: trust_contract_requested.emit())
-	if start_button != null:
-		start_button.pressed.connect(_on_start_pressed)
-	if end_button != null:
-		end_button.pressed.connect(_on_end_pressed)
+	if trust_button != null: trust_button.pressed.connect(func() -> void: trust_contract_requested.emit())
+	if start_button != null: start_button.pressed.connect(_on_start_pressed)
+	if end_button != null: end_button.pressed.connect(_on_end_pressed)
 
 	_build_dynamic_inventory_ui()
-	_build_debrief_modal() # NEW: Build the victory screen
+	_build_debrief_modal()
 
-	if explain_toggle != null:
-		explain_toggle.toggled.connect(_on_explain_toggled)
+	if explain_toggle != null: explain_toggle.toggled.connect(_on_explain_toggled)
 
 	_init_panel_nodes_and_buttons()
 	_set_setup_guidance()
 	_update_top_time(0.0)
 	_update_strip_text()
-	ProjectSettings.set_setting("gui/timers/tooltip_delay_sec", 1.3)
+	ProjectSettings.set_setting("gui/timers/tooltip_delay_sec", 0.0)
 	_setup_tooltips()
-	# --- NEW: Export Exit Button (Top Right) ---
+	
+	# Exit Button
 	var btn_exit = Button.new()
 	btn_exit.text = " X "
-	btn_exit.tooltip_text = "Exit Application"
-	
-	# Style it to be subtle but visible
 	var sb_exit = StyleBoxFlat.new()
-	sb_exit.bg_color = Color(0.8, 0.2, 0.2, 0.0) # Transparent by default
+	sb_exit.bg_color = Color(0.8, 0.2, 0.2, 0.0) 
 	btn_exit.add_theme_stylebox_override("normal", sb_exit)
-	
 	var sb_hover = StyleBoxFlat.new()
-	sb_hover.bg_color = Color(0.8, 0.2, 0.2, 0.8) # Red on hover
+	sb_hover.bg_color = Color(0.8, 0.2, 0.2, 0.8) 
 	btn_exit.add_theme_stylebox_override("hover", sb_hover)
-	
-	# Position it in the top right of the screen
 	add_child(btn_exit)
 	btn_exit.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	btn_exit.position += Vector2(-10, 10) # Small offset from the edge
-	
-	# Connect the exit logic
+	btn_exit.position += Vector2(-10, 10) 
 	btn_exit.pressed.connect(func(): get_tree().quit())
 
-# ==========================================
-# NEW: BUILD THE VICTORY MODAL
-# ==========================================
 func _input(event: InputEvent) -> void:
-	# Pressing 'Escape' will also close the app (standard for full-screen apps)
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		get_tree().quit()
+
 func _build_debrief_modal() -> void:
 	debrief_overlay = ColorRect.new()
-	debrief_overlay.color = Color(0, 0, 0, 0.75) # Dark dim background
+	debrief_overlay.color = Color(0, 0, 0, 0.75) 
 	debrief_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	debrief_overlay.visible = false
 	$Root.add_child(debrief_overlay)
@@ -165,8 +153,6 @@ func _build_debrief_modal() -> void:
 	btn_close.pressed.connect(func(): debrief_overlay.visible = false)
 	vbox.add_child(btn_close)
 
-# ==========================================
-
 func _build_dynamic_inventory_ui() -> void:
 	if check_button == null: return
 	var sit_vbox = check_button.get_parent().get_parent()
@@ -201,17 +187,6 @@ func _build_dynamic_inventory_ui() -> void:
 	btn_seal.pressed.connect(func(): _on_decision_pressed("Seal Truck"))
 	action_row.add_child(btn_seal)
 
-	var quick_row = HBoxContainer.new()
-	quick_row.add_theme_constant_override("separation", 8)
-	sit_vbox.add_child(quick_row)
-
-	var types = ["Mecha", "Bulky", "Bikes", "C&C"]
-	for t in types:
-		var btn = Button.new()
-		btn.text = "Quick Load " + t
-		btn.pressed.connect(func(): if _session != null: _session.call("load_random_pallet", t))
-		quick_row.add_child(btn)
-
 	btn_dock_view = Button.new()
 	btn_dock_view.text = "Dock View"
 	var toggle_vbox = btn_shift_board.get_parent()
@@ -221,22 +196,35 @@ func _build_dynamic_inventory_ui() -> void:
 	pnl_dock_view = pnl_loading_plan.duplicate()
 	pnl_loading_plan.get_parent().add_child(pnl_dock_view)
 	var dv_vbox = pnl_dock_view.get_child(0).get_child(0)
-	dv_vbox.get_child(0).text = "Dock View (Physical Pallets)"
+	dv_vbox.get_child(0).text = "Dock View & Truck Grid"
 	dv_vbox.get_child(1).queue_free()
 
-	var scroll = ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# NEW: Instant Hover Info Bar
+	lbl_hover_info = RichTextLabel.new()
+	lbl_hover_info.bbcode_enabled = true
+	lbl_hover_info.custom_minimum_size = Vector2(0, 30)
+	lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]"
+	dv_vbox.add_child(lbl_hover_info)
+
+	var split = HBoxContainer.new()
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	split.add_theme_constant_override("separation", 24)
+	dv_vbox.add_child(split)
+
+	var scroll_left = ScrollContainer.new()
+	scroll_left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	split.add_child(scroll_left)
+	
 	var map_vbox = VBoxContainer.new()
 	map_vbox.add_theme_constant_override("separation", 12)
-	scroll.add_child(map_vbox)
-	dv_vbox.add_child(scroll)
+	scroll_left.add_child(map_vbox)
 
 	row_mecha = HFlowContainer.new()
 	row_bulky = HFlowContainer.new()
 	row_bikes_cc = HFlowContainer.new()
 	
 	var lbl_mecha = Label.new()
-	lbl_mecha.text = "Mecha (86)"
+	lbl_mecha.text = "Mecha (MAP/MAG)"
 	map_vbox.add_child(lbl_mecha)
 	map_vbox.add_child(row_mecha)
 	
@@ -246,9 +234,32 @@ func _build_dynamic_inventory_ui() -> void:
 	map_vbox.add_child(row_bulky)
 	
 	var lbl_bikes = Label.new()
-	lbl_bikes.text = "Bikes & C&C"
+	lbl_bikes.text = "Bikes, C&C, Service Center"
 	map_vbox.add_child(lbl_bikes)
 	map_vbox.add_child(row_bikes_cc)
+
+	var truck_pnl = PanelContainer.new()
+	truck_pnl.custom_minimum_size = Vector2(150, 0)
+	var t_sb = StyleBoxFlat.new()
+	t_sb.bg_color = Color(0.1, 0.1, 0.1)
+	t_sb.corner_radius_bottom_left = 6
+	t_sb.corner_radius_bottom_right = 6
+	t_sb.corner_radius_top_left = 6
+	t_sb.corner_radius_top_right = 6
+	truck_pnl.add_theme_stylebox_override("panel", t_sb)
+	split.add_child(truck_pnl)
+
+	truck_grid = GridContainer.new()
+	truck_grid.columns = 2
+	truck_grid.add_theme_constant_override("h_separation", 4)
+	truck_grid.add_theme_constant_override("v_separation", 4)
+	truck_grid.set_anchors_preset(Control.PRESET_CENTER)
+	
+	var t_margin = MarginContainer.new()
+	t_margin.add_theme_constant_override("margin_left", 8)
+	t_margin.add_theme_constant_override("margin_top", 8)
+	truck_pnl.add_child(t_margin)
+	t_margin.add_child(truck_grid)
 
 func set_enabled(enabled: bool) -> void:
 	_enabled = enabled
@@ -265,7 +276,7 @@ func set_enabled(enabled: bool) -> void:
 	if explain_toggle != null:
 		explain_toggle.visible = false
 		explain_toggle.button_pressed = false
-	if debrief_overlay != null: debrief_overlay.visible = false # NEW: Hide overlay on reset
+	if debrief_overlay != null: debrief_overlay.visible = false
 	_close_all_panels(true)
 	_set_setup_guidance()
 	_render_setup_scenario_list()
@@ -299,7 +310,7 @@ func _on_as400_updated(t_uats: int, t_col: int, l_uats: int, l_col: int) -> void
 	if as400_label != null:
 		as400_label.text = "[color=#2ecc71]EXPECTED: %d UATs | %d Collis[/color]\n[color=#95a5a6]LOADED: %d UATs | %d Collis[/color]" % [t_uats, t_col, l_uats, l_col]
 
-func _on_inventory_updated(avail: Array, _loaded: Array, _cap_used: float, _cap_max: float) -> void:
+func _on_inventory_updated(avail: Array, loaded: Array, _cap_used: float, _cap_max: float) -> void:
 	for child in row_mecha.get_children(): child.queue_free()
 	for child in row_bulky.get_children(): child.queue_free()
 	for child in row_bikes_cc.get_children(): child.queue_free()
@@ -311,27 +322,75 @@ func _on_inventory_updated(avail: Array, _loaded: Array, _cap_used: float, _cap_
 		elif p.type == "Bulky": row = row_bulky
 		else: row = row_bikes_cc
 		_draw_pallet(p, row)
+		
+	_update_truck_visualizer(loaded)
 
+func _get_type_color(p_type: String) -> Color:
+	if p_type == "C&C": return Color(1.0, 1.0, 1.0) # White
+	if p_type == "Bikes": return Color(0.2, 0.7, 0.3)
+	if p_type == "Bulky": return Color(0.9, 0.5, 0.1)
+	if p_type == "Mecha": return Color(0.0, 0.51, 0.76)
+	if p_type == "ServiceCenter": return Color(0.8, 0.8, 0.1)
+	return Color(0.5, 0.5, 0.5)
+
+func _update_truck_visualizer(loaded_pallets: Array) -> void:
+	for child in truck_grid.get_children(): child.queue_free()
+	
+	for p in loaded_pallets:
+		var slot = ColorRect.new()
+		slot.custom_minimum_size = Vector2(50, 50 * p.cap) 
+		slot.color = _get_type_color(p.type)
+		truck_grid.add_child(slot)
+
+# ==========================================
+# PALLET STYLING & INSTANT HOVER MAGIC
+# ==========================================
 func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(50, 50)
-	btn.text = p_data.id.split("-")[1] 
-	btn.tooltip_text = "%s\nPromise: %s\nCollis: %d\nCap: %0.1f" % [p_data.type, p_data.promise, p_data.collis, p_data.cap]
+	btn.text = "" # No numbers
+	
+	var color = _get_type_color(p_data.type)
 
-	var color = Color(0.2, 0.2, 0.2)
-	if p_data.type == "C&C": color = Color(1.0, 1.0, 1.0)
-	elif p_data.type == "Bikes": color = Color(0.2, 0.7, 0.3)
-	elif p_data.type == "Bulky": color = Color(0.9, 0.5, 0.1)
-	elif p_data.type == "Mecha": color = Color(0.0, 0.51, 0.76)
-
+	# 1. Base Style (Thick borders so white pops!)
 	var sb = StyleBoxFlat.new()
 	sb.bg_color = color
 	sb.corner_radius_top_left = 4
 	sb.corner_radius_bottom_right = 4
-	btn.add_theme_stylebox_override("normal", sb)
-	btn.add_theme_stylebox_override("hover", sb) 
-	btn.add_theme_color_override("font_color", Color(0,0,0) if p_data.type == "C&C" else Color(1,1,1))
+	sb.border_width_left = 2
+	sb.border_width_top = 2
+	sb.border_width_right = 2
+	sb.border_width_bottom = 2
+	sb.shadow_color = Color(0, 0, 0, 0.2)
+	sb.shadow_size = 3
+	if p_data.type == "C&C":
+		sb.border_color = Color(0.3, 0.3, 0.3) # Dark border for white C&C
+	else:
+		sb.border_color = color.darkened(0.25)
 
+	# 2. Hover Style (The Electric Blue Halo)
+	var sb_hover = sb.duplicate()
+	sb_hover.border_color = Color(0.1, 0.8, 1.0) 
+	sb_hover.border_width_left = 3
+	sb_hover.border_width_top = 3
+	sb_hover.border_width_right = 3
+	sb_hover.border_width_bottom = 3
+	sb_hover.shadow_color = Color(0.1, 0.8, 1.0, 0.6)
+	sb_hover.shadow_size = 10
+
+	btn.add_theme_stylebox_override("normal", sb)
+	btn.add_theme_stylebox_override("hover", sb_hover) 
+	btn.add_theme_stylebox_override("focus", sb_hover) # Keeps halo if clicked
+
+	# 3. Connect Instant Hover Text
+	var code_str = ""
+	if p_data.has("code"): code_str = " | " + p_data.code
+	var hover_text = "[color=#0082c3]SCAN:[/color] [b]%s[/b]%s | Promise: [b]%s[/b] | Collis: %d | Space: %0.1f" % [p_data.type, code_str, p_data.promise, p_data.collis, p_data.cap]
+	
+	btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
+	btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]")
+
+	# 4. Connect Click Action
 	btn.pressed.connect(func(): if _session != null: _session.call("load_pallet_by_id", p_data.id))
 	parent.add_child(btn)
 
@@ -418,7 +477,6 @@ func _on_explain_toggled(pressed: bool) -> void:
 	_render_debrief(pressed)
 
 func _render_debrief(show_why: bool) -> void:
-	# POPULATE THE NEW VICTORY SCREEN
 	var bb := "[center][font_size=24][color=#0082c3][b]Story of the Shift[/b][/color][/font_size][/center]\n\n"
 	bb += "[b]Timeline of Events[/b]\n"
 	bb += _debrief_what_happened + "\n"
@@ -441,13 +499,11 @@ func _render_debrief(show_why: bool) -> void:
 		bb += "[b]Neutral Pattern Callout[/b]\n"
 		bb += _debrief_why_it_mattered + "\n"
 		
-	# Show the popup modal!
 	if lbl_debrief_text != null:
 		lbl_debrief_text.text = bb
 	if debrief_overlay != null:
 		debrief_overlay.visible = true
 		
-	# Also set it to the background log just so it stays there when closed
 	if log_text != null: log_text.text = bb
 
 func _set_setup_guidance() -> void:
