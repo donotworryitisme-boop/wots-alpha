@@ -106,31 +106,73 @@ var tutorial_step: int = -1
 var sop_database: Array = [
 	{
 		"title": "AS400: Login & Shortcuts",
-		"tags": ["as400", "login", "password", "f3", "f10", "terminal"],
-		"content": "[font_size=22][color=#0082c3][b]AS400: Login & Shortcuts[/b][/color][/font_size]\n\nThe AS400 is your primary system for checking the RAQ.\n\n[b]Login Sequence:[/b]\n1. User: [b]BAYB2B[/b]\n2. Password: [b]123456[/b]\n\n[b]Shortcuts:[/b]\n• Press [b]F3[/b] on your keyboard to go back a screen.\n• Press [b]F10[/b] to confirm the RAQ when you are finished loading.",
+		"tags": ["as400", "login", "password", "f3", "f10", "terminal", "code", "badge"],
+		"content": "[font_size=22][color=#0082c3][b]AS400: Login & Shortcuts[/b][/color][/font_size]\n\nThe AS400 is your primary system for managing expeditions and checking the RAQ.\n\n[b]Login Sequence:[/b]\n1. Code opé/badge: [b]BAYB2B[/b]\n2. Mot de passe: [b]123456[/b]\n\n[b]Navigation:[/b]\n• Type [b]50[/b] for Ship Dock 390\n• Then [b]01[/b] → [b]02[/b] → [b]05[/b] to reach the RAQ\n\n[b]Shortcuts:[/b]\n• [b]F3[/b] — Go back one screen (Retour/Sortie)\n• [b]F10[/b] — Confirm/Validate the RAQ\n• [b]F5[/b] — Refresh data on scanning screen",
 		"scenarios": [0, 1, 2],
 		"new_in": 0
 	},
 	{
 		"title": "C&C (Click & Collect): What is it?",
 		"tags": ["click", "collect", "c&c", "white", "customer", "last"],
-		"content": "[font_size=22][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nThese pallets contain items directly ordered by customers waiting at the store. \n\n[color=#e74c3c][b]THE RULE:[/b][/color] They MUST be loaded [b]LAST[/b] onto the truck (closest to the doors) so they are the very first things taken off at the destination store.",
+		"content": "[font_size=22][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nC&C pallets contain items ordered by customers online. They are waiting at the store to pick them up.\n\n[color=#e74c3c][b]THE RULE:[/b][/color] C&C MUST be loaded [b]LAST[/b] — closest to the truck doors — so they come off first at the store.\n\n[b]How to identify C&C on the AS400:[/b]\nC&C lines appear in [color=#ffffff][b]WHITE text[/b][/color] on the RAQ screen (all other pallets are cyan/green).\n\n[b]Typical C&C per store:[/b] 1 plastic pallet + 1 magnum + 1 EUR wooden. If more than 3 total, extras go on magnums or wooden — never a second plastic.",
 		"scenarios": [0, 1, 2],
 		"new_in": 0
 	},
 	{
 		"title": "Loading: The Standard Sequence",
-		"tags": ["load", "sequence", "truck", "order", "standard", "first"],
-		"content": "[font_size=22][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe physical order in which you put things into the truck is critical for safe transit and efficient unloading.\n\n[b]Load in this exact order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] - Yellow\n2. [color=#2ecc71][b]Bikes[/b][/color] - Green\n3. [color=#e67e22][b]Bulky[/b][/color] - Orange\n4. [color=#3498db][b]Mecha[/b][/color] - Blue\n5. [color=#95a5a6][b]Click & Collect[/b][/color] - White (Always last!)",
+		"tags": ["load", "sequence", "truck", "order", "standard", "first", "lifo"],
+		"content": "[font_size=22][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe physical order matters because the store unloads from the doors inward (LIFO — Last In, First Out).\n\n[b]Load in this exact order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] — Yellow — deepest in truck\n2. [color=#2ecc71][b]Bikes[/b][/color] — Green\n3. [color=#e67e22][b]Bulky[/b][/color] — Orange\n4. [color=#3498db][b]Mecha (Blue Boxes)[/b][/color] — Blue\n5. [color=#95a5a6][b]Click & Collect[/b][/color] — White — closest to doors (ALWAYS LAST)\n\n[b]Why this order?[/b]\nThe store needs C&C first (customers waiting), then mecha for shelf stocking, then bulky and bikes which take longer to process.",
+		"scenarios": [0, 1, 2],
+		"new_in": 0
+	},
+	{
+		"title": "What is a UAT?",
+		"tags": ["uat", "label", "number", "pallet", "barcode", "orange"],
+		"content": "[font_size=22][color=#0082c3][b]What is a UAT?[/b][/color][/font_size]\n\nA UAT (Unité d'Aide au Transport) is a scannable pallet unit. Each UAT has an orange label with:\n\n• [b]Sector:[/b] 84/86 (mecha), 84/89 (bikes), 84/90 (bulky)\n• [b]Pallet type:[/b] 20-PALETTE EUROPE or PLASTIQUE\n• [b]EXP/DEST:[/b] Sender and destination warehouse/store\n• [b]Colis count, weight, volume[/b]\n• [b]Flow code:[/b] MAG (store), MAP (store palletized)\n• [b]Barcode:[/b] The UAT number you scan\n\n[b]UAT Number formats:[/b]\n• AS400: 15 digits (00900084XXXXXXX)\n• Scanner: 16 digits\n• EWM: 20 digits\n\n[b]Colis prefix identification:[/b]\n• 8486 = Mecha (sorter/Bay B2B)\n• 8490 = Bulky\n• 8489 = Bikes\n• 0035 = Service Center (EWM format)",
+		"scenarios": [0, 1, 2],
+		"new_in": 0
+	},
+	{
+		"title": "Reading the RAQ Screen",
+		"tags": ["raq", "screen", "columns", "as400", "read", "flx", "uni", "nbc"],
+		"content": "[font_size=22][color=#0082c3][b]Reading the RAQ Screen[/b][/color][/font_size]\n\nThe RAQ (PJJIDFR) shows all parcels/UATs assigned to your truck.\n\n[b]Column definitions:[/b]\n• [b]N° U.A.T[/b] — UAT number (15 digits)\n• [b]Flx[/b] — Flow: MAG (store), MAP (palletized), @Z/UE@Z (internet)\n• [b]Uni[/b] — Universe number (* = mixed universe)\n• [b]NBC[/b] — Number of colis on this UAT\n• [b]SE[/b] — Sector: 86=mecha, 89=bikes, 90=bulky\n• [b]EM[/b] — Container type: 01=Plastic, 02=Box, 03=Magnum\n• [b]Colis[/b] — Individual parcel number\n• [b]Dt Col / Dt Exp[/b] — Collection/Expedition dates\n\n[b]Color coding:[/b]\n• [color=#00ffff]Cyan/Green[/color] = Regular pallets\n• [color=#ffffff]White[/color] = C&C (PRIORITY — customer waiting)\n• [color=#ff0000]Red[/color] = Hazardous materials (PRIORITY)",
 		"scenarios": [0, 1, 2],
 		"new_in": 0
 	},
 	{
 		"title": "Promise Dates: Capacity & Priority",
 		"tags": ["promise", "date", "d+", "d-", "priority", "capacity", "full"],
-		"content": "[font_size=22][color=#0082c3][b]Promise Dates & Capacity[/b][/color][/font_size]\n\nWhen you have more pallets than the truck can hold, you must leave some behind. You decide what stays based on the Promise Date.\n\n[color=#e74c3c][b]D-[/b] : Overdue.[/color] CRITICAL priority. Must be loaded.\n[color=#f1c40f][b]D[/b]  : Due today.[/color] High priority. Must be loaded.\n[color=#95a5a6][b]D+[/b] : Due tomorrow.[/color] Low priority. \n\n[b]The Rule:[/b] Load ALL of your D- and D pallets first (following the standard sequence). Only load D+ pallets if you still have empty spaces left in the truck.",
+		"content": "[font_size=22][color=#0082c3][b]Promise Dates & Capacity[/b][/color][/font_size]\n\nWhen you have more pallets than the truck can hold, you must choose what to leave behind.\n\n[color=#e74c3c][b]D-[/b] : Overdue.[/color] CRITICAL. Must be loaded.\n[color=#f1c40f][b]D[/b]  : Due today.[/color] High priority. Must be loaded.\n[color=#95a5a6][b]D+[/b] : Due tomorrow.[/color] Low priority.\n\n[b]The Rule:[/b] Load ALL D- and D pallets first (following the standard sequence). Only load D+ pallets if you still have space. Never leave D- or D behind while loading D+.",
 		"scenarios": [2],
 		"new_in": 2
+	},
+	{
+		"title": "The CMR Document",
+		"tags": ["cmr", "document", "paper", "transport", "legal", "seal"],
+		"content": "[font_size=22][color=#0082c3][b]The CMR Document[/b][/color][/font_size]\n\nThe CMR is the legal transport document filled AFTER loading.\n\n[b]Key fields:[/b]\n• [b]Box 1 (Sender):[/b] Decathlon Netherlands, Logistiek 9017650000, Kroonstraat 3, 5048 AT TILBURG\n• [b]Box 2 (Destinataire):[/b] Store name + address\n• [b]Box 3:[/b] IDEM 2 (delivery = destinataire)\n• [b]Box 4:[/b] IDEM 1 (pickup = sender)\n• [b]Box 6-7:[/b] Counts — UATs, Colis, EUR pallets, Plastic pallets, Magnums, C&C\n• [b]Box 13:[/b] Seal number + Expedition number + Dock number\n• [b]Box 22:[/b] Sender stamp\n• [b]Box 23:[/b] Driver license plate + signature\n\n[b]Important:[/b] The counts on the CMR come from the Loading Sheet, not from memory. Always fill in the Loading Sheet during loading.",
+		"scenarios": [1, 2],
+		"new_in": 1
+	},
+	{
+		"title": "The Loading Sheet",
+		"tags": ["loading", "sheet", "dual", "count", "eur", "plastic", "magnum"],
+		"content": "[font_size=22][color=#0082c3][b]The Loading Sheet[/b][/color][/font_size]\n\nThe Loading Sheet uses a dual-count system:\n\n[b]Left side — by department:[/b]\nTally marks for Bikes, Bulky, Mecha, Transit, C&C. This is what operations cares about.\n\n[b]Right side — by container type:[/b]\nGrids for EUR pallets (1-30), Plastic pallets (1-30), Magnums (1-20). This is what the CMR needs.\n\n[b]The same pallets are counted both ways.[/b]\n\n[b]C&C exception:[/b] C&C is its own category regardless of the container type. A C&C pallet on a EUR wooden base counts as both 'C&C' on the left AND 'EUR pallet' on the right.",
+		"scenarios": [1, 2],
+		"new_in": 1
+	},
+	{
+		"title": "Dock Lines: Where Departments Deliver",
+		"tags": ["dock", "line", "cell", "mecha", "bulky", "bikes", "lane"],
+		"content": "[font_size=22][color=#0082c3][b]Dock Lines & Cells[/b][/color][/font_size]\n\nThe warehouse has three cells:\n\n[b]Cell A[/b] (Docks 17-29): Bulky area. Sector 90 reception. Transit pallets unloaded here when possible.\n\n[b]Cell B[/b] (Docks 3, 4, 5): Mecha inbound. Sector 86 reception. Transit often comes mixed with sector 86.\n\n[b]Cell C[/b] (Docks 1C-4C): Bikes ONLY. Sector 89 reception. [color=#e74c3c]Bay B2B does NOT unload bikes receptions — the bikes department handles their own.[/color]\n\n[b]At your loading dock, pallets arrive on 4 lines:[/b]\n• Mecha 1 & 2: Blue boxes from the sorter\n• Bulky: Cardboard on wooden pallets from Cell A\n• Mixed (Bikes/C&C/Service Center): Various departments",
+		"scenarios": [1, 2],
+		"new_in": 1
+	},
+	{
+		"title": "Loading Quality Rules",
+		"tags": ["quality", "tall", "height", "damage", "label", "orientation"],
+		"content": "[font_size=22][color=#0082c3][b]Loading Quality Rules[/b][/color][/font_size]\n\n• [b]Heaviest/tallest pallets[/b] go at the bottom-right of the truck to prevent overthrow\n• [b]Never place tall pallets next to short ones[/b] — this causes toppling during transport\n• [b]Max 6 layers[/b] for bulky Type A parcels\n• [b]Label orientation:[/b] Parcel labels must face the loading bay door\n• [b]If you damage goods during loading:[/b] You MUST tell your manager or the duty manager immediately. Do not hide it.\n\n[b]Target:[/b] Complete loading within 1 hour of starting.",
+		"scenarios": [1, 2],
+		"new_in": 1
 	}
 ]
 
@@ -217,11 +259,13 @@ func _input(event: InputEvent) -> void:
 			get_tree().quit()
 		elif event.keycode == KEY_F3:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
-				if as400_state > 0:
-					if as400_state == 7: as400_state = 6 
-					elif as400_state == 6: as400_state = 5 
-					else: as400_state -= 1
-					_render_as400_screen()
+				if as400_state == 7: as400_state = 6
+				elif as400_state == 6: as400_state = 5
+				elif as400_state == 10: as400_state = 2
+				elif as400_state == 11: as400_state = 3
+				elif as400_state == 12: as400_state = 4
+				elif as400_state > 0: as400_state -= 1
+				_render_as400_screen()
 		elif event.keycode == KEY_F10:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
 				_confirm_as400_raq()
@@ -756,11 +800,14 @@ func _build_operational_layout() -> void:
 			n_sb.border_width_right = 1; n_sb.border_width_bottom = 1
 			n_sb.border_color = Color(0.25, 0.27, 0.3)
 		b.add_theme_stylebox_override("normal", n_sb)
-		var h_sb = n_sb.duplicate()
-		h_sb.bg_color = Color(0.22, 0.24, 0.28)
-		b.add_theme_stylebox_override("hover", h_sb)
+		var p_sb = n_sb.duplicate()
+		p_sb.bg_color = Color(0.1, 0.12, 0.15)
+		b.add_theme_stylebox_override("pressed", p_sb)
+		b.add_theme_stylebox_override("disabled", n_sb)
 		b.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
 		b.add_theme_color_override("font_hover_color", Color.WHITE)
+		b.add_theme_color_override("font_pressed_color", Color(0.5, 0.55, 0.6))
+		b.toggle_mode = false
 		return b
 
 	btn_start_load = make_action_btn.call(" Start Loading ", false)
@@ -1188,46 +1235,97 @@ func _confirm_as400_raq() -> void:
 
 func _render_as400_screen() -> void:
 	if as400_terminal_display == null: return
-	
-	var t = "[font_size=15]" 
+	var t = "[font_size=14]"
+	var date_str = "25/03/26"
 	
 	if as400_state == 0:
-		t += "[color=#00ffff]SIGN ON[/color]\n\n"
-		t += "[color=#00ff00]System : DECA_AS400\n\nUser     : [/color]"
+		# SIMPLIFIED MENU (PSIP0120) — login prompt
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]       [color=#00ffff]Simplified Menu[/color]      [color=#00ff00]***[/color] [color=#00ff00]DKOSUT01[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:00:00[/color]                  [color=#ffff00]PSIP0120[/color]         [color=#00ff00]ENTER[/color]   [color=#00ff00]SOHKPVR[/color]\n\n"
+		t += "[color=#00ffff]                    Profession Opt[/color]\n"
+		t += "                                          [color=#00ff00]10  Change Password[/color]\n"
+		t += "    [color=#ffff00]1[/color]  [color=#00ff00]-[/color]\n"
+		t += "    [color=#ffff00]2[/color]  [color=#00ff00]-[/color]                        [color=#00ff00]20  GE Menu[/color]\n"
+		t += "    [color=#ffff00]3[/color]  [color=#00ff00]-[/color]\n"
+		t += "    [color=#ffff00]4[/color]  [color=#00ff00]-[/color]                        [color=#00ff00]30  PARCELx[/color]\n\n"
+		t += "[color=#00ffff]                Own Options[/color]        [color=#00ff00]40  Recep Dock[/color]  [color=#ffff00]390[/color]\n\n"
+		t += "    [color=#ffff00]11[/color] [color=#00ff00]-[/color]                        [color=#00ff00]50  Ship Dock[/color]   [color=#ffff00]390[/color]\n"
+		t += "    [color=#ffff00]12[/color] [color=#00ff00]-[/color]\n"
+		t += "    [color=#ffff00]13[/color] [color=#00ff00]-[/color]                        [color=#00ff00]80  Modification[/color]\n"
+		t += "    [color=#ffff00]14[/color] [color=#00ff00]-[/color]                            [color=#00ff00]Own Options[/color]\n"
+		t += "    [color=#ffff00]15[/color] [color=#00ff00]-[/color]\n"
+		t += "                                          [color=#00ff00]90  End of session[/color]\n\n"
+		t += "[color=#00ff00]              Code opé/badge :[/color] [color=#ffff00]_[/color]\n"
 		as400_terminal_input.placeholder_text = "Type 'BAYB2B' and press Enter"
+		t += "\n[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Exit  F10=Reinit Docks[/color]\n"
 	
 	elif as400_state == 1:
-		t += "[color=#00ffff]SIGN ON[/color]\n\n"
-		t += "[color=#00ff00]System : DECA_AS400\n\nUser     : BAYB2B\nPassword : [/color]"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]       [color=#00ffff]Simplified Menu[/color]      [color=#00ff00]***[/color] [color=#00ff00]DKOSUT01[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:00:00[/color]                  [color=#ffff00]PSIP0120[/color]\n\n"
+		t += "[color=#00ff00]  Code opé/badge : BAYB2B[/color]\n"
+		t += "[color=#00ff00]  Mot de passe   :[/color] [color=#ffff00]_[/color]\n"
 		as400_terminal_input.placeholder_text = "Type '123456' and press Enter"
+		t += "\n\n[color=#00ffff]F3=Retour   F6=Chgt Mot Passe[/color]\n"
 		
 	elif as400_state == 2:
-		t += "[color=#00ffff]MAIN MENU[/color]\n\n"
-		t += "[color=#00ff00] 50 - Expeditions\n 80 - Reception\n 90 - System\n\nSelection : [/color]"
-		as400_terminal_input.placeholder_text = "Type '50'"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]       [color=#00ffff]Simplified Menu[/color]      [color=#00ff00]***[/color] [color=#00ff00]DKOSUT01[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:00:12[/color]                  [color=#ffff00]PSIP0120[/color]\n\n"
+		t += "[color=#00ffff]                Own Options[/color]        [color=#00ff00]40  Recep Dock[/color]  [color=#ffff00]390[/color]\n\n"
+		t += "                                        [color=#00ff00]50  Ship Dock[/color]   [color=#ffff00]390[/color]\n\n"
+		t += "                                        [color=#00ff00]90  End of session[/color]\n\n"
+		t += "[color=#00ff00]              Your Choice[/color] [color=#ffff00]__[/color]\n"
+		as400_terminal_input.placeholder_text = "Type '50' for Ship Dock"
+		t += "\n\n[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Exit  F10=Reinit Docks[/color]\n"
 		
 	elif as400_state == 3:
-		t += "[color=#00ffff]EXPEDITIONS[/color]\n\n"
-		t += "[color=#00ff00] 01 - Gestion des RAQ\n 02 - Impression\n\nSelection : [/color]"
-		as400_terminal_input.placeholder_text = "Type '01'"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]       [color=#00ffff]SHIP DOCK 390[/color]        [color=#00ff00]***[/color]  [color=#00ff00]QUAI390[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:00:18[/color]                                    [color=#ffff00]AFFICH.[/color]  [color=#00ff00]PIEMDFR[/color]\n\n"
+		t += "[color=#00ff00]  01 - Gestion des RAQ[/color]\n"
+		t += "[color=#00ff00]  02 - Impression[/color]\n\n"
+		t += "[color=#00ff00]  Selection :[/color] [color=#ffff00]__[/color]\n"
+		as400_terminal_input.placeholder_text = "Type '01' for RAQ management"
+		t += "\n\n\n\n\n\n\n"
+		t += "[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Retour  F12=Annuler[/color]\n"
 		
 	elif as400_state == 4:
-		t += "[color=#00ffff]GESTION DES RAQ[/color]\n\n"
-		t += "[color=#00ff00] 02 - RAQ Par Camion\n 03 - RAQ Par Magasin\n\nSelection : [/color]"
-		as400_terminal_input.placeholder_text = "Type '02'"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]       [color=#00ffff]GESTION DES RAQ[/color]      [color=#00ff00]***[/color]  [color=#00ff00]QUAI390[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:00:24[/color]                                    [color=#ffff00]AFFICH.[/color]  [color=#00ff00]PIEMRFR[/color]\n\n"
+		t += "[color=#00ff00]  02 - RAQ Par Camion[/color]\n"
+		t += "[color=#00ff00]  03 - RAQ Par Magasin[/color]\n\n"
+		t += "[color=#00ff00]  Selection :[/color] [color=#ffff00]__[/color]\n"
+		as400_terminal_input.placeholder_text = "Type '02' for RAQ by truck"
+		t += "\n\n\n\n\n\n\n"
+		t += "[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Retour  F12=Annuler[/color]\n"
 		
 	elif as400_state == 5:
-		t += "[color=#00ffff]RAQ PAR CAMION[/color]\n\n"
-		t += "[color=#00ff00] 05 - Afficher RAQ Actuel\n\nSelection : [/color]"
-		as400_terminal_input.placeholder_text = "Type '05'"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]       [color=#00ffff]RAQ PAR CAMION[/color]       [color=#00ff00]***[/color]  [color=#00ff00]QUAI390[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:00:30[/color]                                    [color=#ffff00]AFFICH.[/color]  [color=#00ff00]PIEHCFR[/color]\n\n"
+		t += "[color=#00ff00]  05 - Afficher RAQ Actuel[/color]\n\n"
+		t += "[color=#00ff00]  Selection :[/color] [color=#ffff00]__[/color]\n"
+		as400_terminal_input.placeholder_text = "Type '05' to display current RAQ"
+		t += "\n\n\n\n\n\n\n\n"
+		t += "[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Retour  F12=Annuler[/color]\n"
 		
 	elif as400_state == 6:
-		as400_terminal_input.placeholder_text = "Wait for scan, F10 to confirm, F3 to exit"
-		t += "[color=#00ff00]Expediteur   :  14   390  CAR TILBURG EXPE\n"
-		t += "Destinataire :   7  %-5s %s\n\n[/color]" % [current_dest_code, current_dest_name]
-		t += "[color=#00ffff]5=Detail Colis/UAT   7=Validation UAT transit vocal[/color]\n\n"
-		t += "[color=#00ff00]? N° U.A.T             Flx Uni NBC SE EM Colis                  Dt Col CCC/\n"
-		t += "                               CFP    CD                        Dt Exp Adresse[/color]\n"
+		as400_terminal_input.placeholder_text = "N° Colis ou UAT — F10 to confirm, F3 to exit"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]      [color=#00ffff]DSPF COLIS RAQ/RAC[/color]       [color=#00ff00]***[/color]  [color=#00ff00]QUAI390[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:01:00[/color]                                    [color=#ffff00]AFFICH.[/color]  [color=#00ff00]PJJIDFR[/color]\n\n"
+		t += "[color=#00ff00]Expéditeur   :   14    390   CAR TILBURG EXPE[/color]"
+		
+		# Count total colis
+		var total_colis = 0
+		for p in last_avail_cache:
+			if p.is_uat: total_colis += p.collis
+		t += "       [color=#00ff00]Total colis :   %d[/color]\n" % total_colis
+		t += "[color=#00ff00]Destinataire :    7  %5s   %s[/color]\n\n" % [current_dest_code, current_dest_name]
+		t += "[color=#00ffff]5=Détail Colis/UAT   7=Validation UAT transit vocal[/color]\n\n"
+		t += "[color=#00ff00]? N° U.A.T                  Flx Uni NBC SE EM Colis                  Dt Col  CCC/[/color]\n"
+		t += "[color=#00ff00]                              CFP     CD                       Dt Exp Adresse[/color]\n\n"
 		
 		var regular_uats = []
 		var cc_uats = []
@@ -1235,30 +1333,70 @@ func _render_as400_screen() -> void:
 			if p.is_uat:
 				if p.type == "C&C": cc_uats.append(p)
 				else: regular_uats.append(p)
-				
+		
+		var se_map = {"Mecha": "86", "Bulky": "90", "Bikes": "89", "ServiceCenter": "86", "C&C": "86"}
+		var uni_map = {"Mecha": "62*", "Bulky": "10 ", "Bikes": "63*", "ServiceCenter": "02*", "C&C": "61*"}
+		
 		for p in regular_uats:
-			var uat = p.id
-			var colis = p.get("colis_id", "N/A")
-			t += "[color=#00ffff]  %-20s MAG 02* 47 90    %-20s 250924[/color]\n" % [uat, colis]
+			var se = se_map.get(p.type, "86")
+			var uni = uni_map.get(p.type, "02*")
+			t += "[color=#00ffff]_ %-20s  MAG %s %3d %s 11 %-20s %s[/color]\n" % [p.id, uni, p.collis, se, p.get("colis_id", "N/A"), "250924"]
 			
 		for p in cc_uats:
-			var uat = p.id
-			var colis = p.get("colis_id", "N/A")
-			t += "[color=#ffffff]  %-20s MAG 61* 14 90    %-20s 250924[/color]\n" % [uat, colis]
+			t += "[color=#ffffff]_ %-20s  MAG 61* %3d 86 11 %-20s %s[/color]\n" % [p.id, p.collis, p.get("colis_id", "N/A"), "250924"]
 					
-		t += "\n[color=#3498db]F3=Sortie  F5=Ttes UAT  F7=UAT non Adressées  F8=UAT Adressées  F9=CCC/ADR\nF10=NBC/CFP  F11=EM/CD  F15=Tri F&R[/color]\n"
+		t += "\n[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Sortie   F5=Ttes UAT   F7=UAT non Adressées   F8=UAT Adressées   F9=CCC/ADR[/color]\n"
+		t += "[color=#00ffff]F10=NBC/CFP   F11=EM/CD   F15=Tri F&R[/color]\n"
 		
 	elif as400_state == 7:
-		as400_terminal_input.placeholder_text = "F3=Sortie (Type F3 to exit)"
-		t += "[color=#00ff00]Expediteur   :  14   390  CAR TILBURG EXPE\n"
-		t += "Destinataire :   7  %-5s %s\n\n[/color]" % [current_dest_code, current_dest_name]
-		t += "[color=#f1c40f]**************************************************\n"
-		t += "* *\n"
-		t += "* VALIDATION EFFECTUEE                 *\n"
-		t += "* (RAQ CONFIRMED)                      *\n"
-		t += "* *\n"
-		t += "**************************************************[/color]\n\n"
+		as400_terminal_input.placeholder_text = "F3=Sortie"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]      [color=#00ffff]DSPF COLIS RAQ/RAC[/color]       [color=#00ff00]***[/color]  [color=#00ff00]QUAI390[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:01:00[/color]                                    [color=#ffff00]AFFICH.[/color]  [color=#00ff00]PJJIDFR[/color]\n\n"
+		t += "[color=#00ff00]Expéditeur   :   14    390   CAR TILBURG EXPE[/color]\n"
+		t += "[color=#00ff00]Destinataire :    7  %5s   %s[/color]\n\n" % [current_dest_code, current_dest_name]
+		t += "[color=#f1c40f]╔══════════════════════════════════════════════════╗\n"
+		t += "║                                                  ║\n"
+		t += "║     VALIDATION EFFECTUEE                         ║\n"
+		t += "║     (RAQ CONFIRMED)                              ║\n"
+		t += "║                                                  ║\n"
+		t += "╚══════════════════════════════════════════════════╝[/color]\n\n"
 		t += "[color=#00ffff]You may now physically Seal the Truck.[/color]\n"
+		t += "\n[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Sortie[/color]\n"
+
+	elif as400_state == 10:
+		as400_terminal_input.placeholder_text = "F3=Retour"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]       [color=#00ffff]RECEP DOCK 390[/color]       [color=#00ff00]***[/color]  [color=#00ff00]QUAI390[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:00:18[/color]                                    [color=#ffff00]AFFICH.[/color]  [color=#00ff00]PIRCDFR[/color]\n\n"
+		t += "[color=#00ff00]  Réception — Gestion des arrivages[/color]\n\n"
+		t += "[color=#00ff00]  Aucune réception en cours.[/color]\n\n"
+		t += "[color=#ffff00]  (Ce module n'est pas actif dans cette version de la simulation.)[/color]\n"
+		t += "\n\n\n\n\n\n"
+		t += "[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Retour  F12=Annuler[/color]\n"
+
+	elif as400_state == 11:
+		as400_terminal_input.placeholder_text = "F3=Retour"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]       [color=#00ffff]IMPRESSION[/color]           [color=#00ff00]***[/color]  [color=#00ff00]QUAI390[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:00:18[/color]                                    [color=#ffff00]AFFICH.[/color]  [color=#00ff00]PIEMIFR[/color]\n\n"
+		t += "[color=#00ff00]  01 - Imprimer CMR[/color]\n"
+		t += "[color=#00ff00]  02 - Imprimer Bordereau[/color]\n"
+		t += "[color=#00ff00]  03 - Imprimer Etiquettes[/color]\n\n"
+		t += "[color=#ffff00]  (Les impressions ne sont pas actives dans cette version de la simulation.)[/color]\n"
+		t += "\n\n\n\n\n"
+		t += "[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Retour  F12=Annuler[/color]\n"
+
+	elif as400_state == 12:
+		as400_terminal_input.placeholder_text = "F3=Retour"
+		t += "[color=#00ff00]%s[/color]   [color=#00ff00]***[/color]       [color=#00ffff]RAQ PAR MAGASIN[/color]      [color=#00ff00]***[/color]  [color=#00ff00]QUAI390[/color]    [color=#00ff00]NLDKL01[/color]\n" % date_str
+		t += "[color=#00ff00]09:00:30[/color]                                    [color=#ffff00]AFFICH.[/color]  [color=#00ff00]PIEHMFR[/color]\n\n"
+		t += "[color=#00ff00]  Entrez le code magasin :[/color] [color=#ffff00]_____[/color]\n\n"
+		t += "[color=#ffff00]  (La consultation par magasin n'est pas active dans cette version.)[/color]\n"
+		t += "\n\n\n\n\n\n\n"
+		t += "[color=#00ffff]─────────────────────────────────────────────────────[/color]\n"
+		t += "[color=#00ffff]F3=Retour  F12=Annuler[/color]\n"
 
 	t += "[/font_size]"
 	as400_terminal_display.text = t
@@ -1269,12 +1407,21 @@ func _on_as400_input_submitted(text: String) -> void:
 	
 	if as400_state == 0 and input == "BAYB2B": as400_state = 1
 	elif as400_state == 1 and input == "123456": as400_state = 2
-	elif as400_state == 2 and input == "50": as400_state = 3
-	elif as400_state == 3 and input == "01": as400_state = 4
-	elif as400_state == 4 and input == "02": as400_state = 5
+	elif as400_state == 2:
+		if input == "50": as400_state = 3
+		elif input == "40": as400_state = 10
+	elif as400_state == 3:
+		if input == "01": as400_state = 4
+		elif input == "02": as400_state = 11
+	elif as400_state == 4:
+		if input == "02": as400_state = 5
+		elif input == "03": as400_state = 12
 	elif as400_state == 5 and input == "05": as400_state = 6
 	elif as400_state == 6 and input == "F3": as400_state = 5 
-	elif as400_state == 7 and input == "F3": as400_state = 6 
+	elif as400_state == 7 and input == "F3": as400_state = 6
+	elif as400_state == 10 and input == "F3": as400_state = 2
+	elif as400_state == 11 and input == "F3": as400_state = 3
+	elif as400_state == 12 and input == "F3": as400_state = 4
 	
 	_render_as400_screen()
 	
@@ -1296,8 +1443,8 @@ func set_enabled(enabled: bool) -> void:
 
 func _on_portal_start_pressed() -> void:
 	if _session == null: return
-	var scenario_name: String = "default"
-	if portal_scenario_dropdown != null: scenario_name = portal_scenario_dropdown.get_item_text(portal_scenario_dropdown.get_selected_id())
+	var _scenario_name: String = "default"
+	if portal_scenario_dropdown != null: _scenario_name = portal_scenario_dropdown.get_item_text(portal_scenario_dropdown.get_selected_id())
 	
 	_current_scenario_index = portal_scenario_dropdown.get_selected_id()
 	if _current_scenario_index == 0: _current_scenario_name = "0. Tutorial"
@@ -1326,7 +1473,8 @@ func _on_portal_start_pressed() -> void:
 		tutorial_step = 0
 		tut_canvas.visible = true
 		_update_tutorial_ui()
-		lbl_standby.visible = false
+		lbl_standby.text = "Your first shift starts here.\n\nFollow the green Training Guide at the top.\nIt will walk you through every step."
+		lbl_standby.visible = true
 	else:
 		tutorial_active = false
 		if tut_canvas != null: tut_canvas.visible = false
@@ -1457,7 +1605,7 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 		_render_as400_screen() 
 
 	if truck_cap_label != null:
-		var spaces_left = cap_max - cap_used
+		var _spaces_left = cap_max - cap_used
 		var pct = cap_used / cap_max if cap_max > 0 else 0
 		var color_hex = "#8fa6bf"
 		if pct > 0.85: color_hex = "#e74c3c"
@@ -1612,16 +1760,17 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 		cargo_box.add_child(mid_line)
 	elif p_type == "Bulky":
 		cargo_box.color = Color(0.82, 0.68, 0.45)
+		cargo_box.clip_contents = true
 		var tape_h = ColorRect.new()
-		tape_h.color = Color(0.7, 0.55, 0.3, 0.6)
-		tape_h.set_anchors_preset(Control.PRESET_CENTER)
-		tape_h.custom_minimum_size = Vector2(p_size, 2)
+		tape_h.color = Color(0.65, 0.5, 0.28)
+		tape_h.set_anchors_preset(Control.PRESET_HCENTER_WIDE)
+		tape_h.offset_top = -1; tape_h.offset_bottom = 1
 		tape_h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cargo_box.add_child(tape_h)
 		var tape_v = ColorRect.new()
-		tape_v.color = Color(0.7, 0.55, 0.3, 0.6)
-		tape_v.set_anchors_preset(Control.PRESET_CENTER)
-		tape_v.custom_minimum_size = Vector2(2, p_size)
+		tape_v.color = Color(0.65, 0.5, 0.28)
+		tape_v.set_anchors_preset(Control.PRESET_VCENTER_WIDE)
+		tape_v.offset_left = -1; tape_v.offset_right = 1
 		tape_v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cargo_box.add_child(tape_v)
 	elif p_type == "Bikes":
@@ -1687,10 +1836,10 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 		var hover_text = ""
 		
 		if is_reachable:
-			hover_text = "[font_size=14][color=#e74c3c][b]⚠ UNLOAD[/b][/color]  [b]%s[/b]  Colis: %s  [color=#95a5a6]Penalty: +1.1 min[/color][/font_size]" % [p.id, p.get("colis_id", "N/A")]
+			hover_text = "[font_size=14][color=#e74c3c][b]⚠ UNLOAD PALLET[/b][/color]\n[color=#aab0b8]U.A.T:[/color] [b]%s[/b]\n[color=#aab0b8]Colis:[/color] %s\n[color=#e74c3c]Penalty: +1.1 min rework[/color][/font_size]" % [p.id, p.get("colis_id", "N/A")]
 		else:
 			btn.modulate = Color(0.6, 0.6, 0.6) 
-			hover_text = "[font_size=14][color=#95a5a6][b]BLOCKED[/b]  %s — unload tail first[/color][/font_size]" % p.id
+			hover_text = "[font_size=14][color=#95a5a6][b]BLOCKED[/b]\n%s\nUnload the pallets near the door first.[/color][/font_size]" % p.id
 
 		btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
 		btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[font_size=14][color=#5a6a7a]▶ Hover over a pallet to scan...[/color][/font_size]")
@@ -1711,8 +1860,10 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	var colis_str = p_data.get("colis_id", "N/A")
 	
 	var base_label = "Plastic" if (p_data.type == "Mecha" or p_data.type == "C&C") else "EUR Wood"
-	var hover_text = "[font_size=14][color=#0082c3][b]SCAN[/b][/color]  Type: [b]%s[/b] (%s)%s  UAT: [b]%s[/b]  Colis: [b]%s[/b]  Promise: [b]%s[/b]  Qty: %d  Cap: %0.1f[/font_size]" % [p_data.type, base_label, code_str, p_data.id, colis_str, p_data.promise, p_data.collis, p_data.cap]
-	
+	var hover_text = "[font_size=14][color=#0082c3][b]▶ SCAN DATA[/b][/color]\n"
+	hover_text += "[color=#aab0b8]Type:[/color] [b]%s[/b] [color=#6a7a8a](%s)[/color]%s\n" % [p_data.type, base_label, code_str]
+	hover_text += "[color=#aab0b8]U.A.T:[/color] [b]%s[/b]   [color=#aab0b8]Colis:[/color] [b]%s[/b]\n" % [p_data.id, colis_str]
+	hover_text += "[color=#aab0b8]Promise:[/color] [b]%s[/b]   [color=#aab0b8]Qty:[/color] %d   [color=#aab0b8]Cap:[/color] %0.1f[/font_size]" % [p_data.promise, p_data.collis, p_data.cap]
 	btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
 	btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[font_size=14][color=#5a6a7a]▶ Hover over a pallet to scan...[/color][/font_size]")
 
@@ -1780,7 +1931,7 @@ func _toggle_panel(panel_name: String) -> void:
 	var is_open: bool = bool(_panel_state.get(panel_name, false))
 	_set_panel_visible(panel_name, not is_open, false)
 
-func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) -> void:
+func _set_panel_visible(panel_name: String, make_visible: bool, _silent: bool) -> void:
 	_panel_state[panel_name] = make_visible
 	if make_visible: panels_ever_opened[panel_name] = true 
 	
