@@ -739,100 +739,240 @@ func _build_dock_stage() -> void:
 	pnl_dock_stage = PanelContainer.new()
 	pnl_dock_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pnl_dock_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	pnl_dock_stage.visible = false 
+	pnl_dock_stage.visible = false
+	var stage_sb = StyleBoxFlat.new()
+	stage_sb.bg_color = Color(0.22, 0.23, 0.24)
+	pnl_dock_stage.add_theme_stylebox_override("panel", stage_sb)
 	stage_hbox.add_child(pnl_dock_stage)
-	
+
 	var dock_margin = MarginContainer.new()
-	dock_margin.add_theme_constant_override("margin_left", 15)
-	dock_margin.add_theme_constant_override("margin_top", 15)
-	dock_margin.add_theme_constant_override("margin_right", 15)
-	dock_margin.add_theme_constant_override("margin_bottom", 15)
+	dock_margin.add_theme_constant_override("margin_left", 10)
+	dock_margin.add_theme_constant_override("margin_top", 8)
+	dock_margin.add_theme_constant_override("margin_right", 10)
+	dock_margin.add_theme_constant_override("margin_bottom", 8)
 	pnl_dock_stage.add_child(dock_margin)
-	
+
 	var dock_vbox = VBoxContainer.new()
-	dock_vbox.add_theme_constant_override("separation", 10)
+	dock_vbox.add_theme_constant_override("separation", 6)
 	dock_margin.add_child(dock_vbox)
-	
-	lbl_hover_info = RichTextLabel.new()
-	lbl_hover_info.bbcode_enabled = true
-	lbl_hover_info.custom_minimum_size = Vector2(0, 75) 
-	lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]"
-	dock_vbox.add_child(lbl_hover_info)
-	
+
+	# --- MAIN FLOOR AREA: lanes left, truck right ---
 	var floor_split = HBoxContainer.new()
 	floor_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	floor_split.add_theme_constant_override("separation", 0)
 	dock_vbox.add_child(floor_split)
-	
+
+	# === DOCK LANES AREA (concrete floor) ===
 	var dock_lanes_bg = PanelContainer.new()
 	dock_lanes_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dock_lanes_bg.size_flags_stretch_ratio = 2.0
+	dock_lanes_bg.size_flags_stretch_ratio = 2.2
 	var sb_dock = StyleBoxFlat.new()
-	sb_dock.bg_color = Color(0.9, 0.9, 0.9) 
-	sb_dock.corner_radius_top_left = 6
-	sb_dock.corner_radius_bottom_left = 6
+	sb_dock.bg_color = Color(0.62, 0.63, 0.61) # Polished grey concrete
+	sb_dock.border_width_bottom = 3
+	sb_dock.border_color = Color(0.85, 0.65, 0.0) # Yellow boundary line at bottom
 	dock_lanes_bg.add_theme_stylebox_override("panel", sb_dock)
 	floor_split.add_child(dock_lanes_bg)
-	
-	var dock_margin2 = MarginContainer.new()
-	dock_margin2.add_theme_constant_override("margin_left", 15)
-	dock_margin2.add_theme_constant_override("margin_top", 15)
-	dock_margin2.add_theme_constant_override("margin_bottom", 15) 
-	dock_margin2.add_theme_constant_override("margin_right", 15)
-	dock_lanes_bg.add_child(dock_margin2)
 
-	var dock_vbox2 = VBoxContainer.new()
-	dock_margin2.add_child(dock_vbox2)
+	var dock_inner_margin = MarginContainer.new()
+	dock_inner_margin.add_theme_constant_override("margin_left", 8)
+	dock_inner_margin.add_theme_constant_override("margin_top", 0)
+	dock_inner_margin.add_theme_constant_override("margin_bottom", 0)
+	dock_inner_margin.add_theme_constant_override("margin_right", 8)
+	dock_lanes_bg.add_child(dock_inner_margin)
 
-	var headers_hbox = HBoxContainer.new()
-	headers_hbox.add_theme_constant_override("separation", 10)
-	dock_vbox2.add_child(headers_hbox)
+	var dock_inner_vbox = VBoxContainer.new()
+	dock_inner_vbox.add_theme_constant_override("separation", 0)
+	dock_inner_margin.add_child(dock_inner_vbox)
 
-	var lbl1 = Label.new(); lbl1.text = "Mecha (1)"; lbl1.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lbl1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lbl1.add_theme_color_override("font_color", Color.BLACK)
-	var lbl2 = Label.new(); lbl2.text = "Mecha (2)"; lbl2.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lbl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lbl2.add_theme_color_override("font_color", Color.BLACK)
-	var lbl3 = Label.new(); lbl3.text = "Bulky"; lbl3.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lbl3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lbl3.add_theme_color_override("font_color", Color.BLACK)
-	var lbl4 = Label.new(); lbl4.text = "Bikes/C&C/SC"; lbl4.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lbl4.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lbl4.add_theme_color_override("font_color", Color.BLACK)
-	headers_hbox.add_child(lbl1); headers_hbox.add_child(lbl2); headers_hbox.add_child(lbl3); headers_hbox.add_child(lbl4)
+	# --- OVERHEAD SIGNS (dark panels, white text, blue accent stripe) ---
+	var signs_hbox = HBoxContainer.new()
+	signs_hbox.add_theme_constant_override("separation", 6)
+	dock_inner_vbox.add_child(signs_hbox)
 
+	var sign_data = [
+		{"label": "MECHA 1", "sub": "BLUE BOXES", "color": Color(0.2, 0.5, 0.8)},
+		{"label": "MECHA 2", "sub": "BLUE BOXES", "color": Color(0.2, 0.5, 0.8)},
+		{"label": "BULKY", "sub": "TRANSIT", "color": Color(0.9, 0.5, 0.15)},
+		{"label": "BIKES / C&C / SC", "sub": "MIXED", "color": Color(0.2, 0.7, 0.35)}
+	]
+	for sd in sign_data:
+		var sign_panel = PanelContainer.new()
+		sign_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var sign_sb = StyleBoxFlat.new()
+		sign_sb.bg_color = Color(0.1, 0.1, 0.12)
+		sign_sb.border_width_top = 3
+		sign_sb.border_color = sd.color
+		sign_sb.corner_radius_bottom_left = 2
+		sign_sb.corner_radius_bottom_right = 2
+		sign_panel.add_theme_stylebox_override("panel", sign_sb)
+		signs_hbox.add_child(sign_panel)
+
+		var sign_margin = MarginContainer.new()
+		sign_margin.add_theme_constant_override("margin_left", 6)
+		sign_margin.add_theme_constant_override("margin_top", 5)
+		sign_margin.add_theme_constant_override("margin_right", 6)
+		sign_margin.add_theme_constant_override("margin_bottom", 5)
+		sign_panel.add_child(sign_margin)
+
+		var sign_vbox = VBoxContainer.new()
+		sign_vbox.add_theme_constant_override("separation", 0)
+		sign_margin.add_child(sign_vbox)
+
+		var sign_lbl = Label.new()
+		sign_lbl.text = sd.label
+		sign_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sign_lbl.add_theme_font_size_override("font_size", 13)
+		sign_lbl.add_theme_color_override("font_color", Color.WHITE)
+		sign_vbox.add_child(sign_lbl)
+
+		var sign_sub = Label.new()
+		sign_sub.text = sd.sub
+		sign_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sign_sub.add_theme_font_size_override("font_size", 10)
+		sign_sub.add_theme_color_override("font_color", Color(0.55, 0.58, 0.62))
+		sign_vbox.add_child(sign_sub)
+
+	# --- LANE COLUMNS (with white dashed dividers between them) ---
 	var lanes_hbox = HBoxContainer.new()
 	lanes_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lanes_hbox.add_theme_constant_override("separation", 10)
-	dock_vbox2.add_child(lanes_hbox)
+	lanes_hbox.add_theme_constant_override("separation", 0)
+	dock_inner_vbox.add_child(lanes_hbox)
 
 	lane_m1 = VBoxContainer.new(); lane_m1.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_m1.alignment = BoxContainer.ALIGNMENT_END; lane_m1.add_theme_constant_override("separation", 4)
 	lane_m2 = VBoxContainer.new(); lane_m2.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_m2.alignment = BoxContainer.ALIGNMENT_END; lane_m2.add_theme_constant_override("separation", 4)
 	lane_b = VBoxContainer.new(); lane_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_b.alignment = BoxContainer.ALIGNMENT_END; lane_b.add_theme_constant_override("separation", 4)
 	lane_misc = VBoxContainer.new(); lane_misc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_misc.alignment = BoxContainer.ALIGNMENT_END; lane_misc.add_theme_constant_override("separation", 4)
 
-	lanes_hbox.add_child(lane_m1); lanes_hbox.add_child(lane_m2); lanes_hbox.add_child(lane_b); lanes_hbox.add_child(lane_misc)
+	# Helper to create a dashed lane divider
+	var make_divider = func() -> ColorRect:
+		var div = ColorRect.new()
+		div.custom_minimum_size = Vector2(2, 0)
+		div.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		div.color = Color(1, 1, 1, 0.3) # White dashed effect (solid for now, reads as lane line)
+		div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		return div
 
-	var truck_pnl = PanelContainer.new()
-	truck_pnl.custom_minimum_size = Vector2(180, 0)
-	var t_sb = StyleBoxFlat.new()
-	t_sb.bg_color = Color(0.15, 0.15, 0.15)
-	t_sb.border_width_left = 4
-	t_sb.border_width_right = 4
-	t_sb.border_width_top = 4
-	t_sb.border_width_bottom = 4
-	t_sb.border_color = Color.BLACK
-	truck_pnl.add_theme_stylebox_override("panel", t_sb)
-	floor_split.add_child(truck_pnl)
+	lanes_hbox.add_child(lane_m1)
+	lanes_hbox.add_child(make_divider.call())
+	lanes_hbox.add_child(lane_m2)
+	lanes_hbox.add_child(make_divider.call())
+	lanes_hbox.add_child(lane_b)
+	lanes_hbox.add_child(make_divider.call())
+	lanes_hbox.add_child(lane_misc)
+
+	# --- ORANGE FLOOR LABELS (store name + code at base of each lane) ---
+	var floor_labels_hbox = HBoxContainer.new()
+	floor_labels_hbox.add_theme_constant_override("separation", 6)
+	dock_inner_vbox.add_child(floor_labels_hbox)
+
+	var floor_label_texts = ["MECHA 1", "MECHA 2", "BULKY", "BIKES/C&C"]
+	for flt in floor_label_texts:
+		var fl_panel = PanelContainer.new()
+		fl_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var fl_sb = StyleBoxFlat.new()
+		fl_sb.bg_color = Color(0.9, 0.55, 0.1) # Orange floor label
+		fl_sb.corner_radius_top_left = 2
+		fl_sb.corner_radius_top_right = 2
+		fl_sb.corner_radius_bottom_left = 2
+		fl_sb.corner_radius_bottom_right = 2
+		fl_panel.add_theme_stylebox_override("panel", fl_sb)
+		floor_labels_hbox.add_child(fl_panel)
+
+		var fl_lbl = Label.new()
+		fl_lbl.text = flt
+		fl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		fl_lbl.add_theme_font_size_override("font_size", 11)
+		fl_lbl.add_theme_color_override("font_color", Color.WHITE)
+		var fl_m = MarginContainer.new()
+		fl_m.add_theme_constant_override("margin_top", 2)
+		fl_m.add_theme_constant_override("margin_bottom", 2)
+		fl_m.add_child(fl_lbl)
+		fl_panel.add_child(fl_m)
+
+	# === TRUCK SECTION (door frame visual) ===
+	var truck_outer = PanelContainer.new()
+	truck_outer.custom_minimum_size = Vector2(195, 0)
+	var truck_frame_sb = StyleBoxFlat.new()
+	truck_frame_sb.bg_color = Color(0.35, 0.36, 0.38) # Steel door frame
+	truck_frame_sb.border_width_left = 5
+	truck_frame_sb.border_width_right = 5
+	truck_frame_sb.border_width_top = 5
+	truck_frame_sb.border_width_bottom = 0
+	truck_frame_sb.border_color = Color(0.55, 0.56, 0.58) # Lighter steel edge
+	truck_frame_sb.corner_radius_top_left = 4
+	truck_frame_sb.corner_radius_top_right = 4
+	truck_outer.add_theme_stylebox_override("panel", truck_frame_sb)
+	floor_split.add_child(truck_outer)
+
+	var truck_inner = PanelContainer.new()
+	truck_inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var truck_inner_sb = StyleBoxFlat.new()
+	truck_inner_sb.bg_color = Color(0.12, 0.12, 0.14) # Dark truck interior
+	truck_inner_sb.corner_radius_top_left = 2
+	truck_inner_sb.corner_radius_top_right = 2
+	truck_outer.add_child(truck_inner)
 
 	var truck_vbox = VBoxContainer.new()
-	truck_pnl.add_child(truck_vbox)
+	truck_vbox.add_theme_constant_override("separation", 4)
+	truck_inner.add_child(truck_vbox)
+
+	# Truck header label
+	var truck_header = Label.new()
+	truck_header.text = "TRAILER"
+	truck_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	truck_header.add_theme_font_size_override("font_size", 11)
+	truck_header.add_theme_color_override("font_color", Color(0.5, 0.52, 0.55))
+	truck_vbox.add_child(truck_header)
 
 	truck_cap_label = RichTextLabel.new()
 	truck_cap_label.bbcode_enabled = true
-	truck_cap_label.scroll_active = false 
+	truck_cap_label.scroll_active = false
 	truck_cap_label.fit_content = true
-	truck_cap_label.text = "[center][color=#7f8fa6]Capacity: 0.0 / 36.0[/color]\n[b][color=#f5f6fa]Spaces Left: 36.0[/color][/b][/center]"
+	truck_cap_label.text = "[center][color=#7f8fa6]0.0 / 36.0[/color]\n[b][color=#f5f6fa]36.0 left[/color][/b][/center]"
 	truck_vbox.add_child(truck_cap_label)
 
 	truck_grid = GridContainer.new()
 	truck_grid.columns = 3
-	truck_grid.add_theme_constant_override("h_separation", 4)
-	truck_grid.add_theme_constant_override("v_separation", 4)
+	truck_grid.add_theme_constant_override("h_separation", 3)
+	truck_grid.add_theme_constant_override("v_separation", 3)
 	truck_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	truck_vbox.add_child(truck_grid)
+
+	# Arrow indicator: LIFO direction
+	var lifo_lbl = Label.new()
+	lifo_lbl.text = "← UNLOAD FIRST"
+	lifo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lifo_lbl.add_theme_font_size_override("font_size", 10)
+	lifo_lbl.add_theme_color_override("font_color", Color(0.6, 0.35, 0.35))
+	truck_vbox.add_child(lifo_lbl)
+
+	# Spacer to push grid up
+	var truck_spacer = Control.new()
+	truck_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	truck_vbox.add_child(truck_spacer)
+
+	# === SCANNER-STYLE HOVER PANEL (below dock, monospace feel) ===
+	var scanner_bg = PanelContainer.new()
+	scanner_bg.custom_minimum_size = Vector2(0, 60)
+	var scanner_sb = StyleBoxFlat.new()
+	scanner_sb.bg_color = Color(0.08, 0.09, 0.1)
+	scanner_sb.border_width_top = 1
+	scanner_sb.border_color = Color(0.3, 0.3, 0.32)
+	scanner_bg.add_theme_stylebox_override("panel", scanner_sb)
+	dock_vbox.add_child(scanner_bg)
+
+	var scanner_margin = MarginContainer.new()
+	scanner_margin.add_theme_constant_override("margin_left", 12)
+	scanner_margin.add_theme_constant_override("margin_top", 6)
+	scanner_margin.add_theme_constant_override("margin_right", 12)
+	scanner_margin.add_theme_constant_override("margin_bottom", 6)
+	scanner_bg.add_child(scanner_margin)
+
+	lbl_hover_info = RichTextLabel.new()
+	lbl_hover_info.bbcode_enabled = true
+	lbl_hover_info.custom_minimum_size = Vector2(0, 45)
+	lbl_hover_info.text = "[font_size=14][color=#5a6a7a]▶ Hover over a pallet to scan...[/color][/font_size]"
+	scanner_margin.add_child(lbl_hover_info)
 
 # ==========================================
 # AS400 TERMINAL (SHRUNK TO FIT)
@@ -1282,73 +1422,150 @@ func _get_type_color(p_type: String) -> Color:
 # ==========================================
 # TOP-DOWN REALISTIC PALLET GENERATOR
 # ==========================================
-func _build_pallet_graphic(color: Color, is_truck: bool) -> Button:
+func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") -> Button:
 	var btn = Button.new()
 	var p_size = 45 if is_truck else 64
 	btn.custom_minimum_size = Vector2(p_size, p_size)
-	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER 
-	
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+
 	var empty_sb = StyleBoxEmpty.new()
 	btn.add_theme_stylebox_override("normal", empty_sb)
-	btn.add_theme_stylebox_override("hover", empty_sb) 
-	btn.add_theme_stylebox_override("focus", empty_sb) 
-	
-	# The wooden pallet base (Top-down view)
-	var wood_bg = ColorRect.new()
-	wood_bg.color = Color(0.65, 0.45, 0.25) 
-	wood_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	wood_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(wood_bg)
-	
-	# Add 3 vertical wooden planks to give it texture
-	var planks = HBoxContainer.new()
-	planks.set_anchors_preset(Control.PRESET_FULL_RECT)
-	planks.add_theme_constant_override("separation", 4)
-	planks.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	wood_bg.add_child(planks)
-	
-	for i in range(3):
-		var plank = ColorRect.new()
-		plank.color = Color(0.8, 0.6, 0.4) 
-		plank.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		plank.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		planks.add_child(plank)
-	
-	# The tinted cargo box sitting on top
+	btn.add_theme_stylebox_override("hover", empty_sb)
+	btn.add_theme_stylebox_override("focus", empty_sb)
+
+	# --- BASE (pallet platform) ---
+	var is_plastic = (p_type == "Mecha" or p_type == "C&C")
+	var base_bg = ColorRect.new()
+	base_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	base_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(base_bg)
+
+	if is_plastic:
+		# Black plastic pallet — flat dark surface with subtle grid
+		base_bg.color = Color(0.15, 0.15, 0.17)
+		var grid_h = VBoxContainer.new()
+		grid_h.set_anchors_preset(Control.PRESET_FULL_RECT)
+		grid_h.add_theme_constant_override("separation", 0)
+		grid_h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		base_bg.add_child(grid_h)
+		for i in range(3):
+			var row = ColorRect.new()
+			row.color = Color(0.2, 0.2, 0.22) if i % 2 == 0 else Color(0.15, 0.15, 0.17)
+			row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			grid_h.add_child(row)
+	else:
+		# EUR wooden pallet — warm brown with plank lines
+		base_bg.color = Color(0.65, 0.45, 0.25)
+		var planks = HBoxContainer.new()
+		planks.set_anchors_preset(Control.PRESET_FULL_RECT)
+		planks.add_theme_constant_override("separation", 3)
+		planks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		base_bg.add_child(planks)
+		for i in range(3):
+			var plank = ColorRect.new()
+			plank.color = Color(0.78, 0.58, 0.38) if i % 2 == 0 else Color(0.7, 0.5, 0.32)
+			plank.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			plank.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			planks.add_child(plank)
+
+	# --- CARGO (sitting on top of base) ---
 	var cargo_margin = MarginContainer.new()
 	cargo_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	cargo_margin.add_theme_constant_override("margin_left", 6)
-	cargo_margin.add_theme_constant_override("margin_top", 6)
-	cargo_margin.add_theme_constant_override("margin_right", 6)
-	cargo_margin.add_theme_constant_override("margin_bottom", 6)
+	var inset = 5 if is_truck else 7
+	cargo_margin.add_theme_constant_override("margin_left", inset)
+	cargo_margin.add_theme_constant_override("margin_top", inset)
+	cargo_margin.add_theme_constant_override("margin_right", inset)
+	cargo_margin.add_theme_constant_override("margin_bottom", inset)
 	cargo_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(cargo_margin)
-	
+
 	var cargo_box = ColorRect.new()
-	cargo_box.color = color.lerp(Color.WHITE, 0.15) 
 	cargo_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cargo_margin.add_child(cargo_box)
-	
+
+	if p_type == "Mecha":
+		# Blue boxes — solid blue with a subtle darker divider line
+		cargo_box.color = Color(0.15, 0.45, 0.75)
+		var mid_line = ColorRect.new()
+		mid_line.color = Color(0.1, 0.35, 0.6)
+		mid_line.set_anchors_preset(Control.PRESET_TOP_WIDE)
+		mid_line.custom_minimum_size = Vector2(0, 2)
+		mid_line.offset_top = (p_size - inset * 2) * 0.5 - 1
+		mid_line.offset_bottom = (p_size - inset * 2) * 0.5 + 1
+		mid_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cargo_box.add_child(mid_line)
+	elif p_type == "Bulky":
+		# Shrink-wrapped cardboard — tan/brown with cross tape lines
+		cargo_box.color = Color(0.82, 0.68, 0.45)
+		# Horizontal tape
+		var tape_h = ColorRect.new()
+		tape_h.color = Color(0.7, 0.55, 0.3, 0.6)
+		tape_h.set_anchors_preset(Control.PRESET_CENTER)
+		tape_h.custom_minimum_size = Vector2(p_size, 2)
+		tape_h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cargo_box.add_child(tape_h)
+		# Vertical tape
+		var tape_v = ColorRect.new()
+		tape_v.color = Color(0.7, 0.55, 0.3, 0.6)
+		tape_v.set_anchors_preset(Control.PRESET_CENTER)
+		tape_v.custom_minimum_size = Vector2(2, p_size)
+		tape_v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cargo_box.add_child(tape_v)
+	elif p_type == "Bikes":
+		# Long bike boxes — green-tinted cardboard, horizontal box orientation
+		cargo_box.color = Color(0.28, 0.62, 0.35)
+		var box_line1 = ColorRect.new()
+		box_line1.color = Color(0.22, 0.52, 0.28)
+		box_line1.set_anchors_preset(Control.PRESET_TOP_WIDE)
+		box_line1.custom_minimum_size = Vector2(0, 1)
+		box_line1.offset_top = (p_size - inset * 2) * 0.33
+		box_line1.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cargo_box.add_child(box_line1)
+		var box_line2 = ColorRect.new()
+		box_line2.color = Color(0.22, 0.52, 0.28)
+		box_line2.set_anchors_preset(Control.PRESET_TOP_WIDE)
+		box_line2.custom_minimum_size = Vector2(0, 1)
+		box_line2.offset_top = (p_size - inset * 2) * 0.66
+		box_line2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cargo_box.add_child(box_line2)
+	elif p_type == "C&C":
+		# White C&C — clean white with small "C&C" feel (dotted center)
+		cargo_box.color = Color(0.92, 0.92, 0.92)
+		var cc_dot = ColorRect.new()
+		cc_dot.color = Color(0.7, 0.7, 0.7)
+		cc_dot.custom_minimum_size = Vector2(6, 6)
+		cc_dot.set_anchors_preset(Control.PRESET_CENTER)
+		cc_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cargo_box.add_child(cc_dot)
+	elif p_type == "ServiceCenter":
+		# Yellow stands — bright yellow, clean
+		cargo_box.color = Color(0.88, 0.82, 0.2)
+	else:
+		# Fallback
+		cargo_box.color = color.lerp(Color.WHITE, 0.15)
+
+	# Border around cargo
 	var border = ReferenceRect.new()
-	border.border_color = color.darkened(0.3)
+	border.border_color = color.darkened(0.35)
 	border.border_width = 2
 	border.editor_only = false
 	border.set_anchors_preset(Control.PRESET_FULL_RECT)
 	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cargo_box.add_child(border)
-	
+
 	# Hover glow
 	var glow = ReferenceRect.new()
-	glow.border_color = Color(0,0,0,0)
+	glow.border_color = Color(0, 0, 0, 0)
 	glow.border_width = 3
 	glow.editor_only = false
 	glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(glow)
-	
+
 	btn.mouse_entered.connect(func(): glow.border_color = Color(0.1, 0.8, 1.0))
-	btn.mouse_exited.connect(func(): glow.border_color = Color(0,0,0,0))
-	
+	btn.mouse_exited.connect(func(): glow.border_color = Color(0, 0, 0, 0))
+
 	return btn
 
 func _update_truck_visualizer(loaded_pallets: Array) -> void:
@@ -1358,7 +1575,7 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 	for i in range(loaded_pallets.size()):
 		var p = loaded_pallets[i]
 		
-		var btn = _build_pallet_graphic(_get_type_color(p.type), true)
+		var btn = _build_pallet_graphic(_get_type_color(p.type), true, p.type)
 		
 		var is_reachable = i >= (loaded_pallets.size() - 3)
 		var hover_text = ""
@@ -1370,7 +1587,7 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 			hover_text = "[font_size=18][color=#95a5a6][b]🔒 BLOCKED[/b][/color]\n[b]%s[/b] is blocked by pallets in front of it. Unload the tail first.[/font_size]" % p.id
 
 		btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
-		btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]")
+		btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[font_size=14][color=#5a6a7a]▶ Hover over a pallet to scan...[/color][/font_size]")
 		
 		btn.pressed.connect(func(): 
 			if tutorial_active and tutorial_step != 7:
@@ -1381,7 +1598,7 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 		truck_grid.add_child(btn)
 
 func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
-	var btn = _build_pallet_graphic(_get_type_color(p_data.type), false)
+	var btn = _build_pallet_graphic(_get_type_color(p_data.type), false, p_data.type)
 
 	var code_str = ""
 	if p_data.has("code"): code_str = " | Code: " + p_data.code
@@ -1390,8 +1607,7 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	var hover_text = "[font_size=18][color=#0082c3][b]SCAN DATA:[/b][/color] Type: [b]%s[/b]%s\nU.A.T: [b]%s[/b] | Colis: [b]%s[/b]\nPromise Date: [b]%s[/b] | Collis Count: %d | Cap Space: %0.1f[/font_size]" % [p_data.type, code_str, p_data.id, colis_str, p_data.promise, p_data.collis, p_data.cap]
 	
 	btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
-	btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]")
-
+	btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[font_size=14][color=#5a6a7a]▶ Hover over a pallet to scan...[/color][/font_size]")
 	btn.pressed.connect(func(): 
 		if tutorial_active:
 			if tutorial_step < 6:

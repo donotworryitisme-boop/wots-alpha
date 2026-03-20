@@ -59,13 +59,13 @@ func _apply_hover_state(hovered: bool) -> void:
 			accept_button.add_theme_stylebox_override("normal", _normal_stylebox)
 
 func _build_contract_text() -> String:
-	# Trust-safe language pass: "score" -> "learning signals"
 	return """[b]Before you start:[/b]
 
-• This simulation is for learning and coaching only; it will never be used for discipline or ranking.
-• Learning signals are private to you; managers and captains cannot see individual runs.
-• No personal data is collected; only aggregated metrics are used to improve training.
-• Your role determines what you see; fairness is built into the system.
+- This simulation is for learning and coaching only; it will never be used for discipline or ranking.
+- Learning signals are private to you; managers and captains cannot see individual runs.
+- No personal data is collected; only aggregated metrics are used to improve training.
+- Your role determines what you see; fairness is built into the system.
+- Scenarios unlock progressively — completing one means you've demonstrated the foundations needed for the next. This is readiness, not a grade.
 
 Press [b]I Understand[/b] to continue."""
 
