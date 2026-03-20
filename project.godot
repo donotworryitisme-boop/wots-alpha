@@ -19,6 +19,13 @@ config/icon="res://icon.svg"
 
 UiTokens="*res://ui/ui_tokens.gd"
 
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
 [filesystem]
 
 import/blender/enabled=false

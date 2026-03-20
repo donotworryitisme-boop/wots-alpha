@@ -33,7 +33,10 @@ var _strip_window_active: bool = false
 var _panel_state: Dictionary = {} 
 var _panel_nodes: Dictionary = {} 
 var panels_ever_opened: Dictionary = {} 
+
 var _current_scenario_name: String = ""
+var _current_scenario_index: int = 0
+var highest_unlocked_scenario: int = 0
 
 # --- PORTAL & STAGE CONTAINERS ---
 var portal_overlay: ColorRect
@@ -45,9 +48,19 @@ var lbl_standby: Label
 var pnl_dock_stage: PanelContainer
 var pnl_as400_stage: PanelContainer
 
-var row_mecha: HFlowContainer
-var row_bulky: HFlowContainer
-var row_bikes_cc: HFlowContainer
+# GLOBAL BUTTON REFS FOR SPOTLIGHT
+var btn_start_load: Button
+var btn_call: Button
+var btn_seal: Button
+var btn_sop: Button
+var btn_dock_view: Button
+
+# --- 4 VERTICAL DOCK LANES ---
+var lane_m1: VBoxContainer
+var lane_m2: VBoxContainer
+var lane_b: VBoxContainer
+var lane_misc: VBoxContainer
+
 var truck_grid: GridContainer
 var truck_cap_label: RichTextLabel 
 var lbl_hover_info: RichTextLabel 
@@ -67,104 +80,56 @@ var store_destinations: Array = [
 	{"name": "AMSTERDAM NOORD", "code": "2226"},
 	{"name": "APELDOORN", "code": "896"},
 	{"name": "ARENA", "code": "256"},
-	{"name": "ARNHEM", "code": "1089"},
-	{"name": "BEST", "code": "664"},
-	{"name": "BREDA", "code": "1088"},
-	{"name": "DEN BOSCH", "code": "3619"},
-	{"name": "DEN HAAG", "code": "1186"},
-	{"name": "EINDHOVEN", "code": "1185"},
-	{"name": "ENSCHEDE", "code": "2092"},
-	{"name": "GRONINGEN", "code": "2224"},
-	{"name": "ROERMOND", "code": "2094"},
-	{"name": "TILBURG", "code": "2013"},
-	{"name": "UTRECHT THE WALL", "code": "2095"}
+	{"name": "ARNHEM", "code": "1089"}
 ]
 var current_dest_name: String = "ALKMAAR"
 var current_dest_code: String = "1570"
 
-# --- SOP CONTAINERS ---
 var sop_overlay: ColorRect
 var sop_search_input: LineEdit
 var sop_results_vbox: VBoxContainer
 var sop_content_label: RichTextLabel
 
-# --- TUTORIAL SYSTEM ---
+# --- NEW SPOTLIGHT TUTORIAL SYSTEM ---
 var tut_canvas: CanvasLayer
 var tutorial_label: RichTextLabel
+var tut_dim_overlay: ColorRect
+var tut_highlight_box: ReferenceRect
+var tut_screen_margin: MarginContainer
+var tut_aligner: VBoxContainer
+var _tut_target_node: Control
+
 var tutorial_active: bool = false
 var tutorial_step: int = -1
 
-# --- PROGRESSIVE SOP DATABASE ---
 var sop_database: Array = [
 	{
 		"title": "AS400: Login & Shortcuts",
 		"tags": ["as400", "login", "password", "f3", "f10", "terminal"],
 		"content": "[font_size=22][color=#0082c3][b]AS400: Login & Shortcuts[/b][/color][/font_size]\n\nThe AS400 is your primary system for checking the RAQ.\n\n[b]Login Sequence:[/b]\n1. User: [b]BAYB2B[/b]\n2. Password: [b]123456[/b]\n\n[b]Shortcuts:[/b]\n• Press [b]F3[/b] on your keyboard to go back a screen.\n• Press [b]F10[/b] to confirm the RAQ when you are finished loading.",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
-		"new_in": "0. Tutorial"
-	},
-	{
-		"title": "AS400: How to find the RAQ List",
-		"tags": ["as400", "navigate", "raq", "menu", "list"],
-		"content": "[font_size=22][color=#0082c3][b]AS400: Navigation[/b][/color][/font_size]\n\nTo find the RAQ (Rest à Quai / Remaining to Load) list, type the following numbers in the AS400 menu and press Enter after each:\n\n1. [b]50[/b] (Expeditions)\n2. [b]01[/b] (Gestion des RAQ)\n3. [b]02[/b] (RAQ Par Camion)\n4. [b]05[/b] (Afficher RAQ Actuel)",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
-		"new_in": "0. Tutorial"
-	},
-	{
-		"title": "Colis Numbers: How to read Department Prefixes",
-		"tags": ["colis", "number", "prefix", "identify", "department"],
-		"content": "[font_size=22][color=#0082c3][b]Colis Number Identification[/b][/color][/font_size]\n\nYou can identify exactly where a pallet came from based on the first 4 digits of its 20-digit Colis number.\n\n[b]Department Prefixes:[/b]\n• [color=#3498db][b]8486[/b][/color] - Sorter Bay B2B / Mecha\n• [color=#e67e22][b]8490[/b][/color] - Bulky\n• [color=#2ecc71][b]8489[/b][/color] - Bikes\n• [color=#f1c40f][b]0035[/b][/color] - Service Center\n• [color=#95a5a6][b]White Numbers[/b][/color] - Click & Collect (C&C Log)\n\nAlways check the tooltip when hovering over a pallet to verify its Colis prefix matches what you expect.",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
-		"new_in": "0. Tutorial"
+		"scenarios": [0, 1, 2],
+		"new_in": 0
 	},
 	{
 		"title": "C&C (Click & Collect): What is it?",
 		"tags": ["click", "collect", "c&c", "white", "customer", "last"],
-		"content": "[font_size=22][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nThese pallets contain items directly ordered by customers waiting at the store. \n\n[color=#e74c3c][b]THE RULE:[/b][/color] They MUST be loaded [b]LAST[/b] onto the truck (closest to the doors) so they are the very first things taken off at the destination store. If you load them early, the store has to empty the whole truck to give customers their orders.",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
-		"new_in": "0. Tutorial"
-	},
-	{
-		"title": "C&C: How to check for missing pallets",
-		"tags": ["check", "click", "missing", "raq", "as400", "compare"],
-		"content": "[font_size=22][color=#0082c3][b]Verifying Click & Collect[/b][/color][/font_size]\n\nNever guess if you have all your C&C pallets. Verify it:\n\n1. Open the [b]AS400[/b] panel and go to the RAQ list.\n2. Count the white [b]C&C[/b] entries at the bottom of the list.\n3. Compare that number to the physical white pallets sitting in the [b]Dock View[/b].\n4. If the AS400 says you should have 3, but you only see 2 on the floor, click [b]Call Departments[/b] immediately to find the missing pallet before you seal the truck.",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
-		"new_in": "0. Tutorial"
+		"content": "[font_size=22][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nThese pallets contain items directly ordered by customers waiting at the store. \n\n[color=#e74c3c][b]THE RULE:[/b][/color] They MUST be loaded [b]LAST[/b] onto the truck (closest to the doors) so they are the very first things taken off at the destination store.",
+		"scenarios": [0, 1, 2],
+		"new_in": 0
 	},
 	{
 		"title": "Loading: The Standard Sequence",
 		"tags": ["load", "sequence", "truck", "order", "standard", "first"],
 		"content": "[font_size=22][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe physical order in which you put things into the truck is critical for safe transit and efficient unloading.\n\n[b]Load in this exact order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] - Yellow\n2. [color=#2ecc71][b]Bikes[/b][/color] - Green\n3. [color=#e67e22][b]Bulky[/b][/color] - Orange\n4. [color=#3498db][b]Mecha[/b][/color] - Blue\n5. [color=#95a5a6][b]Click & Collect[/b][/color] - White (Always last!)",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
-		"new_in": "0. Tutorial"
-	},
-	{
-		"title": "Loading: How to load and unload pallets",
-		"tags": ["load", "unload", "truck", "click", "penalty", "dock", "mistake"],
-		"content": "[font_size=22][color=#0082c3][b]Loading & Unloading Mechanics[/b][/color][/font_size]\n\n[b]Loading:[/b]\nHover over a pallet in the Dock View to scan it. Click the pallet to load it onto the truck.\n\n[b]Unloading (Mistakes):[/b]\nIf you make a sequence mistake, you can pull pallets back onto the dock by clicking them [i]inside[/i] the truck capacity grid.\n\n[color=#e74c3c][b]WARNING:[/b][/color]\n1. You can only reach the [b]last 3 pallets[/b] loaded (LIFO - Last In, First Out). Pallets buried deeper are locked.\n2. Every pallet you pull off the truck costs you a [b]1.1 minute time penalty[/b] for rework!",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
-		"new_in": "0. Tutorial"
-	},
-	{
-		"title": "Pallet Sizes & Truck Capacity",
-		"tags": ["capacity", "space", "size", "bulky", "mecha", "bikes"],
-		"content": "[font_size=22][color=#0082c3][b]Pallet Capacities[/b][/color][/font_size]\n\nNot all pallets take up the same space in the truck! The truck holds a maximum of [b]36.0 spaces[/b].\n\n• [color=#f1c40f][b]Service Center:[/b][/color] 0.5 spaces\n• [color=#2ecc71][b]Bikes:[/b][/color] 1.3 spaces (They overlap slightly!)\n• [b]Mecha/Bulky/C&C:[/b] 1.0 space\n\nKeep an eye on the [b]Trailer Capacity[/b] readout to see exactly how much room you have left.",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
-		"new_in": "0. Tutorial"
-	},
-	{
-		"title": "Shift Summary & Debrief",
-		"tags": ["summary", "debrief", "score", "mistakes", "time"],
-		"content": "[font_size=22][color=#0082c3][b]Shift Summary[/b][/color][/font_size]\n\nWhen you Seal the Truck, the simulator reviews your shift.\n\nIt checks:\n• Did you load the exact correct sequence?\n• Did you prioritize Promise Dates correctly?\n• Did you remember the Click & Collect pallets?\n\nYou will receive a summary explaining what you did perfectly, and what operational errors were detected. Review this to improve!",
-		"scenarios": ["0. Tutorial", "1. Standard Loading", "2. Priority Loading"],
-		"new_in": "0. Tutorial"
+		"scenarios": [0, 1, 2],
+		"new_in": 0
 	},
 	{
 		"title": "Promise Dates: Capacity & Priority",
 		"tags": ["promise", "date", "d+", "d-", "priority", "capacity", "full"],
-		"content": "[font_size=22][color=#0082c3][b]Promise Dates & Capacity[/b][/color][/font_size]\n\nWhen you have more pallets than the truck can hold, you must leave some behind. You decide what stays based on the Promise Date.\n\n[color=#e74c3c][b]D-[/b] : Overdue.[/color] CRITICAL priority. Must be loaded.\n[color=#f1c40f][b]D[/b]  : Due today.[/color] High priority. Must be loaded.\n[color=#95a5a6][b]D+[/b] : Due tomorrow.[/color] Low priority. \n\n[b]The Rule:[/b] Load ALL of your D- and D pallets first (following the standard sequence). Only load D+ pallets if you still have empty spaces left in the truck after all priority pallets are loaded.",
-		"scenarios": ["2. Priority Loading"],
-		"new_in": "2. Priority Loading"
+		"content": "[font_size=22][color=#0082c3][b]Promise Dates & Capacity[/b][/color][/font_size]\n\nWhen you have more pallets than the truck can hold, you must leave some behind. You decide what stays based on the Promise Date.\n\n[color=#e74c3c][b]D-[/b] : Overdue.[/color] CRITICAL priority. Must be loaded.\n[color=#f1c40f][b]D[/b]  : Due today.[/color] High priority. Must be loaded.\n[color=#95a5a6][b]D+[/b] : Due tomorrow.[/color] Low priority. \n\n[b]The Rule:[/b] Load ALL of your D- and D pallets first (following the standard sequence). Only load D+ pallets if you still have empty spaces left in the truck.",
+		"scenarios": [2],
+		"new_in": 2
 	}
 ]
 
@@ -195,6 +160,15 @@ func _ready() -> void:
 	_update_strip_text()
 	ProjectSettings.set_setting("gui/timers/tooltip_delay_sec", 0.0)
 
+# Keeps the spotlight glued to the button even if layout shifts!
+func _process(_delta: float) -> void:
+	if tutorial_active and _tut_target_node != null and is_instance_valid(_tut_target_node) and _tut_target_node.visible:
+		tut_highlight_box.visible = true
+		tut_highlight_box.global_position = _tut_target_node.global_position - Vector2(4, 4)
+		tut_highlight_box.size = _tut_target_node.size + Vector2(8, 8)
+	elif tut_highlight_box != null:
+		tut_highlight_box.visible = false
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE:
@@ -211,7 +185,7 @@ func _input(event: InputEvent) -> void:
 				_confirm_as400_raq()
 
 # ==========================================
-# TUTORIAL UI SYSTEM WITH GUARDRAILS
+# THE SPOTLIGHT TUTORIAL SYSTEM
 # ==========================================
 func _build_tutorial_ui() -> void:
 	tut_canvas = CanvasLayer.new()
@@ -219,50 +193,68 @@ func _build_tutorial_ui() -> void:
 	tut_canvas.visible = false
 	self.add_child(tut_canvas)
 	
-	var screen_margin = MarginContainer.new()
-	screen_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	screen_margin.add_theme_constant_override("margin_bottom", 50)
-	screen_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tut_canvas.add_child(screen_margin)
+	# No dim overlay — keep the full UI visible and interactive
+	tut_dim_overlay = ColorRect.new()
+	tut_dim_overlay.visible = false
+	tut_dim_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tut_canvas.add_child(tut_dim_overlay)
+
+	# Glowing border box (highlight target)
+	tut_highlight_box = ReferenceRect.new()
+	tut_highlight_box.border_color = Color(1.0, 0.8, 0.1)
+	tut_highlight_box.border_width = 4
+	tut_highlight_box.editor_only = false
+	tut_highlight_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tut_canvas.add_child(tut_highlight_box)
 	
-	var aligner = VBoxContainer.new()
-	aligner.alignment = BoxContainer.ALIGNMENT_END 
-	aligner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	screen_margin.add_child(aligner)
+	# Tutorial banner — pinned as a strip at the top, right below the top bar
+	tut_screen_margin = MarginContainer.new()
+	tut_screen_margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	tut_screen_margin.anchor_bottom = 0.0
+	tut_screen_margin.offset_top = 50  # Just below the top bar
+	tut_screen_margin.offset_bottom = 50  # Will grow with content
+	tut_screen_margin.add_theme_constant_override("margin_left", 8)
+	tut_screen_margin.add_theme_constant_override("margin_right", 200)
+	tut_screen_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tut_canvas.add_child(tut_screen_margin)
+	
+	tut_aligner = VBoxContainer.new()
+	tut_aligner.alignment = BoxContainer.ALIGNMENT_BEGIN
+	tut_aligner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tut_screen_margin.add_child(tut_aligner)
 	
 	var tut_panel = PanelContainer.new()
-	tut_panel.custom_minimum_size = Vector2(1000, 120)
-	tut_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER 
+	tut_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tut_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE 
 	var sb = StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.08, 0.1, 0.95)
-	sb.border_width_left = 3
-	sb.border_width_top = 3
-	sb.border_width_right = 3
+	sb.bg_color = Color(0.06, 0.08, 0.12, 0.92)
+	sb.border_width_left = 0
+	sb.border_width_top = 0
+	sb.border_width_right = 0
 	sb.border_width_bottom = 3
 	sb.border_color = Color(0.18, 0.8, 0.44) 
-	sb.corner_radius_top_left = 8
-	sb.corner_radius_top_right = 8
-	sb.corner_radius_bottom_left = 8
-	sb.corner_radius_bottom_right = 8
-	sb.shadow_color = Color(0, 0, 0, 0.8)
-	sb.shadow_size = 15
+	sb.corner_radius_bottom_left = 6
+	sb.corner_radius_bottom_right = 6
 	tut_panel.add_theme_stylebox_override("panel", sb)
-	aligner.add_child(tut_panel)
+	tut_aligner.add_child(tut_panel)
 	
 	var tut_margin = MarginContainer.new()
-	tut_margin.add_theme_constant_override("margin_left", 20)
-	tut_margin.add_theme_constant_override("margin_top", 15)
-	tut_margin.add_theme_constant_override("margin_right", 20)
-	tut_margin.add_theme_constant_override("margin_bottom", 15)
+	tut_margin.add_theme_constant_override("margin_left", 16)
+	tut_margin.add_theme_constant_override("margin_top", 10)
+	tut_margin.add_theme_constant_override("margin_right", 16)
+	tut_margin.add_theme_constant_override("margin_bottom", 10)
+	tut_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tut_panel.add_child(tut_margin)
 	
 	var hbox = HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 20)
+	hbox.add_theme_constant_override("separation", 12)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tut_margin.add_child(hbox)
 	
 	var icon_lbl = Label.new()
 	icon_lbl.text = "🎓"
-	icon_lbl.add_theme_font_size_override("font_size", 45)
+	icon_lbl.add_theme_font_size_override("font_size", 28)
+	icon_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(icon_lbl)
 	
 	tutorial_label = RichTextLabel.new()
@@ -270,29 +262,63 @@ func _build_tutorial_ui() -> void:
 	tutorial_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tutorial_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tutorial_label.fit_content = true 
-	tutorial_label.custom_minimum_size = Vector2(0, 80)
+	tutorial_label.custom_minimum_size = Vector2(0, 36)
+	tutorial_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(tutorial_label)
+
+func _set_tutorial_focus(target: Control, _pos: String, _dim: bool):
+	_tut_target_node = target
+	# Dim overlay is permanently disabled — UI stays fully visible
+	tut_dim_overlay.visible = false
 
 func _update_tutorial_ui() -> void:
 	if not tutorial_active or tutorial_label == null: return
 	
-	var t = "[font_size=20][color=#2ecc71][b]TRAINING GUIDE[/b][/color]\n"
+	var t = "[font_size=17][color=#2ecc71][b]TRAINING GUIDE[/b][/color]  "
 	
 	match tutorial_step:
-		0: t += "Welcome to the dock! Your very first step is checking the RAQ list. Open the [color=#f1c40f][b]AS400[/b][/color] from the right panel menu."
-		1: t += "Great. Now log in to the terminal. Type [color=#f1c40f]BAYB2B[/color] and press Enter, then type the password [color=#f1c40f]123456[/color] and press Enter."
-		2: t += "You are in! Navigate to the RAQ list by typing this sequence: [color=#f1c40f]50[/color] -> [color=#f1c40f]01[/color] -> [color=#f1c40f]02[/color] -> [color=#f1c40f]05[/color]."
-		3: t += "This is the RAQ. Notice the [color=#bdc3c7]White text[/color] at the bottom—these are your Click & Collect (C&C) pallets! Now, open the [color=#f1c40f][b]Dock View[/b][/color] panel."
-		4: t += "Compare the White C&C pallets in the AS400 to the Dock View. One is missing! Click [color=#f1c40f][b]Call Departments (C&C Check)[/b][/color] at the top to find it."
-		5: t += "Good! The missing pallet was found and brought to the dock. Now, click [color=#f1c40f][b]Start Loading[/b][/color] to begin the physical loading process."
-		6: t += "Look at the [b]Capacity[/b] panel. Pallets have different sizes (Bikes = 1.3, Service = 0.5). Keep an eye on your Spaces Left! Let's learn to fix mistakes. Click any [color=#3498db]Blue Mecha[/color] pallet to intentionally load it out of order."
-		7: t += "Oops! Mecha is the wrong sequence. Click the [color=#3498db]Blue[/color] pallet [b]inside the truck grid[/b] to remove it. In real shifts, removing a pallet adds a 1.1-minute rework penalty!"
-		8: t += "Good recovery. Now, let's do it right. Always load [color=#f1c40f]Yellow Service Center[/color] pallets first. Click a yellow pallet to load it."
-		9: t += "Perfect! Next is [color=#2ecc71]Green Bikes[/color]. Click a green pallet to load it."
-		10: t += "Awesome! Before you finish, click [color=#3498db][b]Help & SOPs[/b][/color] in the top right. Time stops when this is open! Check out how new, important articles are highlighted."
-		11: t += "Great! All the tutorial info is stored there. Now, finish loading all remaining pallets onto the truck (Yellow -> Green -> Orange -> Blue -> White C&C)."
-		12: t += "All pallets loaded! Open the [color=#f1c40f][b]AS400[/b][/color] and press [color=#f1c40f][b]F10[/b][/color] on your keyboard to confirm the RAQ."
-		13: t += "Validation Effectuée! Click [color=#f1c40f][b]Seal Truck & Print Papers[/b][/color]. You'll see a Shift Summary explaining what you did right or wrong. Finish your shift!"
+		0: 
+			t += "Welcome to the dock! Your very first step is checking the RAQ list. Open the [color=#f1c40f][b]AS400[/b][/color] from the right panel menu."
+			_set_tutorial_focus(btn_as400, "top", true)
+		1: 
+			t += "Great. Now log in to the terminal. Type [color=#f1c40f]BAYB2B[/color] and press Enter, then type the password [color=#f1c40f]123456[/color] and press Enter."
+			_set_tutorial_focus(as400_terminal_input, "top", true)
+		2: 
+			t += "You are in! Navigate to the RAQ list by typing this sequence: [color=#f1c40f]50[/color] -> [color=#f1c40f]01[/color] -> [color=#f1c40f]02[/color] -> [color=#f1c40f]05[/color]."
+			_set_tutorial_focus(as400_terminal_input, "top", true)
+		3: 
+			t += "This is the RAQ. Notice the [color=#bdc3c7]White text[/color] at the bottom—these are your Click & Collect (C&C) pallets! Now, open the [color=#f1c40f][b]Dock View[/b][/color] panel."
+			_set_tutorial_focus(btn_dock_view, "top", true)
+		4: 
+			t += "Compare the White C&C pallets in the AS400 to the Dock View. One is missing! Click [color=#f1c40f][b]Call Departments (C&C Check)[/b][/color] at the top to find it."
+			_set_tutorial_focus(btn_call, "bottom", true)
+		5: 
+			t += "Good! The missing pallet was found and brought to the dock. Now, click [color=#f1c40f][b]Start Loading[/b][/color] to begin the physical loading process."
+			_set_tutorial_focus(btn_start_load, "bottom", true)
+		6: 
+			t += "Look at the [b]Capacity[/b] panel. Pallets have different sizes. Let's learn to fix mistakes. Click any [color=#3498db]Blue Mecha[/color] pallet to intentionally load it out of order."
+			_set_tutorial_focus(null, "top", false)
+		7: 
+			t += "Oops! Mecha is the wrong sequence. Click the [color=#3498db]Blue[/color] pallet [b]inside the truck grid[/b] to remove it. In real shifts, removing a pallet adds a 1.1-minute rework penalty!"
+			_set_tutorial_focus(truck_grid, "top", false)
+		8: 
+			t += "Good recovery. Now, let's do it right. Always load [color=#f1c40f]Yellow Service Center[/color] pallets first. Click a yellow pallet to load it."
+			_set_tutorial_focus(null, "top", false)
+		9: 
+			t += "Perfect! Next is [color=#2ecc71]Green Bikes[/color]. Click a green pallet to load it."
+			_set_tutorial_focus(null, "top", false)
+		10: 
+			t += "Awesome! Before you finish, click [color=#3498db][b]Help & SOPs[/b][/color] in the top right. Time stops when this is open! Check out how new, important articles are highlighted."
+			_set_tutorial_focus(btn_sop, "bottom", true)
+		11: 
+			t += "Great! All the tutorial info is stored there. Now, finish loading all remaining pallets onto the truck (Yellow -> Green -> Orange -> Blue -> White C&C)."
+			_set_tutorial_focus(null, "top", false)
+		12: 
+			t += "All pallets loaded! Open the [color=#f1c40f][b]AS400[/b][/color] and press [color=#f1c40f][b]F10[/b][/color] on your keyboard to confirm the RAQ."
+			_set_tutorial_focus(btn_as400, "top", false)
+		13: 
+			t += "Validation Effectuée! Click [color=#f1c40f][b]Seal Truck & Print Papers[/b][/color]. You'll see a Shift Summary explaining what you did right or wrong. Finish your shift!"
+			_set_tutorial_focus(btn_seal, "bottom", true)
 	
 	t += "[/font_size]"
 	tutorial_label.text = t
@@ -302,13 +328,13 @@ func _update_tutorial_ui() -> void:
 
 func _flash_tutorial_warning(msg: String) -> void:
 	if not tutorial_active or tutorial_label == null: return
-	var t = "[font_size=20][color=#e74c3c][b]⚠️ INCORRECT ACTION[/b][/color]\n"
-	t += "[color=#e74c3c]" + msg + "[/color][/font_size]"
+	var t = "[font_size=17][color=#e74c3c][b]⚠️ INCORRECT ACTION[/b]  "
+	t += msg + "[/color][/font_size]"
 	tutorial_label.text = t
 	get_tree().create_timer(2.5).timeout.connect(_update_tutorial_ui)
 
 # ==========================================
-# 1. PROGRESSIVE SOP KNOWLEDGE BASE MODAL
+# PROGRESSIVE SOP KNOWLEDGE BASE MODAL
 # ==========================================
 func _build_sop_modal() -> void:
 	sop_overlay = ColorRect.new()
@@ -396,7 +422,7 @@ func _build_sop_modal() -> void:
 	left_margin.add_child(left_vbox)
 	
 	sop_search_input = LineEdit.new()
-	sop_search_input.placeholder_text = "Search SOPs (e.g., 'click')"
+	sop_search_input.placeholder_text = "Search SOPs..."
 	sop_search_input.custom_minimum_size = Vector2(0, 40)
 	sop_search_input.text_changed.connect(_on_sop_search_changed)
 	left_vbox.add_child(sop_search_input)
@@ -430,7 +456,6 @@ func _open_sop_modal() -> void:
 	_on_sop_search_changed("") 
 	sop_overlay.visible = true
 	
-	# TUTORIAL HOOK
 	if tutorial_active and tutorial_step == 10:
 		tutorial_step = 11
 		_update_tutorial_ui()
@@ -448,7 +473,7 @@ func _on_sop_search_changed(query: String) -> void:
 	var old_arts = []
 	
 	for article in sop_database:
-		if not article.scenarios.has(_current_scenario_name):
+		if not article.scenarios.has(_current_scenario_index):
 			continue 
 			
 		var match_found = false
@@ -459,7 +484,7 @@ func _on_sop_search_changed(query: String) -> void:
 				if q in tag.to_lower(): match_found = true
 				
 		if match_found:
-			if article.get("new_in", "") == _current_scenario_name:
+			if article.get("new_in", -1) == _current_scenario_index:
 				new_arts.append(article)
 			else:
 				old_arts.append(article)
@@ -492,12 +517,11 @@ func _on_sop_search_changed(query: String) -> void:
 		btn.pressed.connect(func(): sop_content_label.text = art.content)
 		sop_results_vbox.add_child(btn)
 		
-	# Render highlighted new articles at the top!
 	for a in new_arts: create_btn.call(a, true)
 	for a in old_arts: create_btn.call(a, false)
 
 # ==========================================
-# 2. START PORTAL
+# START PORTAL
 # ==========================================
 func _build_start_portal() -> void:
 	portal_overlay = ColorRect.new()
@@ -591,40 +615,57 @@ func _build_start_portal() -> void:
 	btn_start.add_theme_font_size_override("font_size", 20)
 	btn_start.pressed.connect(_on_portal_start_pressed)
 	vbox.add_child(btn_start)
-	
-	var btn_quit = Button.new()
-	btn_quit.text = "Close Application"
-	btn_quit.custom_minimum_size = Vector2(0, 40)
-	
-	var quit_sb_normal = StyleBoxFlat.new()
-	quit_sb_normal.bg_color = Color(0.95, 0.95, 0.95) 
-	quit_sb_normal.corner_radius_top_left = 6
-	quit_sb_normal.corner_radius_top_right = 6
-	quit_sb_normal.corner_radius_bottom_left = 6
-	quit_sb_normal.corner_radius_bottom_right = 6
-	quit_sb_normal.border_width_left = 1
-	quit_sb_normal.border_width_top = 1
-	quit_sb_normal.border_width_right = 1
-	quit_sb_normal.border_width_bottom = 1
-	quit_sb_normal.border_color = Color(0.8, 0.8, 0.8)
-	
-	var quit_sb_hover = StyleBoxFlat.new()
-	quit_sb_hover.bg_color = Color(0.8, 0.2, 0.2) 
-	quit_sb_hover.corner_radius_top_left = 6
-	quit_sb_hover.corner_radius_top_right = 6
-	quit_sb_hover.corner_radius_bottom_left = 6
-	quit_sb_hover.corner_radius_bottom_right = 6
-
-	btn_quit.add_theme_stylebox_override("normal", quit_sb_normal)
-	btn_quit.add_theme_stylebox_override("hover", quit_sb_hover)
-	btn_quit.add_theme_color_override("font_color", Color(0.3, 0.3, 0.3)) 
-	btn_quit.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0)) 
-
-	btn_quit.pressed.connect(func(): get_tree().quit())
-	vbox.add_child(btn_quit)
 
 # ==========================================
-# 3. OPERATIONAL STAGE
+# THE VICTORY MODAL
+# ==========================================
+func _build_debrief_modal() -> void:
+	debrief_overlay = ColorRect.new()
+	debrief_overlay.color = Color(0, 0, 0, 0.9) 
+	debrief_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	debrief_overlay.visible = false
+	$Root.add_child(debrief_overlay)
+
+	var center = CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	debrief_overlay.add_child(center)
+
+	var pnl = PanelContainer.new()
+	pnl.custom_minimum_size = Vector2(900, 700)
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color(0.95, 0.95, 0.95, 1)
+	sb.corner_radius_top_left = 8
+	sb.corner_radius_top_right = 8
+	sb.corner_radius_bottom_left = 8
+	sb.corner_radius_bottom_right = 8
+	pnl.add_theme_stylebox_override("panel", sb)
+	center.add_child(pnl)
+
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 40)
+	margin.add_theme_constant_override("margin_top", 40)
+	margin.add_theme_constant_override("margin_right", 40)
+	margin.add_theme_constant_override("margin_bottom", 40)
+	pnl.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 24)
+	margin.add_child(vbox)
+
+	lbl_debrief_text = RichTextLabel.new()
+	lbl_debrief_text.bbcode_enabled = true
+	lbl_debrief_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(lbl_debrief_text)
+
+	var btn_close = Button.new()
+	btn_close.text = "Finish & Return to Portal"
+	btn_close.custom_minimum_size = Vector2(250, 50)
+	btn_close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn_close.pressed.connect(_on_debrief_closed)
+	vbox.add_child(btn_close)
+
+# ==========================================
+# OPERATIONAL STAGE & VERTICAL DOCK
 # ==========================================
 func _build_operational_layout() -> void:
 	top_actions_hbox = HBoxContainer.new()
@@ -632,19 +673,19 @@ func _build_operational_layout() -> void:
 	top_actions_hbox.visible = false 
 	workspace_vbox.add_child(top_actions_hbox)
 
-	var btn_start_load = Button.new()
+	btn_start_load = Button.new()
 	btn_start_load.text = "Start Loading"
 	btn_start_load.custom_minimum_size = Vector2(150, 40)
 	btn_start_load.pressed.connect(func(): _on_decision_pressed("Start Loading"))
 	top_actions_hbox.add_child(btn_start_load)
 
-	var btn_call = Button.new()
+	btn_call = Button.new()
 	btn_call.text = "Call Departments (C&C Check)"
 	btn_call.custom_minimum_size = Vector2(250, 40)
 	btn_call.pressed.connect(func(): _on_decision_pressed("Call departments (C&C check)"))
 	top_actions_hbox.add_child(btn_call)
 
-	var btn_seal = Button.new()
+	btn_seal = Button.new()
 	btn_seal.text = "Seal Truck & Print Papers"
 	btn_seal.custom_minimum_size = Vector2(200, 40)
 	btn_seal.pressed.connect(func(): _on_decision_pressed("Seal Truck"))
@@ -654,7 +695,7 @@ func _build_operational_layout() -> void:
 	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_actions_hbox.add_child(top_spacer)
 	
-	var btn_sop = Button.new()
+	btn_sop = Button.new()
 	btn_sop.text = " Help & SOPs "
 	btn_sop.custom_minimum_size = Vector2(150, 40)
 	var sop_sb = StyleBoxFlat.new()
@@ -687,7 +728,7 @@ func _build_operational_layout() -> void:
 	_build_dock_stage()
 	_build_as400_stage()
 	
-	var btn_dock_view = Button.new()
+	btn_dock_view = Button.new()
 	btn_dock_view.text = "Dock View"
 	btn_shift_board.get_parent().add_child(btn_dock_view)
 	btn_shift_board.get_parent().move_child(btn_dock_view, 0)
@@ -722,46 +763,47 @@ func _build_dock_stage() -> void:
 	floor_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dock_vbox.add_child(floor_split)
 	
-	var scroll_dock = ScrollContainer.new()
-	scroll_dock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll_dock.size_flags_stretch_ratio = 2.0
+	var dock_lanes_bg = PanelContainer.new()
+	dock_lanes_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock_lanes_bg.size_flags_stretch_ratio = 2.0
 	var sb_dock = StyleBoxFlat.new()
 	sb_dock.bg_color = Color(0.9, 0.9, 0.9) 
 	sb_dock.corner_radius_top_left = 6
 	sb_dock.corner_radius_bottom_left = 6
-	scroll_dock.add_theme_stylebox_override("panel", sb_dock)
-	floor_split.add_child(scroll_dock)
+	dock_lanes_bg.add_theme_stylebox_override("panel", sb_dock)
+	floor_split.add_child(dock_lanes_bg)
 	
-	var lines_margin = MarginContainer.new()
-	lines_margin.add_theme_constant_override("margin_left", 15)
-	lines_margin.add_theme_constant_override("margin_top", 15)
-	scroll_dock.add_child(lines_margin)
+	var dock_margin2 = MarginContainer.new()
+	dock_margin2.add_theme_constant_override("margin_left", 15)
+	dock_margin2.add_theme_constant_override("margin_top", 15)
+	dock_margin2.add_theme_constant_override("margin_bottom", 15) 
+	dock_margin2.add_theme_constant_override("margin_right", 15)
+	dock_lanes_bg.add_child(dock_margin2)
 
-	var map_vbox = VBoxContainer.new()
-	map_vbox.add_theme_constant_override("separation", 20)
-	lines_margin.add_child(map_vbox)
+	var dock_vbox2 = VBoxContainer.new()
+	dock_margin2.add_child(dock_vbox2)
 
-	row_mecha = HFlowContainer.new()
-	row_bulky = HFlowContainer.new()
-	row_bikes_cc = HFlowContainer.new()
-	
-	var lbl_mecha = Label.new()
-	lbl_mecha.text = "Mecha (MAP/MAG)"
-	lbl_mecha.add_theme_color_override("font_color", Color.BLACK)
-	map_vbox.add_child(lbl_mecha)
-	map_vbox.add_child(row_mecha)
-	
-	var lbl_bulky = Label.new()
-	lbl_bulky.text = "Bulky (90)"
-	lbl_bulky.add_theme_color_override("font_color", Color.BLACK)
-	map_vbox.add_child(lbl_bulky)
-	map_vbox.add_child(row_bulky)
-	
-	var lbl_bikes = Label.new()
-	lbl_bikes.text = "Bikes, C&C, Service Center"
-	lbl_bikes.add_theme_color_override("font_color", Color.BLACK)
-	map_vbox.add_child(lbl_bikes)
-	map_vbox.add_child(row_bikes_cc)
+	var headers_hbox = HBoxContainer.new()
+	headers_hbox.add_theme_constant_override("separation", 10)
+	dock_vbox2.add_child(headers_hbox)
+
+	var lbl1 = Label.new(); lbl1.text = "Mecha (1)"; lbl1.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lbl1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lbl1.add_theme_color_override("font_color", Color.BLACK)
+	var lbl2 = Label.new(); lbl2.text = "Mecha (2)"; lbl2.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lbl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lbl2.add_theme_color_override("font_color", Color.BLACK)
+	var lbl3 = Label.new(); lbl3.text = "Bulky"; lbl3.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lbl3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lbl3.add_theme_color_override("font_color", Color.BLACK)
+	var lbl4 = Label.new(); lbl4.text = "Bikes/C&C/SC"; lbl4.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lbl4.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; lbl4.add_theme_color_override("font_color", Color.BLACK)
+	headers_hbox.add_child(lbl1); headers_hbox.add_child(lbl2); headers_hbox.add_child(lbl3); headers_hbox.add_child(lbl4)
+
+	var lanes_hbox = HBoxContainer.new()
+	lanes_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lanes_hbox.add_theme_constant_override("separation", 10)
+	dock_vbox2.add_child(lanes_hbox)
+
+	lane_m1 = VBoxContainer.new(); lane_m1.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_m1.alignment = BoxContainer.ALIGNMENT_END; lane_m1.add_theme_constant_override("separation", 4)
+	lane_m2 = VBoxContainer.new(); lane_m2.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_m2.alignment = BoxContainer.ALIGNMENT_END; lane_m2.add_theme_constant_override("separation", 4)
+	lane_b = VBoxContainer.new(); lane_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_b.alignment = BoxContainer.ALIGNMENT_END; lane_b.add_theme_constant_override("separation", 4)
+	lane_misc = VBoxContainer.new(); lane_misc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_misc.alignment = BoxContainer.ALIGNMENT_END; lane_misc.add_theme_constant_override("separation", 4)
+
+	lanes_hbox.add_child(lane_m1); lanes_hbox.add_child(lane_m2); lanes_hbox.add_child(lane_b); lanes_hbox.add_child(lane_misc)
 
 	var truck_pnl = PanelContainer.new()
 	truck_pnl.custom_minimum_size = Vector2(180, 0)
@@ -793,7 +835,7 @@ func _build_dock_stage() -> void:
 	truck_vbox.add_child(truck_grid)
 
 # ==========================================
-# THE AS400 TERMINAL OVERHAUL
+# AS400 TERMINAL (SHRUNK TO FIT)
 # ==========================================
 func _build_as400_stage() -> void:
 	pnl_as400_stage = PanelContainer.new()
@@ -840,7 +882,7 @@ func _build_as400_stage() -> void:
 	
 	var prompt = Label.new()
 	prompt.text = " > "
-	prompt.add_theme_font_size_override("font_size", 20)
+	prompt.add_theme_font_size_override("font_size", 18) # Shrunk slightly
 	prompt.add_theme_color_override("font_color", Color(0, 1, 0)) 
 	input_hbox.add_child(prompt)
 	
@@ -850,7 +892,7 @@ func _build_as400_stage() -> void:
 	as400_terminal_input.add_theme_stylebox_override("normal", input_sb)
 	as400_terminal_input.add_theme_stylebox_override("focus", input_sb)
 	as400_terminal_input.add_theme_color_override("font_color", Color(0, 1, 0))
-	as400_terminal_input.add_theme_font_size_override("font_size", 20)
+	as400_terminal_input.add_theme_font_size_override("font_size", 18)
 	
 	as400_terminal_input.gui_input.connect(func(event: InputEvent):
 		if event is InputEventKey and event.pressed and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
@@ -881,7 +923,6 @@ func _build_as400_stage() -> void:
 	_render_as400_screen()
 
 func _confirm_as400_raq() -> void:
-	# TUTORIAL GUARDRAIL
 	if tutorial_active:
 		if tutorial_step < 12:
 			_flash_tutorial_warning("Finish loading all pallets into the truck before confirming the RAQ!")
@@ -899,7 +940,8 @@ func _confirm_as400_raq() -> void:
 func _render_as400_screen() -> void:
 	if as400_terminal_display == null: return
 	
-	var t = "[font_size=18]" 
+	# THE FIX: Shrunk from 18 to 15 so it never gets cut off
+	var t = "[font_size=15]" 
 	
 	if as400_state == 0:
 		t += "[color=#00ffff]SIGN ON[/color]\n\n"
@@ -988,7 +1030,6 @@ func _on_as400_input_submitted(text: String) -> void:
 	
 	_render_as400_screen()
 	
-	# TUTORIAL HOOK
 	if tutorial_active:
 		if tutorial_step == 1 and as400_state == 2:
 			tutorial_step = 2
@@ -998,55 +1039,7 @@ func _on_as400_input_submitted(text: String) -> void:
 			_update_tutorial_ui()
 
 # ==========================================
-# THE VICTORY MODAL
-# ==========================================
-func _build_debrief_modal() -> void:
-	debrief_overlay = ColorRect.new()
-	debrief_overlay.color = Color(0, 0, 0, 0.9) 
-	debrief_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	debrief_overlay.visible = false
-	$Root.add_child(debrief_overlay)
-
-	var center = CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	debrief_overlay.add_child(center)
-
-	var pnl = PanelContainer.new()
-	pnl.custom_minimum_size = Vector2(900, 700)
-	var sb = StyleBoxFlat.new()
-	sb.bg_color = Color(0.95, 0.95, 0.95, 1)
-	sb.corner_radius_top_left = 8
-	sb.corner_radius_top_right = 8
-	sb.corner_radius_bottom_left = 8
-	sb.corner_radius_bottom_right = 8
-	pnl.add_theme_stylebox_override("panel", sb)
-	center.add_child(pnl)
-
-	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 40)
-	margin.add_theme_constant_override("margin_top", 40)
-	margin.add_theme_constant_override("margin_right", 40)
-	margin.add_theme_constant_override("margin_bottom", 40)
-	pnl.add_child(margin)
-
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 24)
-	margin.add_child(vbox)
-
-	lbl_debrief_text = RichTextLabel.new()
-	lbl_debrief_text.bbcode_enabled = true
-	lbl_debrief_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(lbl_debrief_text)
-
-	var btn_close = Button.new()
-	btn_close.text = "Finish & Return to Portal"
-	btn_close.custom_minimum_size = Vector2(250, 50)
-	btn_close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	btn_close.pressed.connect(_on_debrief_closed)
-	vbox.add_child(btn_close)
-
-# ==========================================
-# FLOW LOGIC
+# FLOW LOGIC & DATA UPDATES
 # ==========================================
 func set_enabled(enabled: bool) -> void:
 	_enabled = enabled
@@ -1058,7 +1051,11 @@ func _on_portal_start_pressed() -> void:
 	var scenario_name: String = "default"
 	if portal_scenario_dropdown != null: scenario_name = portal_scenario_dropdown.get_item_text(portal_scenario_dropdown.get_selected_id())
 	
-	_current_scenario_name = scenario_name 
+	_current_scenario_index = portal_scenario_dropdown.get_selected_id()
+	if _current_scenario_index == 0: _current_scenario_name = "0. Tutorial"
+	elif _current_scenario_index == 1: _current_scenario_name = "1. Standard Loading"
+	elif _current_scenario_index == 2: _current_scenario_name = "2. Priority Loading"
+	
 	_session.set_role(WOTSConfig.Role.OPERATOR)
 	_is_active = true
 	
@@ -1076,8 +1073,7 @@ func _on_portal_start_pressed() -> void:
 	as400_state = 0
 	_render_as400_screen()
 	
-	# TUTORIAL TRIGGER
-	if _current_scenario_name == "0. Tutorial":
+	if _current_scenario_index == 0:
 		tutorial_active = true
 		tutorial_step = 0
 		tut_canvas.visible = true
@@ -1085,16 +1081,24 @@ func _on_portal_start_pressed() -> void:
 		lbl_standby.visible = false
 	else:
 		tutorial_active = false
-		tut_canvas.visible = false
+		if tut_canvas != null: tut_canvas.visible = false
 		lbl_standby.visible = true
 	
-	_session.call("start_session_with_scenario", scenario_name)
+	_session.call("start_session_with_scenario", _current_scenario_name)
 
 func _on_session_ended(debrief_payload: Dictionary) -> void:
 	_is_active = false
 	_debrief_what_happened = str(debrief_payload.get("what_happened", ""))
 	_debrief_why_it_mattered = str(debrief_payload.get("why_it_mattered", ""))
+	
+	var passed = debrief_payload.get("passed", false)
+	if passed:
+		if _current_scenario_index == highest_unlocked_scenario and highest_unlocked_scenario < 2:
+			highest_unlocked_scenario += 1
+			
 	if tutorial_active: tut_canvas.visible = false
+	
+	_populate_scenarios() 
 	_render_debrief()
 
 func _on_debrief_closed() -> void:
@@ -1128,7 +1132,7 @@ func set_session(session) -> void:
 		if _session.has_signal("inventory_updated"): _session.connect("inventory_updated", Callable(self, "_on_inventory_updated"))
 
 func _populate_scenarios() -> void:
-	if portal_scenario_dropdown == null or _session == null: return
+	if portal_scenario_dropdown == null: return
 	portal_scenario_dropdown.clear()
 	
 	var names: Array[String] = [
@@ -1136,17 +1140,20 @@ func _populate_scenarios() -> void:
 		"1. Standard Loading", 
 		"2. Priority Loading"
 	]
-	
 	names.sort() 
 		
-	for n in names: 
-		portal_scenario_dropdown.add_item(n)
+	for i in range(names.size()):
+		var n = names[i]
+		if i > highest_unlocked_scenario:
+			portal_scenario_dropdown.add_item("🔒 " + n)
+			portal_scenario_dropdown.set_item_disabled(i, true)
+		else:
+			portal_scenario_dropdown.add_item(n)
 		
 	if portal_scenario_dropdown.item_count > 0: 
-		portal_scenario_dropdown.select(0)
+		portal_scenario_dropdown.select(highest_unlocked_scenario)
 
 func _on_decision_pressed(action: String) -> void:
-	# TUTORIAL GUARDRAIL
 	if tutorial_active:
 		if tutorial_step < 4:
 			_flash_tutorial_warning("Follow the guide! We aren't ready for this yet.")
@@ -1204,21 +1211,35 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 		if spaces_left <= 5.0: color_hex = "#e74c3c"
 		truck_cap_label.text = "[center][color=#7f8fa6]Capacity: %0.1f / %0.1f[/color]\n[b][color=%s]Spaces Left: %0.1f[/color][/b][/center]" % [cap_used, cap_max, color_hex, spaces_left]
 
-	for child in row_mecha.get_children(): child.queue_free()
-	for child in row_bulky.get_children(): child.queue_free()
-	for child in row_bikes_cc.get_children(): child.queue_free()
+	for child in lane_m1.get_children(): child.queue_free()
+	for child in lane_m2.get_children(): child.queue_free()
+	for child in lane_b.get_children(): child.queue_free()
+	for child in lane_misc.get_children(): child.queue_free()
 
+	# Creates empty space so tutorial banner doesn't cover pallets
+	var buffer_height = 10
+	for lane in [lane_m1, lane_m2, lane_b, lane_misc]:
+		var spacer = Control.new()
+		spacer.custom_minimum_size = Vector2(0, buffer_height)
+		spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lane.add_child(spacer)
+
+	var mecha_count = 0
 	for p in avail:
 		if p.missing: continue
 		var row = null
-		if p.type == "Mecha": row = row_mecha
-		elif p.type == "Bulky": row = row_bulky
-		else: row = row_bikes_cc
+		if p.type == "Mecha": 
+			if mecha_count % 2 == 0: row = lane_m1
+			else: row = lane_m2
+			mecha_count += 1
+		elif p.type == "Bulky": row = lane_b
+		else: row = lane_misc
+		
 		_draw_pallet(p, row)
+		row.move_child(row.get_child(row.get_child_count() - 1), 0)
 		
 	_update_truck_visualizer(loaded)
 	
-	# TUTORIAL HOOK
 	if tutorial_active:
 		if tutorial_step == 6:
 			for p in loaded:
@@ -1258,41 +1279,96 @@ func _get_type_color(p_type: String) -> Color:
 	if p_type == "ServiceCenter": return Color(0.8, 0.8, 0.1)
 	return Color(0.5, 0.5, 0.5)
 
+# ==========================================
+# TOP-DOWN REALISTIC PALLET GENERATOR
+# ==========================================
+func _build_pallet_graphic(color: Color, is_truck: bool) -> Button:
+	var btn = Button.new()
+	var p_size = 45 if is_truck else 64
+	btn.custom_minimum_size = Vector2(p_size, p_size)
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER 
+	
+	var empty_sb = StyleBoxEmpty.new()
+	btn.add_theme_stylebox_override("normal", empty_sb)
+	btn.add_theme_stylebox_override("hover", empty_sb) 
+	btn.add_theme_stylebox_override("focus", empty_sb) 
+	
+	# The wooden pallet base (Top-down view)
+	var wood_bg = ColorRect.new()
+	wood_bg.color = Color(0.65, 0.45, 0.25) 
+	wood_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wood_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(wood_bg)
+	
+	# Add 3 vertical wooden planks to give it texture
+	var planks = HBoxContainer.new()
+	planks.set_anchors_preset(Control.PRESET_FULL_RECT)
+	planks.add_theme_constant_override("separation", 4)
+	planks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wood_bg.add_child(planks)
+	
+	for i in range(3):
+		var plank = ColorRect.new()
+		plank.color = Color(0.8, 0.6, 0.4) 
+		plank.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		plank.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		planks.add_child(plank)
+	
+	# The tinted cargo box sitting on top
+	var cargo_margin = MarginContainer.new()
+	cargo_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cargo_margin.add_theme_constant_override("margin_left", 6)
+	cargo_margin.add_theme_constant_override("margin_top", 6)
+	cargo_margin.add_theme_constant_override("margin_right", 6)
+	cargo_margin.add_theme_constant_override("margin_bottom", 6)
+	cargo_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(cargo_margin)
+	
+	var cargo_box = ColorRect.new()
+	cargo_box.color = color.lerp(Color.WHITE, 0.15) 
+	cargo_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cargo_margin.add_child(cargo_box)
+	
+	var border = ReferenceRect.new()
+	border.border_color = color.darkened(0.3)
+	border.border_width = 2
+	border.editor_only = false
+	border.set_anchors_preset(Control.PRESET_FULL_RECT)
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cargo_box.add_child(border)
+	
+	# Hover glow
+	var glow = ReferenceRect.new()
+	glow.border_color = Color(0,0,0,0)
+	glow.border_width = 3
+	glow.editor_only = false
+	glow.set_anchors_preset(Control.PRESET_FULL_RECT)
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(glow)
+	
+	btn.mouse_entered.connect(func(): glow.border_color = Color(0.1, 0.8, 1.0))
+	btn.mouse_exited.connect(func(): glow.border_color = Color(0,0,0,0))
+	
+	return btn
+
 func _update_truck_visualizer(loaded_pallets: Array) -> void:
 	if truck_grid.columns != 3: truck_grid.columns = 3
 	for child in truck_grid.get_children(): child.queue_free()
 	
 	for i in range(loaded_pallets.size()):
 		var p = loaded_pallets[i]
-		var btn = Button.new()
-		btn.custom_minimum_size = Vector2(50, 50) 
-		btn.text = "" 
 		
-		var color = _get_type_color(p.type)
-		var sb = StyleBoxFlat.new()
-		sb.bg_color = color
-		sb.corner_radius_top_left = 2
-		sb.corner_radius_bottom_right = 2
-		
-		var sb_hover = sb.duplicate()
-		sb_hover.border_width_left = 3
-		sb_hover.border_width_top = 3
-		sb_hover.border_width_right = 3
-		sb_hover.border_width_bottom = 3
+		var btn = _build_pallet_graphic(_get_type_color(p.type), true)
 		
 		var is_reachable = i >= (loaded_pallets.size() - 3)
 		var hover_text = ""
 		
 		if is_reachable:
-			sb_hover.border_color = Color(0.9, 0.2, 0.2) 
 			hover_text = "[font_size=18][color=#e74c3c][b]⚠️ UNLOAD PALLET[/b][/color]\nClick to return [b]%s[/b] to dock.\nColis: %s\n[b]Penalty:[/b] +1.1 Minutes[/font_size]" % [p.id, p.get("colis_id", "N/A")]
 		else:
-			sb_hover.border_color = Color(0.5, 0.5, 0.5) 
+			btn.modulate = Color(0.6, 0.6, 0.6) 
 			hover_text = "[font_size=18][color=#95a5a6][b]🔒 BLOCKED[/b][/color]\n[b]%s[/b] is blocked by pallets in front of it. Unload the tail first.[/font_size]" % p.id
 
-		btn.add_theme_stylebox_override("normal", sb)
-		btn.add_theme_stylebox_override("hover", sb_hover)
-		
 		btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
 		btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]")
 		
@@ -1305,36 +1381,7 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 		truck_grid.add_child(btn)
 
 func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
-	var btn = Button.new()
-	btn.custom_minimum_size = Vector2(50, 50)
-	btn.text = "" 
-	
-	var color = _get_type_color(p_data.type)
-	var sb = StyleBoxFlat.new()
-	sb.bg_color = color
-	sb.corner_radius_top_left = 4
-	sb.corner_radius_bottom_right = 4
-	sb.border_width_left = 2
-	sb.border_width_top = 2
-	sb.border_width_right = 2
-	sb.border_width_bottom = 2
-	sb.shadow_color = Color(0, 0, 0, 0.2)
-	sb.shadow_size = 3
-	if p_data.type == "C&C": sb.border_color = Color(0.3, 0.3, 0.3) 
-	else: sb.border_color = color.darkened(0.25)
-
-	var sb_hover = sb.duplicate()
-	sb_hover.border_color = Color(0.1, 0.8, 1.0) 
-	sb_hover.border_width_left = 3
-	sb_hover.border_width_top = 3
-	sb_hover.border_width_right = 3
-	sb_hover.border_width_bottom = 3
-	sb_hover.shadow_color = Color(0.1, 0.8, 1.0, 0.6)
-	sb_hover.shadow_size = 10
-
-	btn.add_theme_stylebox_override("normal", sb)
-	btn.add_theme_stylebox_override("hover", sb_hover) 
-	btn.add_theme_stylebox_override("focus", sb_hover) 
+	var btn = _build_pallet_graphic(_get_type_color(p_data.type), false)
 
 	var code_str = ""
 	if p_data.has("code"): code_str = " | Code: " + p_data.code
@@ -1346,7 +1393,6 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[color=#95a5a6]Hover over a pallet to scan details instantly...[/color]")
 
 	btn.pressed.connect(func(): 
-		# TUTORIAL GUARDRAIL
 		if tutorial_active:
 			if tutorial_step < 6:
 				_flash_tutorial_warning("We aren't ready to load pallets yet. Follow the guide!")
@@ -1399,7 +1445,6 @@ func _close_all_panels(silent: bool) -> void:
 	for panel_name in PANEL_NAMES: _set_panel_visible(panel_name, false, silent)
 
 func _toggle_panel(panel_name: String) -> void:
-	# TUTORIAL GUARDRAIL
 	if tutorial_active:
 		if tutorial_step < 3 and panel_name != "AS400":
 			_flash_tutorial_warning("Please open the AS400 panel first!")
@@ -1427,7 +1472,6 @@ func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) ->
 	if panel_name == "AS400" and make_visible and as400_terminal_input != null:
 		as400_terminal_input.call_deferred("grab_focus")
 		
-	# TUTORIAL HOOK
 	if tutorial_active:
 		if tutorial_step == 0 and panel_name == "AS400" and make_visible:
 			tutorial_step = 1
