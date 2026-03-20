@@ -5,6 +5,7 @@ signal session_ended(debrief_payload)
 signal role_updated(role_id)
 signal responsibility_boundary_updated(role_id, assignment_text, window_active)
 signal inventory_updated(available, loaded, cap_used, cap_max)
+signal phone_notification(message: String, pallets_added: int)
 
 var scenario_loader = null
 var current_scenario = ""
@@ -14,11 +15,18 @@ var is_active: bool = false
 
 var inventory_available: Array = []
 var inventory_loaded: Array = []
+var inventory_pending: Array = []  # Pallets not yet on dock (arrive in waves)
 var capacity_max: float = 36.0
 var capacity_used: float = 0.0
 
 var _manual_decisions: Array = []
 var unload_count: int = 0
+var loading_started: bool = false
+
+# Wave delivery system
+var _wave_times: Array = []  # Sim-time thresholds for each wave
+var _waves_delivered: int = 0
+var _required_rework_ids: Array = []  # Pallet IDs that required rework (no penalty)
 
 # Co-loading support
 var is_co_load: bool = false
@@ -32,6 +40,10 @@ func _process(delta: float) -> void:
 	if is_active and not is_paused:
 		total_time += delta
 		emit_signal("time_updated", total_time, 0.0)
+		# Check if a pending wave should arrive
+		if loading_started and _waves_delivered < _wave_times.size():
+			if total_time >= _wave_times[_waves_delivered]:
+				_deliver_pending_wave()
 
 func set_pause_state(paused: bool) -> void:
 	is_paused = paused
@@ -49,8 +61,13 @@ func start_session_with_scenario(scenario_name: String) -> void:
 	capacity_used = 0.0
 	inventory_available.clear()
 	inventory_loaded.clear()
+	inventory_pending.clear()
 	_manual_decisions.clear()
+	_wave_times.clear()
+	_waves_delivered = 0
+	_required_rework_ids.clear()
 	unload_count = 0
+	loading_started = false
 	is_active = true
 	is_paused = false
 	is_co_load = false
@@ -62,7 +79,10 @@ func start_session_with_scenario(scenario_name: String) -> void:
 func manual_decision(action: String) -> void:
 	_manual_decisions.append(action)
 	
-	if action == "Call departments (C&C check)":
+	if action == "Start Loading":
+		loading_started = true
+		
+	elif action == "Call departments (C&C check)":
 		var found_missing = false
 		for p in inventory_available:
 			if p.missing:
@@ -95,13 +115,24 @@ func _generate_inventory(scenario_name: String) -> void:
 	if scenario_name == "0. Tutorial" or scenario_name == "1. Standard Loading":
 		for i in range(2): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bikes", rng), "type": "Bikes", "code": "MAG", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "is_uat": true, "missing": false, "dest": 1})
 		for i in range(10): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bulky", rng), "type": "Bulky", "code": "MAP", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
-		for i in range(16): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
+		
+		if scenario_name == "0. Tutorial":
+			# Tutorial: all 16 Mecha at start, no waves
+			for i in range(16): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
+		else:
+			# Standard: 12 Mecha at start, 4 arrive late
+			for i in range(12): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
+			for i in range(4): inventory_pending.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
+			_wave_times = [600.0]  # ~10 min into shift (after loading ~9 pallets)
 	
 	elif scenario_name == "2. Priority Loading":
 		for i in range(2): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bikes", rng), "type": "Bikes", "code": "MAG", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "is_uat": true, "missing": false, "dest": 1})
 		for i in range(15): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bulky", rng), "type": "Bulky", "code": "MAP", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
 		for i in range(20): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D+", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
-		for i in range(5): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D-", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
+		# D- pallets arrive LATE — forces priority decision
+		for i in range(5):
+			inventory_pending.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D-", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
+		_wave_times = [800.0]  # Arrive after truck is partially loaded
 
 	elif scenario_name == "3. Co-Loading":
 		is_co_load = true
@@ -110,13 +141,52 @@ func _generate_inventory(scenario_name: String) -> void:
 		for i in range(5): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bulky", rng), "type": "Bulky", "code": "MAP", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
 		for i in range(8): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
 		for i in range(2): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("C&C", rng), "type": "C&C", "code": "MAP", "promise": "D", "p_val": 0, "collis": rng.randi_range(3, 8), "cap": 1.0, "is_uat": true, "missing": false, "dest": 1})
-		# Store 2 pallets (dest=2, loaded near door — sequence 2)
+		# Store 2: most at start, 2 Mecha arrive late
 		for i in range(1): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bikes", rng), "type": "Bikes", "code": "MAG", "promise": "D", "p_val": 0, "collis": 5, "cap": 1.3, "is_uat": true, "missing": false, "dest": 2})
 		for i in range(4): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Bulky", rng), "type": "Bulky", "code": "MAP", "promise": "D", "p_val": 0, "collis": 20, "cap": 1.0, "is_uat": true, "missing": false, "dest": 2})
-		for i in range(7): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 2})
+		for i in range(5): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 2})
 		for i in range(2): inventory_available.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("C&C", rng), "type": "C&C", "code": "MAP", "promise": "D", "p_val": 0, "collis": rng.randi_range(3, 8), "cap": 1.0, "is_uat": true, "missing": false, "dest": 2})
+		# Late arrivals for store 2
+		for i in range(2):
+			inventory_pending.append({"id": _generate_real_uat(rng), "colis_id": _generate_real_colis("Mecha", rng), "type": "Mecha", "code": "MAP", "promise": "D", "p_val": 0, "collis": 28, "cap": 1.0, "is_uat": true, "missing": false, "dest": 2})
+		_wave_times = [700.0]
 
 	inventory_available.shuffle()
+
+func _deliver_pending_wave() -> void:
+	if _waves_delivered >= _wave_times.size(): return
+	if inventory_pending.is_empty(): return
+	
+	var wave_pallets: Array = []
+	# Deliver all remaining pending pallets in this wave
+	for p in inventory_pending:
+		wave_pallets.append(p)
+	
+	for p in wave_pallets:
+		inventory_pending.erase(p)
+		inventory_available.append(p)
+		# Track D- arrivals so rework to fit them isn't penalized
+		if p.promise == "D-" or p.promise == "D":
+			_required_rework_ids.append(p.id)
+	
+	_waves_delivered += 1
+	
+	# Build notification message
+	var type_counts = {}
+	for p in wave_pallets:
+		var key = p.type
+		if p.promise == "D-": key += " (D-)"
+		type_counts[key] = type_counts.get(key, 0) + 1
+	
+	var msg = "[color=#e74c3c][b]INCOMING CALL — SORTER[/b][/color]\n\n"
+	msg += "[color=#f1c40f]%d new pallet(s) arrived on dock:[/color]\n" % wave_pallets.size()
+	for t in type_counts:
+		msg += "  • %d × %s\n" % [type_counts[t], t]
+	if current_scenario == "2. Priority Loading":
+		msg += "\n[color=#e74c3c][b]These are D- priority — customer promise![/b]\nYou may need to unload D+ pallets to make room.[/color]"
+	
+	emit_signal("phone_notification", msg, wave_pallets.size())
+	_emit_inventory()
 
 func _generate_real_uat(rng: RandomNumberGenerator) -> String:
 	return "00900084" + str(rng.randi_range(1000000, 9999999))
@@ -188,6 +258,10 @@ func end_session() -> void:
 		unload_count -= 1
 		total_time -= 66.0 
 	
+	# Late D/D- arrival forgiveness: don't penalize rework that was required
+	var forgiven_rework = mini(_required_rework_ids.size(), unload_count)
+	var penalized_unloads = unload_count - forgiven_rework
+	
 	var score = 100
 	var feedback = []
 	
@@ -196,8 +270,11 @@ func end_session() -> void:
 		feedback.append("[color=#e74c3c]• Sequence:[/color] " + str(seq_errors) + " pallet(s) loaded out of the standard order. The store has to dig through the truck to find what they need first.")
 		
 	if unload_count > 0:
-		score -= (unload_count * 5)
-		feedback.append("[color=#e74c3c]• Rework:[/color] " + str(unload_count) + " pallet(s) pulled back off. Each costs ~1.1 minutes, pressuring the departure window.")
+		score -= (penalized_unloads * 5)
+		if forgiven_rework > 0:
+			feedback.append("[color=#f1c40f]• Required rework:[/color] " + str(forgiven_rework) + " pallet(s) removed to fit late-arriving priority pallets. No penalty — this was the right call.")
+		if penalized_unloads > 0:
+			feedback.append("[color=#e74c3c]• Rework:[/color] " + str(penalized_unloads) + " pallet(s) pulled back off. Each costs ~1.1 minutes, pressuring the departure window.")
 		
 	if not did_validate:
 		score -= 20
@@ -259,7 +336,10 @@ func end_session() -> void:
 	if seq_errors > 0:
 		why_it_mattered += "Out-of-sequence loading means the store unstacks everything to reach priority items at the back. "
 	if unload_count > 0:
-		why_it_mattered += "Every pallet pulled back costs ~1.1 minutes. Over a shift, rework adds up and threatens departure times. "
+		if penalized_unloads > 0:
+			why_it_mattered += "Every pallet pulled back costs ~1.1 minutes. Over a shift, rework adds up and threatens departure times. "
+		if forgiven_rework > 0:
+			why_it_mattered += "Some rework was necessary to fit late-arriving priority pallets — good situational awareness. "
 	if left_behind_priority > 0:
 		why_it_mattered += "D-/D pallets are customer promises with deadlines. Leaving them behind while loading D+ breaks the store's delivery schedule. "
 	if is_co_load and score < 100:
