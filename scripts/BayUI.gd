@@ -63,6 +63,7 @@ var lane_misc: VBoxContainer
 
 var truck_grid: GridContainer
 var truck_cap_label: RichTextLabel 
+var truck_cap_bar: ColorRect
 var lbl_hover_info: RichTextLabel 
 
 var debrief_overlay: ColorRect
@@ -150,6 +151,48 @@ func _ready() -> void:
 	var old_raq_btn = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/RAQBtn
 	if old_raq_btn: old_raq_btn.visible = false
 
+	# --- STYLE: Top bar ---
+	var top_bar = $Root/FrameVBox/TopBar
+	if top_bar:
+		var tb_sb = StyleBoxFlat.new()
+		tb_sb.bg_color = Color(0.08, 0.09, 0.11)
+		tb_sb.border_width_bottom = 1
+		tb_sb.border_color = Color(0.2, 0.22, 0.25)
+		top_bar.add_theme_stylebox_override("panel", tb_sb)
+	if top_time_label:
+		top_time_label.add_theme_font_size_override("font_size", 15)
+		top_time_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
+	if role_strip_label:
+		role_strip_label.add_theme_font_size_override("font_size", 13)
+		role_strip_label.add_theme_color_override("font_color", Color(0.5, 0.54, 0.58))
+
+	# --- STYLE: Panel toggle bar ---
+	var toggle_bar = $Root/FrameVBox/MainHBox/PanelToggleBar
+	if toggle_bar:
+		var ptb_sb = StyleBoxFlat.new()
+		ptb_sb.bg_color = Color(0.1, 0.11, 0.13)
+		ptb_sb.border_width_left = 1
+		ptb_sb.border_color = Color(0.2, 0.22, 0.25)
+		toggle_bar.add_theme_stylebox_override("panel", ptb_sb)
+
+	var toggle_buttons = [btn_shift_board, btn_loading_plan, btn_as400, btn_trailer_capacity, btn_phone, btn_notes]
+	for tb in toggle_buttons:
+		if tb == null: continue
+		tb.add_theme_font_size_override("font_size", 13)
+		var tb_n = StyleBoxFlat.new()
+		tb_n.bg_color = Color(0.15, 0.16, 0.18)
+		tb_n.corner_radius_top_left = 4; tb_n.corner_radius_top_right = 4
+		tb_n.corner_radius_bottom_left = 4; tb_n.corner_radius_bottom_right = 4
+		tb_n.border_width_left = 1; tb_n.border_width_top = 1; tb_n.border_width_right = 1; tb_n.border_width_bottom = 1
+		tb_n.border_color = Color(0.25, 0.27, 0.3)
+		tb.add_theme_stylebox_override("normal", tb_n)
+		var tb_h = tb_n.duplicate()
+		tb_h.bg_color = Color(0.2, 0.22, 0.26)
+		tb_h.border_color = Color(0.0, 0.51, 0.76)
+		tb.add_theme_stylebox_override("hover", tb_h)
+		tb.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
+		tb.add_theme_color_override("font_hover_color", Color(1, 1, 1))
+
 	_build_start_portal()
 	_build_operational_layout()
 	_build_debrief_modal()
@@ -160,7 +203,6 @@ func _ready() -> void:
 	_update_strip_text()
 	ProjectSettings.set_setting("gui/timers/tooltip_delay_sec", 0.0)
 
-# Keeps the spotlight glued to the button even if layout shifts!
 func _process(_delta: float) -> void:
 	if tutorial_active and _tut_target_node != null and is_instance_valid(_tut_target_node) and _tut_target_node.visible:
 		tut_highlight_box.visible = true
@@ -193,13 +235,11 @@ func _build_tutorial_ui() -> void:
 	tut_canvas.visible = false
 	self.add_child(tut_canvas)
 	
-	# No dim overlay — keep the full UI visible and interactive
 	tut_dim_overlay = ColorRect.new()
 	tut_dim_overlay.visible = false
 	tut_dim_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tut_canvas.add_child(tut_dim_overlay)
 
-	# Glowing border box (highlight target)
 	tut_highlight_box = ReferenceRect.new()
 	tut_highlight_box.border_color = Color(1.0, 0.8, 0.1)
 	tut_highlight_box.border_width = 4
@@ -207,12 +247,11 @@ func _build_tutorial_ui() -> void:
 	tut_highlight_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tut_canvas.add_child(tut_highlight_box)
 	
-	# Tutorial banner — pinned as a strip at the top, right below the top bar
 	tut_screen_margin = MarginContainer.new()
 	tut_screen_margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	tut_screen_margin.anchor_bottom = 0.0
-	tut_screen_margin.offset_top = 50  # Just below the top bar
-	tut_screen_margin.offset_bottom = 50  # Will grow with content
+	tut_screen_margin.offset_top = 50
+	tut_screen_margin.offset_bottom = 50
 	tut_screen_margin.add_theme_constant_override("margin_left", 8)
 	tut_screen_margin.add_theme_constant_override("margin_right", 200)
 	tut_screen_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -268,7 +307,6 @@ func _build_tutorial_ui() -> void:
 
 func _set_tutorial_focus(target: Control, _pos: String, _dim: bool):
 	_tut_target_node = target
-	# Dim overlay is permanently disabled — UI stays fully visible
 	tut_dim_overlay.visible = false
 
 func _update_tutorial_ui() -> void:
@@ -525,99 +563,125 @@ func _on_sop_search_changed(query: String) -> void:
 # ==========================================
 func _build_start_portal() -> void:
 	portal_overlay = ColorRect.new()
-	portal_overlay.color = Color(0.08, 0.12, 0.18, 1.0) 
+	portal_overlay.color = Color(0.06, 0.08, 0.11, 1.0)
 	portal_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	$Root.add_child(portal_overlay) 
+	$Root.add_child(portal_overlay)
 
 	var center = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	portal_overlay.add_child(center)
 
 	var pnl = PanelContainer.new()
-	pnl.custom_minimum_size = Vector2(500, 450)
+	pnl.custom_minimum_size = Vector2(520, 480)
 	var sb = StyleBoxFlat.new()
-	sb.bg_color = Color(1, 1, 1, 1)
-	sb.corner_radius_top_left = 12
-	sb.corner_radius_top_right = 12
-	sb.corner_radius_bottom_left = 12
-	sb.corner_radius_bottom_right = 12
-	sb.shadow_color = Color(0, 0, 0, 0.3)
-	sb.shadow_size = 25
+	sb.bg_color = Color(0.12, 0.13, 0.16)
+	sb.corner_radius_top_left = 8
+	sb.corner_radius_top_right = 8
+	sb.corner_radius_bottom_left = 8
+	sb.corner_radius_bottom_right = 8
+	sb.border_width_top = 3
+	sb.border_color = Color(0.0, 0.51, 0.76)
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 30
 	pnl.add_theme_stylebox_override("panel", sb)
 	center.add_child(pnl)
 
 	var margin = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 40)
-	margin.add_theme_constant_override("margin_top", 40)
+	margin.add_theme_constant_override("margin_top", 35)
 	margin.add_theme_constant_override("margin_right", 40)
-	margin.add_theme_constant_override("margin_bottom", 40)
+	margin.add_theme_constant_override("margin_bottom", 35)
 	pnl.add_child(margin)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 20)
+	vbox.add_theme_constant_override("separation", 16)
 	margin.add_child(vbox)
 
+	# Decathlon wordmark
+	var brand_lbl = Label.new()
+	brand_lbl.text = "DECATHLON"
+	brand_lbl.add_theme_font_size_override("font_size", 14)
+	brand_lbl.add_theme_color_override("font_color", Color(0.0, 0.51, 0.76))
+	brand_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(brand_lbl)
+
 	var title = Label.new()
-	title.text = "Decathlon Bay B2B"
-	title.add_theme_font_size_override("font_size", 28)
-	title.add_theme_color_override("font_color", Color(0, 0.5, 0.8))
+	title.text = "Bay B2B"
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", Color(0.92, 0.93, 0.95))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(title)
 	
 	var sub = Label.new()
 	sub.text = "Operational Training Simulator"
-	sub.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	sub.add_theme_font_size_override("font_size", 15)
+	sub.add_theme_color_override("font_color", Color(0.45, 0.48, 0.52))
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(sub)
-	
-	vbox.add_child(HSeparator.new())
+
+	# Divider
+	var div = ColorRect.new()
+	div.custom_minimum_size = Vector2(0, 1)
+	div.color = Color(0.25, 0.27, 0.3)
+	vbox.add_child(div)
 
 	var lbl_scen = Label.new()
-	lbl_scen.text = "Select Training Scenario:"
-	lbl_scen.add_theme_color_override("font_color", Color.BLACK)
+	lbl_scen.text = "Select Training Scenario"
+	lbl_scen.add_theme_font_size_override("font_size", 14)
+	lbl_scen.add_theme_color_override("font_color", Color(0.6, 0.63, 0.67))
 	vbox.add_child(lbl_scen)
 
 	portal_scenario_dropdown = OptionButton.new()
 	portal_scenario_dropdown.custom_minimum_size = Vector2(0, 45)
+	var dd_sb = StyleBoxFlat.new()
+	dd_sb.bg_color = Color(0.18, 0.19, 0.22)
+	dd_sb.corner_radius_top_left = 4; dd_sb.corner_radius_top_right = 4
+	dd_sb.corner_radius_bottom_left = 4; dd_sb.corner_radius_bottom_right = 4
+	dd_sb.border_width_left = 1; dd_sb.border_width_top = 1; dd_sb.border_width_right = 1; dd_sb.border_width_bottom = 1
+	dd_sb.border_color = Color(0.3, 0.32, 0.35)
+	portal_scenario_dropdown.add_theme_stylebox_override("normal", dd_sb)
+	portal_scenario_dropdown.add_theme_color_override("font_color", Color(0.85, 0.87, 0.9))
 	vbox.add_child(portal_scenario_dropdown)
 	
 	var spacer = Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(spacer)
 
+	# Warehouse ID line
+	var wh_lbl = Label.new()
+	wh_lbl.text = "NLDKL01 · W146 · QUAI390"
+	wh_lbl.add_theme_font_size_override("font_size", 11)
+	wh_lbl.add_theme_color_override("font_color", Color(0.35, 0.37, 0.4))
+	wh_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(wh_lbl)
+
 	var btn_start = Button.new()
 	btn_start.text = "Begin Shift"
-	btn_start.custom_minimum_size = Vector2(0, 60)
+	btn_start.custom_minimum_size = Vector2(0, 55)
 	
 	var start_sb_normal = StyleBoxFlat.new()
-	start_sb_normal.bg_color = Color(0.95, 0.95, 0.95) 
-	start_sb_normal.corner_radius_top_left = 6
-	start_sb_normal.corner_radius_top_right = 6
-	start_sb_normal.corner_radius_bottom_left = 6
-	start_sb_normal.corner_radius_bottom_right = 6
-	start_sb_normal.border_width_left = 1
-	start_sb_normal.border_width_top = 1
-	start_sb_normal.border_width_right = 1
-	start_sb_normal.border_width_bottom = 1
-	start_sb_normal.border_color = Color(0.8, 0.8, 0.8)
+	start_sb_normal.bg_color = Color(0.18, 0.19, 0.22)
+	start_sb_normal.corner_radius_top_left = 6; start_sb_normal.corner_radius_top_right = 6
+	start_sb_normal.corner_radius_bottom_left = 6; start_sb_normal.corner_radius_bottom_right = 6
+	start_sb_normal.border_width_left = 1; start_sb_normal.border_width_top = 1
+	start_sb_normal.border_width_right = 1; start_sb_normal.border_width_bottom = 1
+	start_sb_normal.border_color = Color(0.3, 0.32, 0.35)
 	
 	var start_sb_hover = StyleBoxFlat.new()
-	start_sb_hover.bg_color = Color(0.18, 0.8, 0.44) 
-	start_sb_hover.corner_radius_top_left = 6
-	start_sb_hover.corner_radius_top_right = 6
-	start_sb_hover.corner_radius_bottom_left = 6
-	start_sb_hover.corner_radius_bottom_right = 6
+	start_sb_hover.bg_color = Color(0.0, 0.51, 0.76)
+	start_sb_hover.corner_radius_top_left = 6; start_sb_hover.corner_radius_top_right = 6
+	start_sb_hover.corner_radius_bottom_left = 6; start_sb_hover.corner_radius_bottom_right = 6
 
 	btn_start.add_theme_stylebox_override("normal", start_sb_normal)
 	btn_start.add_theme_stylebox_override("hover", start_sb_hover)
-	btn_start.add_theme_color_override("font_color", Color(0.3, 0.3, 0.3)) 
-	btn_start.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0)) 
-	btn_start.add_theme_font_size_override("font_size", 20)
+	btn_start.add_theme_color_override("font_color", Color(0.6, 0.63, 0.67))
+	btn_start.add_theme_color_override("font_hover_color", Color.WHITE)
+	btn_start.add_theme_font_size_override("font_size", 18)
 	btn_start.pressed.connect(_on_portal_start_pressed)
 	vbox.add_child(btn_start)
 
 # ==========================================
-# THE VICTORY MODAL
+# DEBRIEF MODAL
 # ==========================================
 func _build_debrief_modal() -> void:
 	debrief_overlay = ColorRect.new()
@@ -669,25 +733,45 @@ func _build_debrief_modal() -> void:
 # ==========================================
 func _build_operational_layout() -> void:
 	top_actions_hbox = HBoxContainer.new()
-	top_actions_hbox.add_theme_constant_override("separation", 15)
+	top_actions_hbox.add_theme_constant_override("separation", 10)
 	top_actions_hbox.visible = false 
 	workspace_vbox.add_child(top_actions_hbox)
 
-	btn_start_load = Button.new()
-	btn_start_load.text = "Start Loading"
-	btn_start_load.custom_minimum_size = Vector2(150, 40)
+	# Helper for styled action buttons
+	var make_action_btn = func(text: String, accent: bool) -> Button:
+		var b = Button.new()
+		b.text = text
+		b.custom_minimum_size = Vector2(0, 38)
+		b.add_theme_font_size_override("font_size", 13)
+		var n_sb = StyleBoxFlat.new()
+		n_sb.corner_radius_top_left = 4; n_sb.corner_radius_top_right = 4
+		n_sb.corner_radius_bottom_left = 4; n_sb.corner_radius_bottom_right = 4
+		if accent:
+			n_sb.bg_color = Color(0.15, 0.16, 0.19)
+			n_sb.border_width_bottom = 2
+			n_sb.border_color = Color(0.0, 0.51, 0.76)
+		else:
+			n_sb.bg_color = Color(0.15, 0.16, 0.19)
+			n_sb.border_width_left = 1; n_sb.border_width_top = 1
+			n_sb.border_width_right = 1; n_sb.border_width_bottom = 1
+			n_sb.border_color = Color(0.25, 0.27, 0.3)
+		b.add_theme_stylebox_override("normal", n_sb)
+		var h_sb = n_sb.duplicate()
+		h_sb.bg_color = Color(0.22, 0.24, 0.28)
+		b.add_theme_stylebox_override("hover", h_sb)
+		b.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
+		b.add_theme_color_override("font_hover_color", Color.WHITE)
+		return b
+
+	btn_start_load = make_action_btn.call(" Start Loading ", false)
 	btn_start_load.pressed.connect(func(): _on_decision_pressed("Start Loading"))
 	top_actions_hbox.add_child(btn_start_load)
 
-	btn_call = Button.new()
-	btn_call.text = "Call Departments (C&C Check)"
-	btn_call.custom_minimum_size = Vector2(250, 40)
+	btn_call = make_action_btn.call(" Call Departments (C&C Check) ", true)
 	btn_call.pressed.connect(func(): _on_decision_pressed("Call departments (C&C check)"))
 	top_actions_hbox.add_child(btn_call)
 
-	btn_seal = Button.new()
-	btn_seal.text = "Seal Truck & Print Papers"
-	btn_seal.custom_minimum_size = Vector2(200, 40)
+	btn_seal = make_action_btn.call(" Seal Truck & Print Papers ", false)
 	btn_seal.pressed.connect(func(): _on_decision_pressed("Seal Truck"))
 	top_actions_hbox.add_child(btn_seal)
 	
@@ -697,21 +781,25 @@ func _build_operational_layout() -> void:
 	
 	btn_sop = Button.new()
 	btn_sop.text = " Help & SOPs "
-	btn_sop.custom_minimum_size = Vector2(150, 40)
+	btn_sop.custom_minimum_size = Vector2(140, 38)
+	btn_sop.add_theme_font_size_override("font_size", 13)
 	var sop_sb = StyleBoxFlat.new()
-	sop_sb.bg_color = Color(0.2, 0.4, 0.8) 
-	sop_sb.corner_radius_top_left = 6
-	sop_sb.corner_radius_top_right = 6
-	sop_sb.corner_radius_bottom_left = 6
-	sop_sb.corner_radius_bottom_right = 6
+	sop_sb.bg_color = Color(0.12, 0.3, 0.55)
+	sop_sb.corner_radius_top_left = 4; sop_sb.corner_radius_top_right = 4
+	sop_sb.corner_radius_bottom_left = 4; sop_sb.corner_radius_bottom_right = 4
 	btn_sop.add_theme_stylebox_override("normal", sop_sb)
+	var sop_h = sop_sb.duplicate()
+	sop_h.bg_color = Color(0.0, 0.51, 0.76)
+	btn_sop.add_theme_stylebox_override("hover", sop_h)
+	btn_sop.add_theme_color_override("font_color", Color(0.7, 0.8, 0.95))
+	btn_sop.add_theme_color_override("font_hover_color", Color.WHITE)
 	btn_sop.pressed.connect(_open_sop_modal)
 	top_actions_hbox.add_child(btn_sop)
 
 	stage_hbox = HBoxContainer.new()
 	stage_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL 
 	stage_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stage_hbox.add_theme_constant_override("separation", 15)
+	stage_hbox.add_theme_constant_override("separation", 0)
 	stage_hbox.visible = false
 	workspace_vbox.add_child(stage_hbox)
 	
@@ -721,8 +809,8 @@ func _build_operational_layout() -> void:
 	lbl_standby.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_standby.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl_standby.text = "Shift Started.\n\nSelect a tool from the Panels menu to begin operations.\n\n(If you don't know what to do, click 'Help & SOPs' in the top right.)"
-	lbl_standby.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-	lbl_standby.add_theme_font_size_override("font_size", 24)
+	lbl_standby.add_theme_color_override("font_color", Color(0.45, 0.48, 0.52))
+	lbl_standby.add_theme_font_size_override("font_size", 22)
 	stage_hbox.add_child(lbl_standby)
 
 	_build_dock_stage()
@@ -732,9 +820,28 @@ func _build_operational_layout() -> void:
 	btn_dock_view.text = "Dock View"
 	btn_shift_board.get_parent().add_child(btn_dock_view)
 	btn_shift_board.get_parent().move_child(btn_dock_view, 0)
+
+	# Style the dock view button to match others
+	btn_dock_view.add_theme_font_size_override("font_size", 13)
+	var dv_n = StyleBoxFlat.new()
+	dv_n.bg_color = Color(0.15, 0.16, 0.18)
+	dv_n.corner_radius_top_left = 4; dv_n.corner_radius_top_right = 4
+	dv_n.corner_radius_bottom_left = 4; dv_n.corner_radius_bottom_right = 4
+	dv_n.border_width_left = 1; dv_n.border_width_top = 1; dv_n.border_width_right = 1; dv_n.border_width_bottom = 1
+	dv_n.border_color = Color(0.25, 0.27, 0.3)
+	btn_dock_view.add_theme_stylebox_override("normal", dv_n)
+	var dv_h = dv_n.duplicate()
+	dv_h.bg_color = Color(0.2, 0.22, 0.26)
+	dv_h.border_color = Color(0.0, 0.51, 0.76)
+	btn_dock_view.add_theme_stylebox_override("hover", dv_h)
+	btn_dock_view.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
+	btn_dock_view.add_theme_color_override("font_hover_color", Color(1, 1, 1))
 	
 	_init_panel_nodes_and_buttons(btn_dock_view)
 
+# ==========================================
+# DOCK VIEW — CONCRETE FLOOR + OVERHEAD SIGNS
+# ==========================================
 func _build_dock_stage() -> void:
 	pnl_dock_stage = PanelContainer.new()
 	pnl_dock_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -756,20 +863,20 @@ func _build_dock_stage() -> void:
 	dock_vbox.add_theme_constant_override("separation", 6)
 	dock_margin.add_child(dock_vbox)
 
-	# --- MAIN FLOOR AREA: lanes left, truck right ---
+	# --- MAIN FLOOR AREA ---
 	var floor_split = HBoxContainer.new()
 	floor_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	floor_split.add_theme_constant_override("separation", 0)
 	dock_vbox.add_child(floor_split)
 
-	# === DOCK LANES AREA (concrete floor) ===
+	# === DOCK LANES (concrete floor) ===
 	var dock_lanes_bg = PanelContainer.new()
 	dock_lanes_bg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dock_lanes_bg.size_flags_stretch_ratio = 2.2
 	var sb_dock = StyleBoxFlat.new()
-	sb_dock.bg_color = Color(0.62, 0.63, 0.61) # Polished grey concrete
+	sb_dock.bg_color = Color(0.62, 0.63, 0.61)
 	sb_dock.border_width_bottom = 3
-	sb_dock.border_color = Color(0.85, 0.65, 0.0) # Yellow boundary line at bottom
+	sb_dock.border_color = Color(0.85, 0.65, 0.0)
 	dock_lanes_bg.add_theme_stylebox_override("panel", sb_dock)
 	floor_split.add_child(dock_lanes_bg)
 
@@ -784,7 +891,7 @@ func _build_dock_stage() -> void:
 	dock_inner_vbox.add_theme_constant_override("separation", 0)
 	dock_inner_margin.add_child(dock_inner_vbox)
 
-	# --- OVERHEAD SIGNS (dark panels, white text, blue accent stripe) ---
+	# --- OVERHEAD SIGNS ---
 	var signs_hbox = HBoxContainer.new()
 	signs_hbox.add_theme_constant_override("separation", 6)
 	dock_inner_vbox.add_child(signs_hbox)
@@ -832,7 +939,7 @@ func _build_dock_stage() -> void:
 		sign_sub.add_theme_color_override("font_color", Color(0.55, 0.58, 0.62))
 		sign_vbox.add_child(sign_sub)
 
-	# --- LANE COLUMNS (with white dashed dividers between them) ---
+	# --- LANE COLUMNS ---
 	var lanes_hbox = HBoxContainer.new()
 	lanes_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lanes_hbox.add_theme_constant_override("separation", 0)
@@ -843,12 +950,11 @@ func _build_dock_stage() -> void:
 	lane_b = VBoxContainer.new(); lane_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_b.alignment = BoxContainer.ALIGNMENT_END; lane_b.add_theme_constant_override("separation", 4)
 	lane_misc = VBoxContainer.new(); lane_misc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lane_misc.alignment = BoxContainer.ALIGNMENT_END; lane_misc.add_theme_constant_override("separation", 4)
 
-	# Helper to create a dashed lane divider
 	var make_divider = func() -> ColorRect:
 		var div = ColorRect.new()
 		div.custom_minimum_size = Vector2(2, 0)
 		div.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		div.color = Color(1, 1, 1, 0.3) # White dashed effect (solid for now, reads as lane line)
+		div.color = Color(1, 1, 1, 0.3)
 		div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		return div
 
@@ -860,7 +966,7 @@ func _build_dock_stage() -> void:
 	lanes_hbox.add_child(make_divider.call())
 	lanes_hbox.add_child(lane_misc)
 
-	# --- ORANGE FLOOR LABELS (store name + code at base of each lane) ---
+	# --- ORANGE FLOOR LABELS ---
 	var floor_labels_hbox = HBoxContainer.new()
 	floor_labels_hbox.add_theme_constant_override("separation", 6)
 	dock_inner_vbox.add_child(floor_labels_hbox)
@@ -870,11 +976,9 @@ func _build_dock_stage() -> void:
 		var fl_panel = PanelContainer.new()
 		fl_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var fl_sb = StyleBoxFlat.new()
-		fl_sb.bg_color = Color(0.9, 0.55, 0.1) # Orange floor label
-		fl_sb.corner_radius_top_left = 2
-		fl_sb.corner_radius_top_right = 2
-		fl_sb.corner_radius_bottom_left = 2
-		fl_sb.corner_radius_bottom_right = 2
+		fl_sb.bg_color = Color(0.9, 0.55, 0.1)
+		fl_sb.corner_radius_top_left = 2; fl_sb.corner_radius_top_right = 2
+		fl_sb.corner_radius_bottom_left = 2; fl_sb.corner_radius_bottom_right = 2
 		fl_panel.add_theme_stylebox_override("panel", fl_sb)
 		floor_labels_hbox.add_child(fl_panel)
 
@@ -889,34 +993,29 @@ func _build_dock_stage() -> void:
 		fl_m.add_child(fl_lbl)
 		fl_panel.add_child(fl_m)
 
-	# === TRUCK SECTION (door frame visual) ===
+	# === TRUCK (door frame) ===
 	var truck_outer = PanelContainer.new()
 	truck_outer.custom_minimum_size = Vector2(195, 0)
 	var truck_frame_sb = StyleBoxFlat.new()
-	truck_frame_sb.bg_color = Color(0.35, 0.36, 0.38) # Steel door frame
-	truck_frame_sb.border_width_left = 5
-	truck_frame_sb.border_width_right = 5
-	truck_frame_sb.border_width_top = 5
-	truck_frame_sb.border_width_bottom = 0
-	truck_frame_sb.border_color = Color(0.55, 0.56, 0.58) # Lighter steel edge
-	truck_frame_sb.corner_radius_top_left = 4
-	truck_frame_sb.corner_radius_top_right = 4
+	truck_frame_sb.bg_color = Color(0.35, 0.36, 0.38)
+	truck_frame_sb.border_width_left = 5; truck_frame_sb.border_width_right = 5
+	truck_frame_sb.border_width_top = 5; truck_frame_sb.border_width_bottom = 0
+	truck_frame_sb.border_color = Color(0.55, 0.56, 0.58)
+	truck_frame_sb.corner_radius_top_left = 4; truck_frame_sb.corner_radius_top_right = 4
 	truck_outer.add_theme_stylebox_override("panel", truck_frame_sb)
 	floor_split.add_child(truck_outer)
 
 	var truck_inner = PanelContainer.new()
 	truck_inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var truck_inner_sb = StyleBoxFlat.new()
-	truck_inner_sb.bg_color = Color(0.12, 0.12, 0.14) # Dark truck interior
-	truck_inner_sb.corner_radius_top_left = 2
-	truck_inner_sb.corner_radius_top_right = 2
+	truck_inner_sb.bg_color = Color(0.12, 0.12, 0.14)
+	truck_inner_sb.corner_radius_top_left = 2; truck_inner_sb.corner_radius_top_right = 2
 	truck_outer.add_child(truck_inner)
 
 	var truck_vbox = VBoxContainer.new()
 	truck_vbox.add_theme_constant_override("separation", 4)
 	truck_inner.add_child(truck_vbox)
 
-	# Truck header label
 	var truck_header = Label.new()
 	truck_header.text = "TRAILER"
 	truck_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -928,8 +1027,20 @@ func _build_dock_stage() -> void:
 	truck_cap_label.bbcode_enabled = true
 	truck_cap_label.scroll_active = false
 	truck_cap_label.fit_content = true
-	truck_cap_label.text = "[center][color=#7f8fa6]0.0 / 36.0[/color]\n[b][color=#f5f6fa]36.0 left[/color][/b][/center]"
+	truck_cap_label.text = "[center][color=#7f8fa6]0 / 36[/color][/center]"
 	truck_vbox.add_child(truck_cap_label)
+
+	# Capacity bar
+	var bar_bg = ColorRect.new()
+	bar_bg.custom_minimum_size = Vector2(0, 6)
+	bar_bg.color = Color(0.2, 0.2, 0.22)
+	truck_vbox.add_child(bar_bg)
+	truck_cap_bar = ColorRect.new()
+	truck_cap_bar.custom_minimum_size = Vector2(0, 6)
+	truck_cap_bar.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	truck_cap_bar.color = Color(0.18, 0.8, 0.44)
+	truck_cap_bar.size = Vector2(0, 6)
+	bar_bg.add_child(truck_cap_bar)
 
 	truck_grid = GridContainer.new()
 	truck_grid.columns = 3
@@ -938,7 +1049,6 @@ func _build_dock_stage() -> void:
 	truck_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	truck_vbox.add_child(truck_grid)
 
-	# Arrow indicator: LIFO direction
 	var lifo_lbl = Label.new()
 	lifo_lbl.text = "← UNLOAD FIRST"
 	lifo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -946,12 +1056,11 @@ func _build_dock_stage() -> void:
 	lifo_lbl.add_theme_color_override("font_color", Color(0.6, 0.35, 0.35))
 	truck_vbox.add_child(lifo_lbl)
 
-	# Spacer to push grid up
 	var truck_spacer = Control.new()
 	truck_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	truck_vbox.add_child(truck_spacer)
 
-	# === SCANNER-STYLE HOVER PANEL (below dock, monospace feel) ===
+	# === SCANNER PANEL (bottom) ===
 	var scanner_bg = PanelContainer.new()
 	scanner_bg.custom_minimum_size = Vector2(0, 60)
 	var scanner_sb = StyleBoxFlat.new()
@@ -975,7 +1084,7 @@ func _build_dock_stage() -> void:
 	scanner_margin.add_child(lbl_hover_info)
 
 # ==========================================
-# AS400 TERMINAL (SHRUNK TO FIT)
+# AS400 TERMINAL
 # ==========================================
 func _build_as400_stage() -> void:
 	pnl_as400_stage = PanelContainer.new()
@@ -1022,7 +1131,7 @@ func _build_as400_stage() -> void:
 	
 	var prompt = Label.new()
 	prompt.text = " > "
-	prompt.add_theme_font_size_override("font_size", 18) # Shrunk slightly
+	prompt.add_theme_font_size_override("font_size", 18)
 	prompt.add_theme_color_override("font_color", Color(0, 1, 0)) 
 	input_hbox.add_child(prompt)
 	
@@ -1080,7 +1189,6 @@ func _confirm_as400_raq() -> void:
 func _render_as400_screen() -> void:
 	if as400_terminal_display == null: return
 	
-	# THE FIX: Shrunk from 18 to 15 so it never gets cut off
 	var t = "[font_size=15]" 
 	
 	if as400_state == 0:
@@ -1323,7 +1431,10 @@ func _on_time_updated(total_time: float, _loading_time: float) -> void:
 	_update_top_time(total_time)
 
 func _update_top_time(total_time: float) -> void:
-	if top_time_label != null: top_time_label.text = "Time: %0.2fs" % total_time
+	if top_time_label == null: return
+	var mins = int(total_time) / 60
+	var secs = int(total_time) % 60
+	top_time_label.text = "Shift Time: %02d:%02d" % [mins, secs]
 
 func _on_role_updated(_role_id: int) -> void:
 	_update_strip_text()
@@ -1347,16 +1458,25 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 
 	if truck_cap_label != null:
 		var spaces_left = cap_max - cap_used
-		var color_hex = "#f5f6fa" 
-		if spaces_left <= 5.0: color_hex = "#e74c3c"
-		truck_cap_label.text = "[center][color=#7f8fa6]Capacity: %0.1f / %0.1f[/color]\n[b][color=%s]Spaces Left: %0.1f[/color][/b][/center]" % [cap_used, cap_max, color_hex, spaces_left]
+		var pct = cap_used / cap_max if cap_max > 0 else 0
+		var color_hex = "#8fa6bf"
+		if pct > 0.85: color_hex = "#e74c3c"
+		elif pct > 0.6: color_hex = "#f1c40f"
+		truck_cap_label.text = "[center][color=%s][b]%0.0f / %0.0f[/b][/color][/center]" % [color_hex, cap_used, cap_max]
+
+		# Update capacity bar
+		if truck_cap_bar != null and truck_cap_bar.get_parent() != null:
+			var parent_w = truck_cap_bar.get_parent().size.x
+			truck_cap_bar.custom_minimum_size.x = parent_w * pct
+			if pct > 0.85: truck_cap_bar.color = Color(0.9, 0.3, 0.25)
+			elif pct > 0.6: truck_cap_bar.color = Color(0.94, 0.76, 0.2)
+			else: truck_cap_bar.color = Color(0.18, 0.8, 0.44)
 
 	for child in lane_m1.get_children(): child.queue_free()
 	for child in lane_m2.get_children(): child.queue_free()
 	for child in lane_b.get_children(): child.queue_free()
 	for child in lane_misc.get_children(): child.queue_free()
 
-	# Creates empty space so tutorial banner doesn't cover pallets
 	var buffer_height = 10
 	for lane in [lane_m1, lane_m2, lane_b, lane_misc]:
 		var spacer = Control.new()
@@ -1420,7 +1540,7 @@ func _get_type_color(p_type: String) -> Color:
 	return Color(0.5, 0.5, 0.5)
 
 # ==========================================
-# TOP-DOWN REALISTIC PALLET GENERATOR
+# TOP-DOWN PALLET GENERATOR (type-specific)
 # ==========================================
 func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") -> Button:
 	var btn = Button.new()
@@ -1433,7 +1553,6 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 	btn.add_theme_stylebox_override("hover", empty_sb)
 	btn.add_theme_stylebox_override("focus", empty_sb)
 
-	# --- BASE (pallet platform) ---
 	var is_plastic = (p_type == "Mecha" or p_type == "C&C")
 	var base_bg = ColorRect.new()
 	base_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1441,7 +1560,6 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 	btn.add_child(base_bg)
 
 	if is_plastic:
-		# Black plastic pallet — flat dark surface with subtle grid
 		base_bg.color = Color(0.15, 0.15, 0.17)
 		var grid_h = VBoxContainer.new()
 		grid_h.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1455,7 +1573,6 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			grid_h.add_child(row)
 	else:
-		# EUR wooden pallet — warm brown with plank lines
 		base_bg.color = Color(0.65, 0.45, 0.25)
 		var planks = HBoxContainer.new()
 		planks.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1469,7 +1586,6 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 			plank.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			planks.add_child(plank)
 
-	# --- CARGO (sitting on top of base) ---
 	var cargo_margin = MarginContainer.new()
 	cargo_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var inset = 5 if is_truck else 7
@@ -1485,7 +1601,6 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 	cargo_margin.add_child(cargo_box)
 
 	if p_type == "Mecha":
-		# Blue boxes — solid blue with a subtle darker divider line
 		cargo_box.color = Color(0.15, 0.45, 0.75)
 		var mid_line = ColorRect.new()
 		mid_line.color = Color(0.1, 0.35, 0.6)
@@ -1496,16 +1611,13 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 		mid_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cargo_box.add_child(mid_line)
 	elif p_type == "Bulky":
-		# Shrink-wrapped cardboard — tan/brown with cross tape lines
 		cargo_box.color = Color(0.82, 0.68, 0.45)
-		# Horizontal tape
 		var tape_h = ColorRect.new()
 		tape_h.color = Color(0.7, 0.55, 0.3, 0.6)
 		tape_h.set_anchors_preset(Control.PRESET_CENTER)
 		tape_h.custom_minimum_size = Vector2(p_size, 2)
 		tape_h.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cargo_box.add_child(tape_h)
-		# Vertical tape
 		var tape_v = ColorRect.new()
 		tape_v.color = Color(0.7, 0.55, 0.3, 0.6)
 		tape_v.set_anchors_preset(Control.PRESET_CENTER)
@@ -1513,7 +1625,6 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 		tape_v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cargo_box.add_child(tape_v)
 	elif p_type == "Bikes":
-		# Long bike boxes — green-tinted cardboard, horizontal box orientation
 		cargo_box.color = Color(0.28, 0.62, 0.35)
 		var box_line1 = ColorRect.new()
 		box_line1.color = Color(0.22, 0.52, 0.28)
@@ -1530,7 +1641,6 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 		box_line2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cargo_box.add_child(box_line2)
 	elif p_type == "C&C":
-		# White C&C — clean white with small "C&C" feel (dotted center)
 		cargo_box.color = Color(0.92, 0.92, 0.92)
 		var cc_dot = ColorRect.new()
 		cc_dot.color = Color(0.7, 0.7, 0.7)
@@ -1539,13 +1649,10 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 		cc_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cargo_box.add_child(cc_dot)
 	elif p_type == "ServiceCenter":
-		# Yellow stands — bright yellow, clean
 		cargo_box.color = Color(0.88, 0.82, 0.2)
 	else:
-		# Fallback
 		cargo_box.color = color.lerp(Color.WHITE, 0.15)
 
-	# Border around cargo
 	var border = ReferenceRect.new()
 	border.border_color = color.darkened(0.35)
 	border.border_width = 2
@@ -1554,7 +1661,6 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cargo_box.add_child(border)
 
-	# Hover glow
 	var glow = ReferenceRect.new()
 	glow.border_color = Color(0, 0, 0, 0)
 	glow.border_width = 3
@@ -1581,10 +1687,10 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 		var hover_text = ""
 		
 		if is_reachable:
-			hover_text = "[font_size=18][color=#e74c3c][b]⚠️ UNLOAD PALLET[/b][/color]\nClick to return [b]%s[/b] to dock.\nColis: %s\n[b]Penalty:[/b] +1.1 Minutes[/font_size]" % [p.id, p.get("colis_id", "N/A")]
+			hover_text = "[font_size=14][color=#e74c3c][b]⚠ UNLOAD[/b][/color]  [b]%s[/b]  Colis: %s  [color=#95a5a6]Penalty: +1.1 min[/color][/font_size]" % [p.id, p.get("colis_id", "N/A")]
 		else:
 			btn.modulate = Color(0.6, 0.6, 0.6) 
-			hover_text = "[font_size=18][color=#95a5a6][b]🔒 BLOCKED[/b][/color]\n[b]%s[/b] is blocked by pallets in front of it. Unload the tail first.[/font_size]" % p.id
+			hover_text = "[font_size=14][color=#95a5a6][b]BLOCKED[/b]  %s — unload tail first[/color][/font_size]" % p.id
 
 		btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
 		btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[font_size=14][color=#5a6a7a]▶ Hover over a pallet to scan...[/color][/font_size]")
@@ -1604,10 +1710,12 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	if p_data.has("code"): code_str = " | Code: " + p_data.code
 	var colis_str = p_data.get("colis_id", "N/A")
 	
-	var hover_text = "[font_size=18][color=#0082c3][b]SCAN DATA:[/b][/color] Type: [b]%s[/b]%s\nU.A.T: [b]%s[/b] | Colis: [b]%s[/b]\nPromise Date: [b]%s[/b] | Collis Count: %d | Cap Space: %0.1f[/font_size]" % [p_data.type, code_str, p_data.id, colis_str, p_data.promise, p_data.collis, p_data.cap]
+	var base_label = "Plastic" if (p_data.type == "Mecha" or p_data.type == "C&C") else "EUR Wood"
+	var hover_text = "[font_size=14][color=#0082c3][b]SCAN[/b][/color]  Type: [b]%s[/b] (%s)%s  UAT: [b]%s[/b]  Colis: [b]%s[/b]  Promise: [b]%s[/b]  Qty: %d  Cap: %0.1f[/font_size]" % [p_data.type, base_label, code_str, p_data.id, colis_str, p_data.promise, p_data.collis, p_data.cap]
 	
 	btn.mouse_entered.connect(func(): if lbl_hover_info: lbl_hover_info.text = hover_text)
 	btn.mouse_exited.connect(func(): if lbl_hover_info: lbl_hover_info.text = "[font_size=14][color=#5a6a7a]▶ Hover over a pallet to scan...[/color][/font_size]")
+
 	btn.pressed.connect(func(): 
 		if tutorial_active:
 			if tutorial_step < 6:
