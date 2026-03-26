@@ -65,9 +65,25 @@ var co_lanes: Dictionary = {}  # Key: "s1_mecha", "s1_bulky", "s1_misc", "s2_mec
 # Phone notification system
 var phone_messages: Array = []
 var phone_flash_active: bool = false
+var _phone_flash_timer: Timer = null
 var _load_cooldown: bool = false  # Prevents spam-clicking pallets
 var btn_sop: Button
 var btn_dock_view: Button
+
+# --- SIDEBAR COLLAPSE/EXPAND ---
+const SIDEBAR_COLLAPSED_W: float = 52.0
+const SIDEBAR_EXPANDED_W: float = 190.0
+const SIDEBAR_ANIM_DURATION: float = 0.2
+const SIDEBAR_HOVER_DELAY: float = 0.15
+const SIDEBAR_COLLAPSE_DELAY: float = 0.25
+var _sidebar_pinned: bool = true
+var _sidebar_expanded: bool = true
+var _sidebar_tween: Tween = null
+var _sidebar_hover_timer: SceneTreeTimer = null
+var _sidebar_collapse_timer: SceneTreeTimer = null
+var _sidebar_btn_labels: Dictionary = {}
+var _sidebar_pin_btn: Button
+var _sidebar_panels_lbl: Label
 
 # --- 4 VERTICAL DOCK LANES ---
 var lane_m1: VBoxContainer
@@ -216,37 +232,72 @@ func _ready() -> void:
 		top_bar_hbox.add_child(audio_btn)
 
 	# --- STYLE: Panel toggle bar ---
-	var toggle_bar = $Root/FrameVBox/MainHBox/PanelToggleBar
+	var toggle_bar: PanelContainer = $Root/FrameVBox/MainHBox/PanelToggleBar
 	if toggle_bar:
-		var ptb_sb = StyleBoxFlat.new()
+		var ptb_sb := StyleBoxFlat.new()
 		ptb_sb.bg_color = Color(0.1, 0.11, 0.13)
 		ptb_sb.border_width_left = 1
 		ptb_sb.border_color = Color(0.2, 0.22, 0.25)
 		toggle_bar.add_theme_stylebox_override("panel", ptb_sb)
+		toggle_bar.mouse_entered.connect(_on_sidebar_mouse_entered)
+		toggle_bar.mouse_exited.connect(_on_sidebar_mouse_exited)
 
 	# Hide Trailer Capacity from sidebar (redundant — capacity shown in dock view)
 	if btn_trailer_capacity: btn_trailer_capacity.visible = false
 
 	# Style the Panels header label
-	var panels_lbl = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/PanelsLabel
-	if panels_lbl:
-		panels_lbl.add_theme_font_size_override("font_size", 12)
-		panels_lbl.add_theme_color_override("font_color", Color(0.4, 0.43, 0.47))
-		panels_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_sidebar_panels_lbl = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/PanelsLabel
+	if _sidebar_panels_lbl:
+		_sidebar_panels_lbl.add_theme_font_size_override("font_size", 12)
+		_sidebar_panels_lbl.add_theme_color_override("font_color", Color(0.4, 0.43, 0.47))
+		_sidebar_panels_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	var toggle_buttons = [btn_shift_board, btn_loading_plan, btn_as400, btn_phone, btn_notes]
-	for tb in toggle_buttons:
+	# --- PIN BUTTON (top of sidebar) ---
+	var toggle_vbox: VBoxContainer = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox
+	if toggle_vbox and _sidebar_panels_lbl:
+		_sidebar_pin_btn = Button.new()
+		_sidebar_pin_btn.text = "<<"
+		_sidebar_pin_btn.tooltip_text = "Collapse sidebar"
+		_sidebar_pin_btn.focus_mode = Control.FOCUS_NONE
+		_sidebar_pin_btn.add_theme_font_size_override("font_size", 11)
+		_sidebar_pin_btn.add_theme_color_override("font_color", Color(0.5, 0.53, 0.57))
+		_sidebar_pin_btn.add_theme_color_override("font_hover_color", Color(0.8, 0.85, 0.9))
+		var pin_n := StyleBoxFlat.new()
+		pin_n.bg_color = Color(0.13, 0.14, 0.16)
+		pin_n.corner_radius_top_left = 3; pin_n.corner_radius_top_right = 3
+		pin_n.corner_radius_bottom_left = 3; pin_n.corner_radius_bottom_right = 3
+		pin_n.content_margin_top = 2; pin_n.content_margin_bottom = 2
+		_sidebar_pin_btn.add_theme_stylebox_override("normal", pin_n)
+		var pin_h := pin_n.duplicate()
+		pin_h.bg_color = Color(0.2, 0.22, 0.26)
+		_sidebar_pin_btn.add_theme_stylebox_override("hover", pin_h)
+		_sidebar_pin_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		_sidebar_pin_btn.pressed.connect(_on_sidebar_pin_pressed)
+		toggle_vbox.add_child(_sidebar_pin_btn)
+		toggle_vbox.move_child(_sidebar_pin_btn, 0)
+		toggle_vbox.move_child(_sidebar_panels_lbl, 0)
+
+	# --- REGISTER BUTTON ICON MAPPINGS ---
+	_sidebar_btn_labels[btn_shift_board] = {"icon": "SB", "label": "Shift Board"}
+	_sidebar_btn_labels[btn_loading_plan] = {"icon": "LP", "label": "Loading Plan"}
+	_sidebar_btn_labels[btn_as400] = {"icon": "AS", "label": "AS400"}
+	_sidebar_btn_labels[btn_phone] = {"icon": "PH", "label": "Phone"}
+	_sidebar_btn_labels[btn_notes] = {"icon": "NT", "label": "Notes"}
+
+	var toggle_buttons: Array = [btn_shift_board, btn_loading_plan, btn_as400, btn_phone, btn_notes]
+	for tb: Button in toggle_buttons:
 		if tb == null: continue
 		tb.focus_mode = Control.FOCUS_NONE
 		tb.add_theme_font_size_override("font_size", 13)
-		var tb_n = StyleBoxFlat.new()
+		tb.clip_text = true
+		var tb_n := StyleBoxFlat.new()
 		tb_n.bg_color = Color(0.15, 0.16, 0.18)
 		tb_n.corner_radius_top_left = 4; tb_n.corner_radius_top_right = 4
 		tb_n.corner_radius_bottom_left = 4; tb_n.corner_radius_bottom_right = 4
 		tb_n.border_width_left = 1; tb_n.border_width_top = 1; tb_n.border_width_right = 1; tb_n.border_width_bottom = 1
 		tb_n.border_color = Color(0.25, 0.27, 0.3)
 		tb.add_theme_stylebox_override("normal", tb_n)
-		var tb_h = tb_n.duplicate()
+		var tb_h := tb_n.duplicate()
 		tb_h.bg_color = Color(0.2, 0.22, 0.26)
 		tb_h.border_color = Color(0.0, 0.51, 0.76)
 		tb.add_theme_stylebox_override("hover", tb_h)
@@ -416,7 +467,7 @@ func _build_tutorial_ui() -> void:
 	tutorial_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(tutorial_label)
 
-func _set_tutorial_focus(target: Control, _pos: String, _dim: bool):
+func _set_tutorial_focus(target: Control, _pos: String, _dim: bool) -> void:
 	_tut_target_node = target
 	tut_dim_overlay.visible = false
 
@@ -1015,19 +1066,20 @@ func _build_operational_layout() -> void:
 	
 	btn_dock_view = Button.new()
 	btn_dock_view.text = "Dock View"
+	btn_dock_view.clip_text = true
 	btn_shift_board.get_parent().add_child(btn_dock_view)
-	btn_shift_board.get_parent().move_child(btn_dock_view, 0)
+	btn_shift_board.get_parent().move_child(btn_dock_view, 2)
 
 	# Style the dock view button to match others
 	btn_dock_view.add_theme_font_size_override("font_size", 13)
-	var dv_n = StyleBoxFlat.new()
+	var dv_n := StyleBoxFlat.new()
 	dv_n.bg_color = Color(0.15, 0.16, 0.18)
 	dv_n.corner_radius_top_left = 4; dv_n.corner_radius_top_right = 4
 	dv_n.corner_radius_bottom_left = 4; dv_n.corner_radius_bottom_right = 4
 	dv_n.border_width_left = 1; dv_n.border_width_top = 1; dv_n.border_width_right = 1; dv_n.border_width_bottom = 1
 	dv_n.border_color = Color(0.25, 0.27, 0.3)
 	btn_dock_view.add_theme_stylebox_override("normal", dv_n)
-	var dv_h = dv_n.duplicate()
+	var dv_h := dv_n.duplicate()
 	dv_h.bg_color = Color(0.2, 0.22, 0.26)
 	dv_h.border_color = Color(0.0, 0.51, 0.76)
 	btn_dock_view.add_theme_stylebox_override("hover", dv_h)
@@ -1035,6 +1087,7 @@ func _build_operational_layout() -> void:
 	btn_dock_view.focus_mode = Control.FOCUS_NONE
 	btn_dock_view.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
 	btn_dock_view.add_theme_color_override("font_hover_color", Color(1, 1, 1))
+	_sidebar_btn_labels[btn_dock_view] = {"icon": "DV", "label": "Dock View"}
 	
 	_init_panel_nodes_and_buttons(btn_dock_view)
 
@@ -2097,6 +2150,10 @@ func _on_portal_start_pressed() -> void:
 	_rebuild_dock_lanes(_current_scenario_index == 3)
 	phone_messages.clear()
 	phone_flash_active = false
+	if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
+		_phone_flash_timer.stop()
+		_phone_flash_timer.queue_free()
+		_phone_flash_timer = null
 	_load_cooldown = false
 	
 	portal_overlay.visible = false
@@ -2116,6 +2173,11 @@ func _on_portal_start_pressed() -> void:
 		_update_tutorial_ui()
 		lbl_standby.text = "Your first shift starts here.\n\nFollow the green Training Guide at the top.\nIt will walk you through every step."
 		lbl_standby.visible = true
+		# Keep sidebar pinned open during tutorial so labels are visible
+		_sidebar_pinned = true
+		if _sidebar_pin_btn:
+			_sidebar_pin_btn.text = "<<"
+		_expand_sidebar()
 	else:
 		tutorial_active = false
 		if tut_canvas != null: tut_canvas.visible = false
@@ -2407,7 +2469,7 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 # ==========================================
 # PHONE NOTIFICATION SYSTEM
 # ==========================================
-func _on_phone_notification(message: String, pallets_added: int) -> void:
+func _on_phone_notification(message: String, _pallets_added: int) -> void:
 	phone_messages.append(message)
 	phone_flash_active = true
 	WOTSAudio.play_error_buzz(self)
@@ -2417,27 +2479,44 @@ func _on_phone_notification(message: String, pallets_added: int) -> void:
 	
 	# Flash the phone button
 	if btn_phone != null:
+		# Kill any existing flash timer first
+		if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
+			_phone_flash_timer.stop()
+			_phone_flash_timer.queue_free()
+			_phone_flash_timer = null
+		
 		var orig_color: Color = btn_phone.get_theme_color("font_color")
 		var state := {"count": 0}
-		var timer := Timer.new()
-		timer.wait_time = 0.4
-		timer.one_shot = false
-		add_child(timer)
-		timer.timeout.connect(func() -> void:
+		_phone_flash_timer = Timer.new()
+		_phone_flash_timer.wait_time = 0.4
+		_phone_flash_timer.one_shot = false
+		add_child(_phone_flash_timer)
+		_phone_flash_timer.timeout.connect(func() -> void:
+			# Stop if flash was cleared (user opened phone panel)
+			if not phone_flash_active:
+				if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
+					_phone_flash_timer.stop()
+					_phone_flash_timer.queue_free()
+					_phone_flash_timer = null
+				return
 			state.count += 1
+			var lbl_full: String = " Phone (!) " if _sidebar_expanded else "!!"
+			var lbl_norm: String = " Phone " if _sidebar_expanded else "PH"
 			if state.count % 2 == 0:
 				btn_phone.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
-				btn_phone.text = " Phone (!) "
+				btn_phone.text = lbl_full
 			else:
 				btn_phone.add_theme_color_override("font_color", orig_color)
-				btn_phone.text = " Phone "
+				btn_phone.text = lbl_norm
 			if state.count >= 10:
-				timer.stop()
-				timer.queue_free()
+				if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
+					_phone_flash_timer.stop()
+					_phone_flash_timer.queue_free()
+					_phone_flash_timer = null
 				btn_phone.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
-				btn_phone.text = " Phone (!) "
+				btn_phone.text = lbl_full
 		)
-		timer.start()
+		_phone_flash_timer.start()
 	
 	# Auto-open phone panel if not in tutorial
 	if not tutorial_active:
@@ -2765,7 +2844,7 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	)
 	parent.add_child(btn)
 
-func _init_panel_nodes_and_buttons(btn_dock_view: Button) -> void:
+func _init_panel_nodes_and_buttons(dock_view_btn: Button) -> void:
 	_panel_nodes.clear()
 	_panel_nodes["Dock View"] = pnl_dock_stage
 	_panel_nodes["AS400"] = pnl_as400_stage
@@ -2776,7 +2855,7 @@ func _init_panel_nodes_and_buttons(btn_dock_view: Button) -> void:
 	_panel_nodes["Phone"] = pnl_phone
 	_panel_nodes["Notes"] = pnl_notes
 	
-	if btn_dock_view != null: btn_dock_view.pressed.connect(func() -> void: _toggle_panel("Dock View"))
+	if dock_view_btn != null: dock_view_btn.pressed.connect(func() -> void: _toggle_panel("Dock View"))
 	if btn_shift_board != null: btn_shift_board.pressed.connect(func() -> void: _toggle_panel("Shift Board"))
 	if btn_loading_plan != null: btn_loading_plan.pressed.connect(func() -> void: _toggle_panel("Loading Plan"))
 	if btn_as400 != null: btn_as400.pressed.connect(func() -> void: _toggle_panel("AS400"))
@@ -2788,6 +2867,108 @@ func _reset_panel_state() -> void:
 	_panel_state.clear()
 	panels_ever_opened.clear()
 	for panel_name in PANEL_NAMES: _panel_state[panel_name] = false
+
+# ==========================================
+# SIDEBAR COLLAPSE / EXPAND
+# ==========================================
+
+func _on_sidebar_pin_pressed() -> void:
+	if _sidebar_pinned:
+		_sidebar_pinned = false
+		_sidebar_pin_btn.text = ">>"
+		_sidebar_pin_btn.tooltip_text = "Pin sidebar open"
+		_collapse_sidebar()
+	else:
+		_sidebar_pinned = true
+		_sidebar_pin_btn.text = "<<"
+		_sidebar_pin_btn.tooltip_text = "Collapse sidebar"
+		_expand_sidebar()
+
+func _on_sidebar_mouse_entered() -> void:
+	# Cancel any pending collapse
+	_sidebar_collapse_timer = null
+	if _sidebar_pinned:
+		return
+	if _sidebar_expanded:
+		return
+	_sidebar_hover_timer = get_tree().create_timer(SIDEBAR_HOVER_DELAY)
+	_sidebar_hover_timer.timeout.connect(_on_sidebar_hover_expand, CONNECT_ONE_SHOT)
+
+func _on_sidebar_hover_expand() -> void:
+	if _sidebar_pinned:
+		return
+	_expand_sidebar()
+
+func _on_sidebar_mouse_exited() -> void:
+	# Cancel any pending expand
+	_sidebar_hover_timer = null
+	if _sidebar_pinned:
+		return
+	if not _sidebar_expanded:
+		return
+	# Delay collapse to prevent flicker during animation
+	_sidebar_collapse_timer = get_tree().create_timer(SIDEBAR_COLLAPSE_DELAY)
+	_sidebar_collapse_timer.timeout.connect(_on_sidebar_collapse_check, CONNECT_ONE_SHOT)
+
+func _on_sidebar_collapse_check() -> void:
+	if _sidebar_pinned:
+		return
+	if not _sidebar_expanded:
+		return
+	# Verify mouse is truly outside the sidebar before collapsing
+	var toggle_bar: PanelContainer = $Root/FrameVBox/MainHBox/PanelToggleBar
+	if toggle_bar == null:
+		return
+	var mouse_pos := toggle_bar.get_local_mouse_position()
+	var bar_rect := Rect2(Vector2.ZERO, toggle_bar.size)
+	if not bar_rect.has_point(mouse_pos):
+		_collapse_sidebar()
+
+func _expand_sidebar() -> void:
+	if _sidebar_expanded:
+		return
+	_sidebar_expanded = true
+	# Animate width first, swap text AFTER animation finishes
+	_animate_sidebar(SIDEBAR_EXPANDED_W, true)
+
+func _collapse_sidebar() -> void:
+	if not _sidebar_expanded:
+		return
+	_sidebar_expanded = false
+	# Swap text to icons BEFORE animation starts
+	_update_sidebar_button_text(false)
+	_animate_sidebar(SIDEBAR_COLLAPSED_W, false)
+
+func _animate_sidebar(target_width: float, show_labels_on_finish: bool) -> void:
+	var toggle_bar: PanelContainer = $Root/FrameVBox/MainHBox/PanelToggleBar
+	if toggle_bar == null:
+		return
+	if _sidebar_tween != null and _sidebar_tween.is_valid():
+		_sidebar_tween.kill()
+	_sidebar_tween = create_tween()
+	_sidebar_tween.set_ease(Tween.EASE_OUT)
+	_sidebar_tween.set_trans(Tween.TRANS_CUBIC)
+	_sidebar_tween.tween_property(
+		toggle_bar, "custom_minimum_size:x", target_width, SIDEBAR_ANIM_DURATION
+	)
+	if show_labels_on_finish:
+		_sidebar_tween.tween_callback(_update_sidebar_button_text.bind(true))
+
+func _update_sidebar_button_text(expanded: bool) -> void:
+	for btn: Button in _sidebar_btn_labels:
+		var data: Dictionary = _sidebar_btn_labels[btn]
+		if expanded:
+			btn.text = data["label"]
+		else:
+			btn.text = data["icon"]
+	if _sidebar_panels_lbl:
+		_sidebar_panels_lbl.visible = expanded
+	if _sidebar_pin_btn:
+		if expanded:
+			_sidebar_pin_btn.text = "<<" if _sidebar_pinned else ">>"
+		else:
+			_sidebar_pin_btn.text = "<<"
+		_sidebar_pin_btn.visible = expanded
 
 func _close_all_panels(silent: bool) -> void:
 	for panel_name in PANEL_NAMES: _set_panel_visible(panel_name, false, silent)
@@ -2827,8 +3008,12 @@ func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) ->
 	# Clear phone flash when Phone panel is opened
 	if panel_name == "Phone" and make_visible and phone_flash_active:
 		phone_flash_active = false
+		if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
+			_phone_flash_timer.stop()
+			_phone_flash_timer.queue_free()
+			_phone_flash_timer = null
 		if btn_phone != null:
-			btn_phone.text = " Phone "
+			btn_phone.text = "Phone" if _sidebar_expanded else "PH"
 			btn_phone.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
 		
 	if tutorial_active:
