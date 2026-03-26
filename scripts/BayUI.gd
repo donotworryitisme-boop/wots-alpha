@@ -65,7 +65,6 @@ var co_lanes: Dictionary = {}  # Key: "s1_mecha", "s1_bulky", "s1_misc", "s2_mec
 # Phone notification system
 var phone_messages: Array = []
 var phone_flash_active: bool = false
-var _phone_flash_timer: Timer = null
 var _load_cooldown: bool = false  # Prevents spam-clicking pallets
 var btn_sop: Button
 var btn_dock_view: Button
@@ -467,7 +466,7 @@ func _build_tutorial_ui() -> void:
 	tutorial_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(tutorial_label)
 
-func _set_tutorial_focus(target: Control, _pos: String, _dim: bool) -> void:
+func _set_tutorial_focus(target: Control, _pos: String, _dim: bool):
 	_tut_target_node = target
 	tut_dim_overlay.visible = false
 
@@ -1477,6 +1476,7 @@ func _build_as400_stage() -> void:
 	pnl_as400_stage = PanelContainer.new()
 	pnl_as400_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pnl_as400_stage.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	pnl_as400_stage.size_flags_stretch_ratio = 1.4
 	pnl_as400_stage.visible = false 
 	
 	var as400_sb = StyleBoxFlat.new()
@@ -1489,11 +1489,12 @@ func _build_as400_stage() -> void:
 
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	as400_vbox.add_child(scroll)
 	
 	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 120)
-	margin.add_theme_constant_override("margin_right", 0)
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 10)
 	margin.add_theme_constant_override("margin_top", 10)
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1981,9 +1982,8 @@ func _render_as400_screen() -> void:
 		t += "%sDestinataire     :%s  %s 7  %s%s   %s%s%s\n\n" % [H, E, Y, dest_c, E, H, dest_n, E]
 		# Random but realistic seal numbers
 		var seal1: String = str(8600000 + (hash(current_dest_name) % 9999))
-		var seal2: String = str(8600000 + (hash(current_dest_code) % 9999))
 		t += "%sSEAL number 1    :%s  %s[u]%s[/u]%s\n" % [H, E, Y, seal1, E]
-		t += "%sSEAL number 2    :%s  %s[u]%s[/u]%s\n\n" % [H, E, Y, seal2, E]
+		t += "%sSEAL number 2    :%s  %s________%s\n\n" % [H, E, Y, E]
 		t += "%sType transport :%s %s1%s\n" % [H, E, Y, E]
 		t += "%sPrestataire    :%s %sDHL%s\n" % [H, E, Y, E]
 		t += "%sType exp{dition :%s %s[u]C[/u]%s %s(C=Classical / S=Specific)%s\n\n\n" % [H, E, Y, E, H, E]
@@ -2150,10 +2150,6 @@ func _on_portal_start_pressed() -> void:
 	_rebuild_dock_lanes(_current_scenario_index == 3)
 	phone_messages.clear()
 	phone_flash_active = false
-	if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
-		_phone_flash_timer.stop()
-		_phone_flash_timer.queue_free()
-		_phone_flash_timer = null
 	_load_cooldown = false
 	
 	portal_overlay.visible = false
@@ -2479,26 +2475,13 @@ func _on_phone_notification(message: String, _pallets_added: int) -> void:
 	
 	# Flash the phone button
 	if btn_phone != null:
-		# Kill any existing flash timer first
-		if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
-			_phone_flash_timer.stop()
-			_phone_flash_timer.queue_free()
-			_phone_flash_timer = null
-		
 		var orig_color: Color = btn_phone.get_theme_color("font_color")
 		var state := {"count": 0}
-		_phone_flash_timer = Timer.new()
-		_phone_flash_timer.wait_time = 0.4
-		_phone_flash_timer.one_shot = false
-		add_child(_phone_flash_timer)
-		_phone_flash_timer.timeout.connect(func() -> void:
-			# Stop if flash was cleared (user opened phone panel)
-			if not phone_flash_active:
-				if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
-					_phone_flash_timer.stop()
-					_phone_flash_timer.queue_free()
-					_phone_flash_timer = null
-				return
+		var timer := Timer.new()
+		timer.wait_time = 0.4
+		timer.one_shot = false
+		add_child(timer)
+		timer.timeout.connect(func() -> void:
 			state.count += 1
 			var lbl_full: String = " Phone (!) " if _sidebar_expanded else "!!"
 			var lbl_norm: String = " Phone " if _sidebar_expanded else "PH"
@@ -2509,14 +2492,12 @@ func _on_phone_notification(message: String, _pallets_added: int) -> void:
 				btn_phone.add_theme_color_override("font_color", orig_color)
 				btn_phone.text = lbl_norm
 			if state.count >= 10:
-				if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
-					_phone_flash_timer.stop()
-					_phone_flash_timer.queue_free()
-					_phone_flash_timer = null
+				timer.stop()
+				timer.queue_free()
 				btn_phone.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
 				btn_phone.text = lbl_full
 		)
-		_phone_flash_timer.start()
+		timer.start()
 	
 	# Auto-open phone panel if not in tutorial
 	if not tutorial_active:
@@ -2844,7 +2825,7 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	)
 	parent.add_child(btn)
 
-func _init_panel_nodes_and_buttons(dock_view_btn: Button) -> void:
+func _init_panel_nodes_and_buttons(btn_dock_view: Button) -> void:
 	_panel_nodes.clear()
 	_panel_nodes["Dock View"] = pnl_dock_stage
 	_panel_nodes["AS400"] = pnl_as400_stage
@@ -2855,7 +2836,7 @@ func _init_panel_nodes_and_buttons(dock_view_btn: Button) -> void:
 	_panel_nodes["Phone"] = pnl_phone
 	_panel_nodes["Notes"] = pnl_notes
 	
-	if dock_view_btn != null: dock_view_btn.pressed.connect(func() -> void: _toggle_panel("Dock View"))
+	if btn_dock_view != null: btn_dock_view.pressed.connect(func() -> void: _toggle_panel("Dock View"))
 	if btn_shift_board != null: btn_shift_board.pressed.connect(func() -> void: _toggle_panel("Shift Board"))
 	if btn_loading_plan != null: btn_loading_plan.pressed.connect(func() -> void: _toggle_panel("Loading Plan"))
 	if btn_as400 != null: btn_as400.pressed.connect(func() -> void: _toggle_panel("AS400"))
@@ -3008,10 +2989,6 @@ func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) ->
 	# Clear phone flash when Phone panel is opened
 	if panel_name == "Phone" and make_visible and phone_flash_active:
 		phone_flash_active = false
-		if _phone_flash_timer != null and is_instance_valid(_phone_flash_timer):
-			_phone_flash_timer.stop()
-			_phone_flash_timer.queue_free()
-			_phone_flash_timer = null
 		if btn_phone != null:
 			btn_phone.text = "Phone" if _sidebar_expanded else "PH"
 			btn_phone.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
