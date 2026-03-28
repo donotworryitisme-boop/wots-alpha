@@ -30,7 +30,7 @@ anchor_bottom = 1.0
 mouse_filter = 2
 
 [node name="Panel" type="PanelContainer" parent="Root/Center"]
-custom_minimum_size = Vector2(980, 560)
+custom_minimum_size = Vector2(980, 640)
 layout_mode = 2
 mouse_filter = 2
 
@@ -53,7 +53,7 @@ mouse_filter = 0
 text = "Trust Contract"
 
 [node name="BodyPanel" type="PanelContainer" parent="Root/Center/Panel/Margin/VBox"]
-custom_minimum_size = Vector2(0, 340)
+custom_minimum_size = Vector2(0, 420)
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
@@ -83,7 +83,6 @@ mouse_filter = 2
 [node name="AcceptButton" type="Button" parent="Root/Center/Panel/Margin/VBox/ButtonCenter"]
 custom_minimum_size = Vector2(460, 76)
 layout_mode = 2
-mouse_filter = 2
 mouse_default_cursor_shape = 2
 text = "I Understand"
 

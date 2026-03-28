@@ -374,7 +374,23 @@ var sop_database: Array = [
 	}
 ]
 
+func _save_progress() -> void:
+	var f := FileAccess.open("user://wots_progress.json", FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify({"highest_unlocked": highest_unlocked_scenario}))
+		f.close()
+
+func _load_progress() -> void:
+	if FileAccess.file_exists("user://wots_progress.json"):
+		var f := FileAccess.open("user://wots_progress.json", FileAccess.READ)
+		if f != null:
+			var data: Variant = JSON.parse_string(f.get_as_text())
+			f.close()
+			if data is Dictionary:
+				highest_unlocked_scenario = int(data.get("highest_unlocked", 0))
+
 func _ready() -> void:
+	_load_progress()
 	Locale.register_sop_database(sop_database)
 	var bg = ColorRect.new()
 	bg.color = Color(0.12, 0.14, 0.16) 
@@ -824,6 +840,7 @@ func _build_sop_modal() -> void:
 			_refresh_sop_tab_styles()
 			_on_sop_search_changed(sop_search_input.text)
 			sop_content_label.text = "[color=#95a5a6]" + Locale.t("sop.select_article") + "[/color]"
+			sop_content_label.get_v_scroll_bar().value = 0
 		)
 		tab_hbox.add_child(tb)
 		sop_tab_btns.append(tb)
@@ -921,6 +938,7 @@ func _open_sop_modal() -> void:
 	_refresh_sop_tab_styles()
 	sop_search_input.text = ""
 	sop_content_label.text = "[color=#95a5a6]" + Locale.t("sop.select_article") + "[/color]"
+	sop_content_label.get_v_scroll_bar().value = 0
 	_on_sop_search_changed("")
 	sop_overlay.visible = true
 
@@ -1010,6 +1028,7 @@ func _on_sop_search_changed(query: String) -> void:
 		
 		btn.pressed.connect(func() -> void:
 			sop_content_label.text = art.content
+			sop_content_label.get_v_scroll_bar().value = 0
 			WOTSAudio.play_panel_click(self)
 		)
 		sop_results_vbox.add_child(btn)
@@ -1031,7 +1050,7 @@ func _build_start_portal() -> void:
 	portal_overlay.add_child(center)
 
 	var pnl = PanelContainer.new()
-	pnl.custom_minimum_size = Vector2(520, 480)
+	pnl.custom_minimum_size = Vector2(550, 530)
 	var sb = StyleBoxFlat.new()
 	sb.bg_color = Color(0.12, 0.13, 0.16)
 	sb.corner_radius_top_left = 8
@@ -1046,14 +1065,14 @@ func _build_start_portal() -> void:
 	center.add_child(pnl)
 
 	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 40)
+	margin.add_theme_constant_override("margin_left", 55)
 	margin.add_theme_constant_override("margin_top", 35)
-	margin.add_theme_constant_override("margin_right", 40)
+	margin.add_theme_constant_override("margin_right", 55)
 	margin.add_theme_constant_override("margin_bottom", 35)
 	pnl.add_child(margin)
 
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
+	vbox.add_theme_constant_override("separation", 12)
 	margin.add_child(vbox)
 
 	# Decathlon wordmark
@@ -1085,13 +1104,18 @@ func _build_start_portal() -> void:
 	div.color = Color(0.25, 0.27, 0.3)
 	vbox.add_child(div)
 
-	# Language selector
+	# --- Language group ---
+	var lang_group := VBoxContainer.new()
+	lang_group.add_theme_constant_override("separation", 4)
+	vbox.add_child(lang_group)
+
 	var lbl_lang = Label.new()
 	_portal_lbl_lang = lbl_lang
 	lbl_lang.text = Locale.t("portal.select_language")
 	lbl_lang.add_theme_font_size_override("font_size", 14)
 	lbl_lang.add_theme_color_override("font_color", Color(0.6, 0.63, 0.67))
-	vbox.add_child(lbl_lang)
+	lbl_lang.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	lang_group.add_child(lbl_lang)
 
 	portal_language_dropdown = OptionButton.new()
 	portal_language_dropdown.custom_minimum_size = Vector2(0, 40)
@@ -1106,14 +1130,20 @@ func _build_start_portal() -> void:
 	lang_dd_sb.border_width_left = 1; lang_dd_sb.border_width_top = 1
 	lang_dd_sb.border_width_right = 1; lang_dd_sb.border_width_bottom = 1
 	lang_dd_sb.border_color = Color(0.3, 0.32, 0.35)
+	lang_dd_sb.content_margin_left = 12.0
 	portal_language_dropdown.add_theme_stylebox_override("normal", lang_dd_sb)
 	var lang_dd_h := lang_dd_sb.duplicate()
 	lang_dd_h.bg_color = Color(0.22, 0.24, 0.28)
 	lang_dd_h.border_color = Color(0.0, 0.51, 0.76)
 	portal_language_dropdown.add_theme_stylebox_override("hover", lang_dd_h)
+	var lang_dd_p := lang_dd_sb.duplicate()
+	lang_dd_p.bg_color = Color(0.14, 0.15, 0.18)
+	lang_dd_p.border_color = Color(0.0, 0.51, 0.76)
+	portal_language_dropdown.add_theme_stylebox_override("pressed", lang_dd_p)
 	portal_language_dropdown.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	portal_language_dropdown.add_theme_color_override("font_color", Color(0.85, 0.87, 0.9))
 	portal_language_dropdown.add_theme_color_override("font_hover_color", Color.WHITE)
+	portal_language_dropdown.add_theme_color_override("font_pressed_color", Color(0.7, 0.73, 0.77))
 	var lang_popup := portal_language_dropdown.get_popup()
 	if lang_popup:
 		var lp_sb := StyleBoxFlat.new()
@@ -1129,15 +1159,22 @@ func _build_start_portal() -> void:
 		lang_popup.add_theme_stylebox_override("hover", lp_hover)
 		lang_popup.add_theme_color_override("font_color", Color(0.8, 0.82, 0.85))
 		lang_popup.add_theme_color_override("font_hover_color", Color.WHITE)
+		lang_popup.add_theme_color_override("font_selected_color", Color.WHITE)
 	portal_language_dropdown.item_selected.connect(_on_portal_language_changed)
-	vbox.add_child(portal_language_dropdown)
+	lang_group.add_child(portal_language_dropdown)
+
+	# --- Scenario group ---
+	var scen_group := VBoxContainer.new()
+	scen_group.add_theme_constant_override("separation", 4)
+	vbox.add_child(scen_group)
 
 	var lbl_scen = Label.new()
 	_portal_lbl_scen = lbl_scen
 	lbl_scen.text = Locale.t("portal.select_scenario")
 	lbl_scen.add_theme_font_size_override("font_size", 14)
 	lbl_scen.add_theme_color_override("font_color", Color(0.6, 0.63, 0.67))
-	vbox.add_child(lbl_scen)
+	lbl_scen.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	scen_group.add_child(lbl_scen)
 
 	portal_scenario_dropdown = OptionButton.new()
 	portal_scenario_dropdown.custom_minimum_size = Vector2(0, 45)
@@ -1147,6 +1184,7 @@ func _build_start_portal() -> void:
 	dd_sb.corner_radius_bottom_left = 4; dd_sb.corner_radius_bottom_right = 4
 	dd_sb.border_width_left = 1; dd_sb.border_width_top = 1; dd_sb.border_width_right = 1; dd_sb.border_width_bottom = 1
 	dd_sb.border_color = Color(0.3, 0.32, 0.35)
+	dd_sb.content_margin_left = 12.0
 	portal_scenario_dropdown.add_theme_stylebox_override("normal", dd_sb)
 	var dd_hover = dd_sb.duplicate()
 	dd_hover.bg_color = Color(0.22, 0.24, 0.28)
@@ -1178,12 +1216,13 @@ func _build_start_portal() -> void:
 		dd_popup.add_theme_stylebox_override("hover", popup_hover_sb)
 		dd_popup.add_theme_color_override("font_color", Color(0.8, 0.82, 0.85))
 		dd_popup.add_theme_color_override("font_hover_color", Color.WHITE)
+		dd_popup.add_theme_color_override("font_selected_color", Color.WHITE)
 		dd_popup.add_theme_color_override("font_disabled_color", Color(0.4, 0.42, 0.45))
 	portal_scenario_dropdown.focus_mode = Control.FOCUS_NONE
 	portal_scenario_dropdown.item_selected.connect(_on_portal_scenario_changed)
-	vbox.add_child(portal_scenario_dropdown)
+	scen_group.add_child(portal_scenario_dropdown)
 
-	# Scenario description
+	# Scenario description — inside scen_group so it aligns with the label above
 	portal_scenario_desc = RichTextLabel.new()
 	portal_scenario_desc.bbcode_enabled = true
 	portal_scenario_desc.fit_content = true
@@ -1191,11 +1230,17 @@ func _build_start_portal() -> void:
 	portal_scenario_desc.add_theme_color_override("default_color", Color(0.5, 0.53, 0.57))
 	portal_scenario_desc.add_theme_font_size_override("normal_font_size", 13)
 	portal_scenario_desc.text = ""
-	vbox.add_child(portal_scenario_desc)
+	scen_group.add_child(portal_scenario_desc)
 	
 	var spacer = Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(spacer)
+
+	# Bottom divider
+	var div2 = ColorRect.new()
+	div2.custom_minimum_size = Vector2(0, 1)
+	div2.color = Color(0.25, 0.27, 0.3)
+	vbox.add_child(div2)
 
 	# Warehouse ID line
 	var wh_lbl = Label.new()
@@ -1211,22 +1256,29 @@ func _build_start_portal() -> void:
 	btn_start.custom_minimum_size = Vector2(0, 55)
 	
 	var start_sb_normal = StyleBoxFlat.new()
-	start_sb_normal.bg_color = Color(0.18, 0.19, 0.22)
+	start_sb_normal.bg_color = Color(0.0, 0.51, 0.76)
 	start_sb_normal.corner_radius_top_left = 6; start_sb_normal.corner_radius_top_right = 6
 	start_sb_normal.corner_radius_bottom_left = 6; start_sb_normal.corner_radius_bottom_right = 6
-	start_sb_normal.border_width_left = 1; start_sb_normal.border_width_top = 1
-	start_sb_normal.border_width_right = 1; start_sb_normal.border_width_bottom = 1
-	start_sb_normal.border_color = Color(0.3, 0.32, 0.35)
 	
 	var start_sb_hover = StyleBoxFlat.new()
-	start_sb_hover.bg_color = Color(0.0, 0.51, 0.76)
+	start_sb_hover.bg_color = Color(0.0, 0.60, 0.88)
 	start_sb_hover.corner_radius_top_left = 6; start_sb_hover.corner_radius_top_right = 6
 	start_sb_hover.corner_radius_bottom_left = 6; start_sb_hover.corner_radius_bottom_right = 6
+	start_sb_hover.set_border_width_all(1)
+	start_sb_hover.border_color = Color(0.0, 0.70, 1.0)
+
+	var start_sb_pressed = StyleBoxFlat.new()
+	start_sb_pressed.bg_color = Color(0.0, 0.38, 0.58)
+	start_sb_pressed.corner_radius_top_left = 6; start_sb_pressed.corner_radius_top_right = 6
+	start_sb_pressed.corner_radius_bottom_left = 6; start_sb_pressed.corner_radius_bottom_right = 6
 
 	btn_start.add_theme_stylebox_override("normal", start_sb_normal)
 	btn_start.add_theme_stylebox_override("hover", start_sb_hover)
-	btn_start.add_theme_color_override("font_color", Color(0.6, 0.63, 0.67))
+	btn_start.add_theme_stylebox_override("pressed", start_sb_pressed)
+	btn_start.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn_start.add_theme_color_override("font_color", Color.WHITE)
 	btn_start.add_theme_color_override("font_hover_color", Color.WHITE)
+	btn_start.add_theme_color_override("font_pressed_color", Color(0.85, 0.90, 0.95))
 	btn_start.add_theme_font_size_override("font_size", 18)
 	btn_start.focus_mode = Control.FOCUS_NONE
 	btn_start.pressed.connect(_on_portal_start_pressed)
@@ -1994,7 +2046,10 @@ func _confirm_as400_raq() -> void:
 			_update_tutorial_ui()
 
 	if _session != null:
-		_session.call("manual_decision", "Confirm AS400")
+		var confirm_dest: int = _get_tab_dest_seq(_active_tab_idx)
+		if confirm_dest == 0:
+			confirm_dest = 1
+		_session.call("manual_decision", "Confirm AS400 Dest %d" % confirm_dest)
 	if as400_state == 8 or as400_state == 18:
 		as400_state = 9
 		_save_tab_state()
@@ -2837,7 +2892,7 @@ func _on_portal_start_pressed() -> void:
 	_session.set_role(WOTSConfig.Role.OPERATOR)
 	_is_active = true
 	
-	var dest = store_destinations[randi() % store_destinations.size()]
+	var dest: Dictionary = store_destinations.pick_random()
 	current_dest_name = dest.name
 	current_dest_code = dest.code
 	current_dest2_name = ""
@@ -2845,7 +2900,7 @@ func _on_portal_start_pressed() -> void:
 	
 	# For co-loading, pick a CO pair
 	if _current_scenario_index == 3:
-		var pair = co_pairs[randi() % co_pairs.size()]
+		var pair: Dictionary = co_pairs.pick_random()
 		current_dest_name = pair.store1
 		current_dest_code = pair.code1
 		current_dest2_name = pair.store2
@@ -2921,6 +2976,7 @@ func _on_session_ended(debrief_payload: Dictionary) -> void:
 	if passed:
 		if _current_scenario_index == highest_unlocked_scenario and highest_unlocked_scenario < 3:
 			highest_unlocked_scenario += 1
+		_save_progress()
 			
 	if tutorial_active: tut_canvas.visible = false
 	
@@ -3664,13 +3720,18 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 				_flash_tutorial_warning(Locale.t("warn.help_sops_first"))
 				return
 				
-		# Scanner only works on scanning screen, not RAQ
-		if as400_state == 8:
+		# Scanner ONLY works on SCANNING QUAI (state 18) with loading started
+		if as400_state != 18:
 			WOTSAudio.play_error_buzz(self)
 			if tutorial_active and tutorial_step == 8:
 				_flash_tutorial_warning(Locale.t("warn.scanner_raq_tutorial"))
 			elif lbl_hover_info:
 				lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]" + Locale.t("dock.scanner_inactive") + "[/b] " + Locale.t("dock.scanner_inactive_detail") + "[/color][/font_size]"
+			return
+		if _session != null and not _session.loading_started:
+			WOTSAudio.play_error_buzz(self)
+			if lbl_hover_info:
+				lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]" + Locale.t("dock.scanner_inactive") + "[/b] " + Locale.t("dock.start_loading_first") + "[/color][/font_size]"
 			return
 
 		# Co-loading: wrong-store tab check (scanner blocks wrong-store pallets)

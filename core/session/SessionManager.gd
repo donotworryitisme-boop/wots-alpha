@@ -57,6 +57,7 @@ var adr_collected: bool = false
 # Pallet combining system
 var combine_count: int = 0
 var _combine_source_ids: Array = []  # IDs of combine-eligible pallets at session start
+var _reworked_pallet_ids: Array = [] # IDs of pallets that were unloaded and reloaded
 
 func _ready() -> void:
 	pass
@@ -109,6 +110,7 @@ func start_session_with_scenario(scenario_name: String) -> void:
 	_wave_batches.clear()
 	_waves_delivered = 0
 	_required_rework_ids.clear()
+	_reworked_pallet_ids.clear()
 	unload_count = 0
 	loading_started = false
 	loading_start_time = 0.0
@@ -522,6 +524,8 @@ func unload_pallet_by_id(id: String) -> void:
 		capacity_used -= target.cap
 		total_time += 66.0
 		unload_count += 1
+		if target.id not in _reworked_pallet_ids:
+			_reworked_pallet_ids.append(target.id)
 		_emit_inventory()
 
 func mark_raq_viewed(dest_seq: int) -> void:
@@ -698,6 +702,7 @@ func end_session() -> void:
 
 	# --- SEQUENCE CHECK (promise-aware, per-destination for co-loading) ---
 	var seq_errors: int = 0
+	var co_interleave_errors: int = 0
 
 	if is_co_load:
 		# Check that all dest=1 pallets were loaded before any dest=2 pallet
@@ -708,7 +713,10 @@ func end_session() -> void:
 				break
 		for i: int in range(first_dest2_pos + 1, inventory_loaded.size()):
 			if inventory_loaded[i].get("dest", 1) == 1:
-				seq_errors += 1  # Store 1 pallet loaded after store 2 started
+				# Reworked pallets are exempt — rework to fit priority arrivals is correct
+				if inventory_loaded[i].id not in _reworked_pallet_ids:
+					co_interleave_errors += 1
+					seq_errors += 1  # Store 1 pallet loaded after store 2 started
 		# Within each store: promise-aware type sequence
 		for dest_id: int in [1, 2]:
 			var highest_rank: int = -1
@@ -737,12 +745,20 @@ func end_session() -> void:
 			else:
 				highest_rank = rank
 
-	var did_validate: bool = "Confirm AS400" in _manual_decisions
+	var did_validate: bool = false
+	if is_co_load:
+		var validated_d1: bool = "Confirm AS400 Dest 1" in _manual_decisions
+		var validated_d2: bool = "Confirm AS400 Dest 2" in _manual_decisions
+		did_validate = validated_d1 and validated_d2
+	else:
+		did_validate = "Confirm AS400 Dest 1" in _manual_decisions
 	var called_departments: bool = "Call departments (C&C check)" in _manual_decisions
 
+	var tutorial_rework_forgiven: bool = false
 	if current_scenario == "0. Tutorial" and unload_count > 0:
 		unload_count -= 1
 		total_time -= 66.0
+		tutorial_rework_forgiven = true
 
 	var forgiven_rework: int = mini(_required_rework_ids.size(), unload_count)
 	var penalized_unloads: int = unload_count - forgiven_rework
@@ -751,20 +767,44 @@ func end_session() -> void:
 	var feedback: Array = []
 	var critical_fail: bool = false
 
-	if seq_errors > 0:
-		score -= (seq_errors * 10)
-		feedback.append("[color=#e74c3c]• Sequence:[/color] " + str(seq_errors) + " pallet(s) loaded out of the correct order. Required order: Service Center → D- pallets → D pallets → D+ pallets → C&C (always last). Within each promise group: Bikes first, then Bulky, then Mecha.")
+	if tutorial_rework_forgiven:
+		feedback.append("[color=#f1c40f]• Tutorial rework:[/color] 1 deliberate rework was forgiven for learning purposes. In a real shift, this would cost ~1.1 minutes and 5 points.")
+
+	var type_seq_errors: int = seq_errors - co_interleave_errors
+	if type_seq_errors > 0:
+		score -= (type_seq_errors * 10)
+		if type_seq_errors <= 2:
+			feedback.append("[color=#e74c3c]• Sequence:[/color] " + str(type_seq_errors) + " pallet(s) loaded out of the standard sequence. The truck unloads from the doors inward — last in, first out. Every pallet in the wrong position means the store team has to move it aside to reach what they need. That's extra handling time at the store that delays their opening routine.")
+		else:
+			feedback.append("[color=#e74c3c]• Sequence:[/color] " + str(type_seq_errors) + " pallet(s) loaded out of the standard sequence. The truck unloads from the doors inward — last in, first out. The store team works in a fixed order: C&C off first for waiting customers, then Mecha for shelf restocking, then Bulky and Bikes for specialist teams, and Service Center last.\n\nEvery pallet in the wrong position has to be moved aside to reach what they need. At " + str(type_seq_errors) + " sequence errors, the store team could spend 30-60 minutes rearranging pallets on the dock floor — people who should be helping customers on the shop floor.")
+	if co_interleave_errors > 0:
+		score -= (co_interleave_errors * 10)
+		feedback.append("[color=#e74c3c]• Co-Loading Sequence:[/color] " + str(co_interleave_errors) + " Store 1 pallet(s) loaded after Store 2 pallets had started. Store 1 goes deepest because it is unloaded second — the truck visits Store 2 first. A Store 1 pallet among Store 2's section means the driver at Store 2 encounters pallets that do not belong to them. They have to move them aside, unload their own, then push the Store 1 pallets back. This adds 10-15 minutes at Store 2 and risks Store 1 pallets being damaged or left behind at the wrong location.")
 
 	if unload_count > 0:
 		score -= (penalized_unloads * 5)
 		if forgiven_rework > 0:
-			feedback.append("[color=#f1c40f]• Required rework:[/color] " + str(forgiven_rework) + " pallet(s) removed to fit late-arriving priority pallets. No penalty — this was the right call.")
+			feedback.append("[color=#2ecc71]• Smart rework:[/color] " + str(forgiven_rework) + " pallet(s) removed to make room for late-arriving D- pallets. No penalty — this was the right call. The D- pallets were overdue and the store needed them. Unloading D+ to make room shows you understood the priority and acted on it.")
 		if penalized_unloads > 0:
-			feedback.append("[color=#e74c3c]• Rework:[/color] " + str(penalized_unloads) + " pallet(s) pulled back off. Each costs ~1.1 minutes, pressuring the departure window.")
+			if penalized_unloads <= 2:
+				feedback.append("[color=#e74c3c]• Rework:[/color] " + str(penalized_unloads) + " pallet(s) pulled back off the truck. Each rework costs 5 points and adds ~1.1 minutes to your shift clock.")
+			else:
+				feedback.append("[color=#e74c3c]• Rework:[/color] " + str(penalized_unloads) + " pallet(s) removed and reloaded during the shift. Occasional rework is normal — a wave arrives and you need to make space. But " + str(penalized_unloads) + " reworks in a single loading suggests pallets were loaded without checking the full picture first. Each one adds ~1.1 minutes, pushing closer to the departure window. If the driver is waiting, that's time the store receives their delivery late.")
 
 	if not did_validate:
-		score -= 20
-		feedback.append("[color=#e74c3c]• AS400 Validation:[/color] Truck sealed without confirming the RAQ. The store won't know what's on the truck.")
+		if is_co_load:
+			var has_d1_confirm: bool = "Confirm AS400 Dest 1" in _manual_decisions
+			var has_d2_confirm: bool = "Confirm AS400 Dest 2" in _manual_decisions
+			var missing_dests: Array[String] = []
+			if not has_d1_confirm:
+				missing_dests.append("Store 1")
+			if not has_d2_confirm:
+				missing_dests.append("Store 2")
+			score -= (missing_dests.size() * 10)
+			feedback.append("[color=#e74c3c]• AS400 Validation:[/color] RAQ not confirmed for " + ", ".join(missing_dests) + ". Each store needs its own F10 confirmation. Without it, the receiving team has no digital record of what is on the truck — they have to manually check every pallet against the paper CMR. Any discrepancy becomes harder to trace because there is no system record of what was supposed to be there.")
+		else:
+			score -= 20
+			feedback.append("[color=#e74c3c]• AS400 Validation:[/color] The truck was sealed without pressing F10 to confirm the RAQ. The AS400 is the digital twin of the physical truck — it is how the store knows what is coming before the truck arrives. Without validation, the receiving team has to manually check every pallet against the paper CMR. If there is a discrepancy — a missing pallet, a wrong delivery — there is no digital trail to trace it. The store loses 15-20 minutes of receiving time, and any missing item becomes an investigation with no starting point.")
 
 	var left_behind_cc: int = 0
 	var left_behind_cc_uncalled: int = 0
@@ -781,33 +821,33 @@ func end_session() -> void:
 	if left_behind_cc > 0:
 		critical_fail = true
 		score -= (left_behind_cc * 25)
-		feedback.append("[color=#e74c3c][b]• CRITICAL — Missing C&C:[/b][/color] " + str(left_behind_cc) + " Click & Collect pallet(s) left on dock. Customers are waiting at the store for their orders.")
+		feedback.append("[color=#e74c3c][b]• CRITICAL — C&C Left Behind:[/b][/color] " + str(left_behind_cc) + " Click & Collect pallet(s) left on the dock. These are customer orders — someone placed an order online, chose store pickup, and received a confirmation with a pickup date. They may have driven 30 minutes to the store. When they arrive at the counter, the store team searches the system, sees the pallet was assigned to your truck, and has to tell the customer it did not arrive. The customer either waits for the next truck — which may not be until tomorrow — or cancels. One forgotten C&C pallet can cost a customer relationship that took years to build.")
 
 	if left_behind_cc_uncalled > 0 and not called_departments:
 		critical_fail = true
 		score -= 20
-		feedback.append("[color=#e74c3c][b]• CRITICAL — C&C Not Called:[/b][/color] " + str(left_behind_cc_uncalled) + " C&C pallet(s) were missing from the dock and departments were never contacted.")
+		feedback.append("[color=#e74c3c][b]• CRITICAL — C&C Not Investigated:[/b][/color] " + str(left_behind_cc_uncalled) + " C&C pallet(s) were listed in the RAQ but not on the dock — and departments were never contacted. The pallets were somewhere in the warehouse: possibly still being picked, stuck on a conveyor, or placed at the wrong dock. A single phone call to the C&C department would have located them in time. Without that call, the truck sealed without them, and the store has no way to know they were supposed to be there until a customer arrives to collect an order that is not in the building. The RAQ existed specifically to catch this — checking it before loading, noticing the gap, and calling is the procedure that prevents this.")
 
 	if left_behind_priority > 0 and current_scenario == "2. Priority Loading":
 		score -= (left_behind_priority * 15)
-		feedback.append("[color=#e74c3c]• Priority:[/color] " + str(left_behind_priority) + " critical (D/D-) pallet(s) left behind while D+ was loaded.")
+		feedback.append("[color=#e74c3c]• Priority Pallets Left Behind:[/color] " + str(left_behind_priority) + " pallet(s) with a D or D- promise date left on the dock while D+ pallets were loaded. D- means the delivery is already overdue — the store expected it yesterday or earlier. D means due today. D+ means tomorrow.\n\nLoading D+ instead of D- means a customer whose order is already late waits another day, while tomorrow's stock arrives early and sits in the store's backroom taking up space. The store team lead has to explain to their manager why overdue deliveries keep slipping while future stock arrives on time. The information was right there in the RAQ.")
 
-	# Transit rack — soft penalty if items existed but were never collected
+	# Transit rack — soft penalty
 	var had_transit_items: bool = (transit_loose_entries.size() > 0 or transit_items.size() > 0)
-	# Also covers the case where UATs were pre-placed (transit_collected = true at start)
 	if had_transit_items and not transit_collected:
 		score -= 10
-		feedback.append("[color=#f1c40f]• Transit rack not checked:[/color] Collis or UATs were waiting on the transit rack and were never retrieved before sealing.")
+		feedback.append("[color=#f1c40f]• Transit Rack Not Checked:[/color] Items were waiting on the transit rack — collis or UATs that belong to this shipment but were not placed on the dock with the rest. They were listed in the RAQ as TRANSIT rows. The truck sealed without them, so the store receives an incomplete delivery. Those items stay in Tilburg until someone notices and adds them to the next available truck — which may not go to the same store for another day.")
 
-	# ADR — hard penalty if pallet was never collected
+	# ADR — critical
 	if has_adr and not adr_collected:
 		score -= 25
 		critical_fail = true
-		feedback.append("[color=#e74c3c][b]• CRITICAL — ADR Not Collected:[/b][/color] The ADR pallet (dangerous goods) was in the yellow lockers and was never retrieved. Dangerous goods cannot be left unsecured when committed to a shipment.")
+		feedback.append("[color=#e74c3c][b]• CRITICAL — ADR Not Collected:[/b][/color] The ADR pallet was listed in the RAQ from the start — a red row signaling dangerous goods under the Accord Dangereux Routier (lithium batteries, aerosols, or other regulated items). It was in the yellow lockers, locked separately because ADR goods require controlled handling. Sealing the truck without it means regulated goods remain unsecured in the warehouse without an active shipment record. This is not an efficiency issue — it is a compliance requirement. If an incident occurs with unsecured ADR material, the warehouse is liable. The store also expected the ADR goods and may have customer orders depending on them.")
 
 	score = clampi(score, 0, 100)
 	var passed: bool = score >= 85 and not critical_fail
 
+	# ---- BUILD DEBRIEF NARRATIVE ----
 	var what_happened: String = ""
 	@warning_ignore("integer_division")
 	var mins: int = int(total_time) / 60
@@ -815,47 +855,49 @@ func end_session() -> void:
 	what_happened += "[color=#7f8fa6]Shift duration: %02d:%02d[/color]\n\n" % [mins, secs]
 
 	if feedback.size() > 0:
-		what_happened += "[font_size=18][b]What happened during this shift[/b][/font_size]\n\n"
+		what_happened += "[font_size=18][b]Story of the Shift[/b][/font_size]\n\n"
 		for f: String in feedback:
 			what_happened += f + "\n\n"
 	else:
-		what_happened += "[font_size=18][color=#2ecc71][b]Clean shift.[/b][/color][/font_size]\nThe physical load matches the digital AS400 twin. The truck is sequenced correctly for the destination store. No rework, no missing pallets.\n\n"
+		what_happened += "[font_size=18][color=#2ecc71][b]Clean shift.[/b][/color][/font_size]\nThe physical load matches the digital AS400 twin. The truck is sequenced correctly for the store — C&C nearest the doors, Service Center deepest. Every promise date was respected, every committed item is on board. The store's receiving team will unload this truck in the order they need, with a confirmed digital record to match. No calls back to Tilburg, no missing items, no customer waiting at an empty counter.\n\n"
 
 	if passed:
 		what_happened += "[color=#2ecc71]You've demonstrated the foundations needed for the next scenario.[/color]\n"
 	else:
 		what_happened += "[color=#95a5a6]Review the patterns above and try again. The next scenario unlocks when these fundamentals are solid.[/color]\n"
 
+	# ---- CONTEXT: CONDITIONS DURING THE SHIFT ----
 	var why_it_mattered: String = ""
-	if not did_validate:
-		why_it_mattered += "Without AS400 validation, the store receives a truck with no digital record. They lose time reconciling what arrived. "
-	if seq_errors > 0:
-		why_it_mattered += "Out-of-sequence loading means the store has to dig through the truck to reach priority items. Load order: ServiceCenter → D- → D → D+ → C&C (always at the doors). "
-	if unload_count > 0:
-		if penalized_unloads > 0:
-			why_it_mattered += "Every pallet pulled back costs ~1.1 minutes. Over a shift, rework adds up and threatens departure times. "
-		if forgiven_rework > 0:
-			why_it_mattered += "Some rework was necessary to fit late-arriving priority pallets — good situational awareness. "
-	if left_behind_cc > 0 or left_behind_cc_uncalled > 0:
-		why_it_mattered += "C&C contains customer orders with promised pickup times. Every missing C&C means a customer arrives to an empty counter. "
-	if left_behind_priority > 0:
-		why_it_mattered += "D-/D pallets are customer promises with deadlines. Leaving them behind while loading D+ breaks the store's delivery schedule. "
-	if is_co_load and score < 100:
-		why_it_mattered += "In co-loading, mixing destinations means the first store has to search through pallets belonging to the second store. "
-	if had_transit_items and not transit_collected:
-		why_it_mattered += "Items were waiting on the transit rack but never collected. Those colis would not be in the shipment — the store receives an incomplete delivery. Always check the rack before sealing. "
-	if has_adr and not adr_collected:
-		why_it_mattered += "The ADR pallet was never retrieved from the yellow lockers. Dangerous goods committed to a shipment cannot remain unsecured in the warehouse. This is a regulatory requirement, not a preference. "
-	if score == 100 and not critical_fail:
-		why_it_mattered = "The SOP was followed precisely. Physical load matches the digital twin, sequence is correct, and all commitments are met."
+	if score < 100 or critical_fail:
+		why_it_mattered += "[font_size=16][b]Conditions during this shift[/b][/font_size]\n\n"
+		why_it_mattered += "[color=#7f8fa6]Truck: %.0f / %.0f slots used[/color]\n" % [capacity_used, capacity_max]
+		var loaded_count: int = inventory_loaded.size()
+		var avail_count: int = inventory_available.size()
+		why_it_mattered += "[color=#7f8fa6]Pallets loaded: %d — Left on dock: %d[/color]\n" % [loaded_count, avail_count]
+		if _waves_delivered > 0:
+			why_it_mattered += "[color=#7f8fa6]Late arrivals: %d wave(s) delivered during loading[/color]\n" % _waves_delivered
+		if raq_viewed_dests.size() > 0:
+			why_it_mattered += "[color=#7f8fa6]RAQ was checked before loading[/color]\n"
+		else:
+			why_it_mattered += "[color=#e67e22]RAQ was not checked before loading started[/color]\n"
+		if combine_count > 0:
+			why_it_mattered += "[color=#7f8fa6]Deckstacker combines: %d[/color]\n" % combine_count
+		why_it_mattered += "\n"
+		if _waves_delivered > 0 and (penalized_unloads > 0 or left_behind_priority > 0):
+			why_it_mattered += "[color=#c0c8d0]Late-arriving pallets added pressure during this shift. Rework and prioritisation decisions are harder when the truck is filling up and new pallets keep arriving. These are the moments where preparation — checking the RAQ early, leaving space for possible arrivals — makes the difference.[/color]\n\n"
+		if raq_viewed_dests.size() == 0 and (left_behind_cc > 0 or left_behind_cc_uncalled > 0 or had_transit_items):
+			why_it_mattered += "[color=#c0c8d0]The RAQ was not checked before loading began. Missing items — C&C pallets, transit rack collis — are visible in the RAQ before the first pallet is scanned. Checking it costs nothing before Start Loading and can prevent most of the issues above.[/color]\n\n"
+	else:
+		why_it_mattered = "[color=#2ecc71]The SOP was followed precisely. Physical load matches the digital twin, sequence is correct, and all commitments are met.[/color]"
+
+	if combine_count > 0:
+		what_happened += "[color=#2ecc71]• Deckstacker combine:[/color] %d pallet(s) combined — one slot freed per combine.\n\n" % combine_count
 
 	var total_weight_kg: float = 0.0
 	var total_dm3: int = 0
 	for p: Dictionary in inventory_loaded:
 		total_weight_kg += p.get("weight_kg", 0.0)
 		total_dm3 += p.get("dm3", 0)
-	if combine_count > 0:
-		what_happened += "[color=#2ecc71]• Deckstacker combine:[/color] %d pallet(s) combined — one slot freed per combine.\n\n" % combine_count
 
 	var payload: Dictionary = {
 		"what_happened": what_happened,
