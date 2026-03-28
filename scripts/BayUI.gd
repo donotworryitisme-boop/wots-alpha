@@ -1,7 +1,5 @@
 extends CanvasLayer
 
-signal trust_contract_requested
-
 const PANEL_NAMES: Array[String] = [
 	"Dock View", "Shift Board", "AS400", "Trailer Capacity", "Phone", "Notes"
 ]
@@ -45,6 +43,12 @@ var highest_unlocked_scenario: int = 0
 var portal_overlay: ColorRect
 var portal_scenario_dropdown: OptionButton
 var portal_scenario_desc: RichTextLabel
+var portal_language_dropdown: OptionButton
+var _portal_lbl_scen: Label
+var _portal_lbl_lang: Label
+var _portal_sub: Label
+var _portal_btn_start: Button
+var _portal_btn_dev: Button
 
 var top_actions_hbox: HBoxContainer
 var stage_hbox: HBoxContainer
@@ -149,6 +153,8 @@ var current_dest_name: String = "ALKMAAR"
 var current_dest_code: String = "1570"
 var current_dest2_name: String = ""
 var current_dest2_code: String = ""
+var seal_number_1: String = ""  # Seal for store 1 (co-loading)
+var seal_number_2: String = ""  # Seal for store 2 (co-loading)
 
 var sop_overlay: ColorRect
 var sop_search_input: LineEdit
@@ -187,14 +193,14 @@ var sop_database: Array = [
 	{
 		"title": "Setting the Loading Destination",
 		"tags": ["saisie", "expedition", "destinataire", "store", "code", "destination", "declare", "f10"],
-		"content": "[font_size=28][color=#0082c3][b]SAISIE D'UNE EXPEDITION[/b][/color][/font_size]\n\nSAISIE means declaration. This screen is where you formally tell the AS400 which store this truck is going to.\n\n[b]When you see this screen:[/b]\nYou pressed F6 from EXPEDITION EN COURS and logged in with your badge. The system needs the destination.\n\n[b]What you do:[/b]\n[b]Solo loading:[/b] The seal number is auto-filled. Press [b]F10[/b] to confirm.\n[b]Co-loading:[/b] Type the [b]store destination code[/b] (e.g. 346 for Kerkrade) and press Enter. Then press [b]F10[/b].\n\n[b]Where to find the store code:[/b]\nCheck the [b]Shift Board[/b]. Store codes are listed next to your truck. For co-loading, look for Seq.1 and Seq.2 labels.\n\n[b]Why this matters:[/b]\nThe code you enter determines which store the AS400 assigns your scanned pallets to. Entering the wrong code causes scan errors when you try to scan pallets for the other store.",
+		"content": "[font_size=28][color=#0082c3][b]SAISIE D'UNE EXPEDITION[/b][/color][/font_size]\n\nSAISIE means declaration. This screen is where you formally tell the AS400 which store this truck is going to.\n\n[b]When you see this screen:[/b]\nYou pressed F6 from EXPEDITION EN COURS and logged in with your badge. The system needs the destination.\n\n[b]What you do:[/b]\n[b]Solo loading:[/b] The destination and seal number are auto-filled. Press [b]F10[/b] to confirm.\n[b]Co-loading:[/b] Two steps:\n1. Type the [b]store destination code[/b] (e.g. 346 for Kerkrade) and press Enter.\n2. Type the [b]seal number[/b] for that store's sequence and press Enter.\n3. Press [b]F10[/b] to confirm.\n\n[b]Where to find the store code and seal number:[/b]\nCheck the [b]Shift Board[/b]. Store codes are listed next to your truck. For co-loading, look for Seq.1 and Seq.2 labels. The seal numbers are shown below the store names.\n\n[b]Why this matters:[/b]\nThe code you enter determines which store the AS400 assigns your scanned pallets to. The seal number is the physical seal placed on the trailer door — it must match the AS400 record.",
 		"scenarios": [1, 2, 3],
 		"new_in": 1
 	},
 	{
 		"title": "C&C (Click & Collect): What is it?",
 		"tags": ["click", "collect", "c&c", "white", "customer", "last", "missing", "call"],
-		"content": "[font_size=28][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nC&C pallets contain items ordered online by customers for store pickup. The customer is already waiting. Every C&C that misses the truck means a customer arrives to an empty counter.\n\n[color=#e74c3c][b]THE RULE:[/b][/color] C&C MUST be loaded [b]LAST[/b] — nearest to the truck doors — so they come off first.\n\n[b]On the AS400:[/b] C&C rows appear in [color=#ffffff][b]WHITE text[/b][/color]. All other pallets are cyan.\n\n[b]Missing C&C:[/b]\nSometimes a C&C pallet is not on the dock when your shift starts. The RAQ shows it, but it is not on the floor. If you see a mismatch, click [b]Call Departments (C&C Check)[/b]. This takes about 5 minutes but always finds the pallet. Never seal the truck without checking.\n\n[b]In this simulator:[/b] Expect 2 to 4 C&C UATs per store per session. About half of sessions will have one C&C pallet missing at the start.",
+		"content": "[font_size=28][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nC&C pallets contain items ordered online by customers for store pickup. The customer is already waiting. Every C&C that misses the truck means a customer arrives to an empty counter.\n\n[color=#e74c3c][b]THE RULE:[/b][/color] C&C MUST be loaded [b]LAST[/b] — nearest to the truck doors — so they come off first.\n\n[b]On the AS400:[/b] C&C rows appear in [color=#ffffff][b]WHITE text[/b][/color]. All other pallets are cyan.\n\n[b]Identifying a C&C pallet:[/b]\nC&C pallets have a white [b]CC_LOG[/b] label on the box, separate from the orange UAT label underneath.\n[img=450]res://ui/images/uat_click_collect.png[/img]\n\n[b]Missing C&C:[/b]\nSometimes a C&C pallet is not on the dock when your shift starts. The RAQ shows it, but it is not on the floor. If you see a mismatch, click [b]Call Departments (C&C Check)[/b]. This takes about 5 minutes but always finds the pallet. Never seal the truck without checking.\n\n[b]In this simulator:[/b] Expect 2 to 4 C&C UATs per store per session. About half of sessions will have one C&C pallet missing at the start.",
 		"scenarios": [0, 1, 2, 3],
 		"new_in": 0
 	},
@@ -208,14 +214,14 @@ var sop_database: Array = [
 	{
 		"title": "Loading: The Standard Sequence",
 		"tags": ["load", "sequence", "truck", "order", "standard", "lifo", "why", "order matters"],
-		"content": "[font_size=28][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe truck is unloaded from the [b]doors inward[/b]. This is LIFO — Last In, First Out. Whatever you load last comes off the truck first at the store.\n\n[b]Load in this order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] — deepest in truck\n2. [color=#2ecc71][b]Bikes[/b][/color]\n3. [color=#e67e22][b]Bulky[/b][/color]\n4. [color=#3498db][b]Mecha[/b][/color] — clothing, small electronics, store replenishment boxes\n5. [color=#ffffff][b]Click & Collect[/b][/color] — ALWAYS LAST, nearest to doors\n\n[b]Why this order?[/b]\nC&C comes off first because customers are waiting. Mecha restocks shelves during opening hours. Bikes and Bulky need specialist teams working on a different schedule. Service Center is handled overnight.\n\n[b]LIFO means mistakes cost time:[/b]\nIf you load Mecha before Bikes, the store must move all the Mecha to reach the Bikes. This is why sequence errors are penalised — they create real work at the other end.",
+		"content": "[font_size=28][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe truck is unloaded from the [b]doors inward[/b]. This is LIFO — Last In, First Out. Whatever you load last comes off the truck first at the store.\n\n[b]Load in this order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] — deepest in truck\n2. [color=#2ecc71][b]Bikes[/b][/color]\n3. [color=#e67e22][b]Bulky[/b][/color]\n4. [color=#3498db][b]Mecha[/b][/color] — clothing, small electronics, store replenishment boxes\n5. [color=#ffffff][b]Click & Collect[/b][/color] — ALWAYS LAST, nearest to doors\n\n[b]What each type looks like on the dock:[/b]\n\n[color=#2ecc71][b]Bikes pallet[/b][/color] — tall cardboard boxes on a EUR pallet:\n[img=350]res://ui/images/bikes_pallet_photo.png[/img]\n\n[color=#e67e22][b]Bulky pallet[/b][/color] — large fitness/furniture boxes, wrapped:\n[img=350]res://ui/images/bulky_pallet_photo.png[/img]\n\n[color=#3498db][b]Mecha pallet[/b][/color] — blue Loadhog boxes stacked and strapped:\n[img=350]res://ui/images/mecha_pallet_photo.png[/img]\n\n[b]Why this order?[/b]\nC&C comes off first because customers are waiting. Mecha restocks shelves during opening hours. Bikes and Bulky need specialist teams working on a different schedule. Service Center is handled overnight.\n\n[b]LIFO means mistakes cost time:[/b]\nIf you load Mecha before Bikes, the store must move all the Mecha to reach the Bikes. This is why sequence errors are penalised — they create real work at the other end.",
 		"scenarios": [0, 1, 2, 3],
 		"new_in": 0
 	},
 	{
 		"title": "What is a UAT?",
 		"tags": ["uat", "label", "number", "pallet", "barcode", "orange", "scan", "15 digits"],
-		"content": "[font_size=28][color=#0082c3][b]What is a UAT?[/b][/color][/font_size]\n\nA UAT (Unite d'Aide au Transport) is a transport unit with an orange scannable label. It can be a pallet, roll cage, or any stackable unit.\n\n[b]The orange label shows:[/b]\nSector (84/86 mecha, 84/89 bikes, 84/90 bulky), pallet type (EUR or PLASTIQUE), sender and destination, colis count, weight, volume, and flow code (MAG = direct to store, MAP = palletised).\n\n[b]Colis prefix identification:[/b]\n8486 = Mecha / Bay B2B\n8490 = Bulky\n8489 = Bikes\n0035 = Service Center (EWM format)\n\n[b]In the AS400:[/b] UAT numbers are 15 digits. When you click a pallet on the dock, the simulator scans it. The AS400 links the UAT to the current shipment and counts the colis toward your total.",
+		"content": "[font_size=28][color=#0082c3][b]What is a UAT?[/b][/color][/font_size]\n\nA UAT (Unite d'Aide au Transport) is a transport unit with an orange scannable label. It can be a pallet, roll cage, or any stackable unit.\n\n[b]The orange label shows:[/b]\nSector (84/86 mecha, 84/89 bikes, 84/90 bulky), pallet type (EUR or PLASTIQUE), sender and destination, colis count, weight, volume, and flow code (MAG = direct to store, MAP = palletised).\n\n[b]Mecha UAT label (sector 84/86):[/b]\n[img=450]res://ui/images/mecha_pallet_uat.png[/img]\n\n[b]Bikes UAT label (sector 84/89):[/b]\n[img=450]res://ui/images/bikes_pallet_uat.png[/img]\n\n[b]Bulky UAT label (sector 84/90):[/b]\n[img=450]res://ui/images/bulky_pallet_uat.png[/img]\n\n[b]Colis prefix identification:[/b]\n8486 = Mecha / Bay B2B\n8490 = Bulky\n8489 = Bikes\n0035 = Service Center (EWM format)\n\n[b]In the AS400:[/b] UAT numbers are 15 digits. When you click a pallet on the dock, the simulator scans it. The AS400 links the UAT to the current shipment and counts the colis toward your total.",
 		"scenarios": [0, 1, 2, 3],
 		"new_in": 0
 	},
@@ -285,7 +291,7 @@ var sop_database: Array = [
 	{
 		"title": "Creating a Shipment (F6)",
 		"tags": ["shipment", "expedition", "f6", "create", "seal", "destinataire", "saisie"],
-		"content": "[font_size=28][color=#0082c3][b]Creating a Shipment[/b][/color][/font_size]\n\nFrom EXPEDITION EN COURS, press [b]F6=Creer[/b].\n\nA badge login popup appears. Log in with badge [b]8600555[/b] and password [b]123456[/b]. After login you land on the SAISIE screen.\n\n[b]SAISIE fields:[/b]\nN expédition: Auto-generated — do not change.\nExpediteur camion: 14  390 — auto-filled.\nDestinataire: For co-loading, type the store code here.\nSEAL number 1: Auto-filled from the seal booklet.\nSEAL number 2: Always empty for Bay B2B standard operations.\nType transport: 1 (road).\nType expedition: C (Classical) or S (Specific).\n\nPress [b]F10=Valider[/b] to confirm. You land on SCANNING QUAI, ready to scan.\n\nThis sequence — F6, badge login, SAISIE, F10 — is exactly what you do on the real terminal before every loading.",
+		"content": "[font_size=28][color=#0082c3][b]Creating a Shipment[/b][/color][/font_size]\n\nFrom EXPEDITION EN COURS, press [b]F6=Creer[/b].\n\nA badge login popup appears. Log in with badge [b]8600555[/b] and password [b]123456[/b]. After login you land on the SAISIE screen.\n\n[b]SAISIE fields:[/b]\nN expédition: Auto-generated — do not change.\nExpediteur camion: 14  390 — auto-filled.\nDestinataire: For co-loading, type the store code here.\nSEAL number 1: For solo loading, auto-filled. For co-loading, type the seal number from the Shift Board.\nSEAL number 2: Always empty for Bay B2B standard operations.\nType transport: 1 (road).\nType expedition: C (Classical) or S (Specific).\n\nPress [b]F10=Valider[/b] to confirm. You land on SCANNING QUAI, ready to scan.\n\nThis sequence — F6, badge login, SAISIE, F10 — is exactly what you do on the real terminal before every loading.",
 		"scenarios": [1, 2, 3],
 		"new_in": 1
 	},
@@ -306,21 +312,21 @@ var sop_database: Array = [
 	{
 		"title": "Reading the Loading Plan",
 		"tags": ["loading", "plan", "schedule", "time", "store", "co", "solo", "carrier", "truck"],
-		"content": "[font_size=28][color=#0082c3][b]Reading the Loading Plan[/b][/color][/font_size]\n\nThe Loading Plan is your shift schedule. It tells you what is coming and when.\n\n[b]It shows:[/b]\nWhich stores, at what time. CO (shared truck) or SOLO. Which carrier (DHL, SCHOTPOORT, P&M). Truck size (8.5m or 13.6m). Live or non-live loading.\n\nYour load is highlighted in yellow. The others give context for pacing your shift.\n\n[b]Three documents, three moments:[/b]\n[b]Loading Plan[/b] — what is scheduled (read before the shift)\n[b]Loading Sheet[/b] — what you physically count (fill during loading)\n[b]CMR[/b] — what you legally certify (sign after loading)",
+		"content": "[font_size=28][color=#0082c3][b]Reading the Loading Plan[/b][/color][/font_size]\n\nThe Loading Plan is your shift schedule. It tells you what is coming and when. In this simulator it is displayed on the [b]Shift Board[/b] panel.\n\n[b]It shows:[/b]\nWhich stores, at what time. CO (shared truck) or SOLO. Which carrier (DHL, SCHOTPOORT, P&M). Truck size (8.5m or 13.6m). Live or non-live loading.\n\nYour load is highlighted in yellow. The others give context for pacing your shift.\n\nFor co-loading, the Shift Board also shows [b]seal numbers[/b] for each sequence. You will need to enter these on the SAISIE screen.\n\n[b]Three documents, three moments:[/b]\n[b]Loading Plan / Shift Board[/b] — what is scheduled (read before the shift)\n[b]Loading Sheet[/b] — what you physically count (fill during loading)\n[b]CMR[/b] — what you legally certify (sign after loading)",
 		"scenarios": [1, 2, 3],
 		"new_in": 1
 	},
 	{
 		"title": "Transit Rack",
 		"tags": ["transit", "rack", "loose", "collis", "missing", "rack check"],
-		"content": "[font_size=28][color=#0082c3][b]Transit Rack[/b][/color][/font_size]\n\nSome collis or UATs arrive via the transit rack — a staging area away from the main dock floor. They do not appear on your dock automatically.\n\n[b]Two types:[/b]\n[b]Loose collis[/b] — individual boxes with no UAT. They count toward your total colis but cannot be scanned individually.\n[b]UAT on rack[/b] — a full palletised unit sitting on the transit rack, not yet moved to your dock.\n\n[b]How to know if you have transit items:[/b]\nThe RAQ shows a [color=#00ffff]TRANSIT[/color] row. The [color=#f1c40f]Check Transit[/color] button will be active.\n\n[b]What to do:[/b]\nBefore sealing, click [color=#f1c40f][b]Check Transit + 4 min[/b][/color]. UAT items appear on the dock. Loose collis are counted as collected automatically. Include them in your Loading Sheet.\n\n[b]Timing:[/b] Not every session has transit items (about 35% chance). If the button is greyed out, no trip is needed. Missing transit items is a grading penalty.",
+		"content": "[font_size=28][color=#0082c3][b]Transit Rack[/b][/color][/font_size]\n\nSome collis or UATs arrive via the transit rack — a staging area away from the main dock floor. They do not appear on your dock automatically.\n\n[b]The transit rack at Bay B2B:[/b]\nA multi-shelf racking unit with store name labels. Each shelf holds loose collis or small items sorted by destination.\n[img=450]res://ui/images/transit_rack.png[/img]\n\n[b]Two types:[/b]\n[b]Loose collis[/b] — individual boxes with no UAT. They count toward your total colis but cannot be scanned individually.\n[b]UAT on rack[/b] — a full palletised unit sitting on the transit rack, not yet moved to your dock.\n\n[b]Transit UAT label:[/b]\n[img=450]res://ui/images/uat_transit.png[/img]\n\n[b]How to know if you have transit items:[/b]\nThe RAQ shows a [color=#00ffff]TRANSIT[/color] row. The [color=#f1c40f]Check Transit[/color] button will be active.\n\n[b]What to do:[/b]\nBefore sealing, click [color=#f1c40f][b]Check Transit + 4 min[/b][/color]. UAT items appear on the dock. Loose collis are counted as collected automatically. Include them in your Loading Sheet.\n\n[b]Timing:[/b] Not every session has transit items (about 35% chance). If the button is greyed out, no trip is needed. Missing transit items is a grading penalty.",
 		"scenarios": [1, 2, 3],
 		"new_in": 1
 	},
 	{
 		"title": "ADR / Dangerous Goods",
 		"tags": ["adr", "dangerous", "hazmat", "locker", "red", "lithium", "aerosol", "yellow"],
-		"content": "[font_size=28][color=#0082c3][b]ADR — Accord Dangereux Routier[/b][/color][/font_size]\n\nADR goods are legally regulated items: lithium batteries, aerosols, flammable substances, and other hazardous materials under the European ADR road transport agreement.\n\n[b]Recognition:[/b]\nADR pallets appear [color=#ff4444][b]red[/b][/color] in the RAQ from the moment the session starts. They are stored in the [b]yellow lockers[/b] near the dock for safety reasons — not on the open floor.\n\n[b]What to do:[/b]\n1. When you see a red row marked [color=#ff4444]LOCKER[/color], click [color=#f1c40f][b]Check Yellow Lockers + 2 min[/b][/color].\n2. The ADR pallet appears on the dock. The RAQ row updates to ON DOCK.\n3. Load it in promise-date order like any other pallet.\n\n[b]Critical rule:[/b] ADR goods cannot be left in the locker when a shipment is committed. This is a hard operational error — flagged as a critical failure in the debrief.\n\n[b]Documentation:[/b] The dock supervisor handles the dangerous goods declaration. Your job is to make sure the pallet is on the truck.\n\nThe yellow lockers are a real fixture at the dock. ADR goods are always stored separately until collected — this is a legal requirement under the ADR agreement, not a warehouse preference.",
+		"content": "[font_size=28][color=#0082c3][b]ADR — Accord Dangereux Routier[/b][/color][/font_size]\n\nADR goods are legally regulated items: lithium batteries, aerosols, flammable substances, and other hazardous materials under the European ADR road transport agreement.\n\n[b]Recognition:[/b]\nADR pallets appear [color=#ff4444][b]red[/b][/color] in the RAQ from the moment the session starts. They are stored in the [b]yellow lockers[/b] near the dock for safety reasons — not on the open floor.\n\n[b]The yellow lockers at Bay B2B:[/b]\nTwo cabinets — one for Liquids/Fluids, one for Gas/Aerosol. Only hazardous material with a UAT ready for Bay B2B is stored here.\n[img=220]res://ui/images/yellow_cabinet_left.png[/img] [img=220]res://ui/images/yellow_cabinet_right.png[/img]\n\n[b]What to do:[/b]\n1. When you see a red row marked [color=#ff4444]LOCKER[/color], click [color=#f1c40f][b]Check Yellow Lockers + 2 min[/b][/color].\n2. The ADR pallet appears on the dock. The RAQ row updates to ON DOCK.\n3. Load it in promise-date order like any other pallet.\n\n[b]Critical rule:[/b] ADR goods cannot be left in the locker when a shipment is committed. This is a hard operational error — flagged as a critical failure in the debrief.\n\n[b]Documentation:[/b] The dock supervisor handles the dangerous goods declaration. Your job is to make sure the pallet is on the truck.\n\nThe yellow lockers are a real fixture at the dock. ADR goods are always stored separately until collected — this is a legal requirement under the ADR agreement, not a warehouse preference.",
 		"scenarios": [1, 2, 3],
 		"new_in": 1
 	},
@@ -334,14 +340,14 @@ var sop_database: Array = [
 	{
 		"title": "Step-by-Step: Tutorial",
 		"tags": ["tutorial", "guide", "walkthrough", "start", "step", "how", "first", "begin"],
-		"content": "[font_size=28][color=#0082c3][b]Tutorial — Complete Walkthrough[/b][/color][/font_size]\n\nThis is your first shift. Every step is guided on screen. Here is the full sequence so you know what to expect.\n\n[b]Step 1 — Open the AS400[/b]\nClick [b]AS400[/b] in the side panel. You will see the Sign On screen.\n\n[b]Step 2 — Log in to the system[/b]\nType [b]BAYB2B[/b] and press Enter. Then type [b]123456[/b] and press Enter.\n\n[b]Step 3 — Navigate to the scanning screen[/b]\nFollow the prompts: type [b]50[/b], then [b]01[/b], then [b]02[/b], then [b]05[/b]. Press [b]F6[/b] to create a shipment. A badge login appears — type [b]8600555[/b] and press Enter, then [b]123456[/b] and press Enter. Press [b]F10[/b] to confirm the SAISIE screen. You are now on the Scanning screen.\n\n[b]Step 4 — Open Dock View[/b]\nClick [b]Dock View[/b] in the side panel to see the pallets on the dock floor.\n\n[b]Step 5 — Check the RAQ[/b]\nWith the AS400 open, press [b]F13[/b] (or Shift+F1) to open the RAQ — the digital pallet list. Compare the white C&C rows to what is on the dock. One C&C pallet will be missing.\n\n[b]Step 6 — Call departments[/b]\nClick [b]Call Departments (C&C Check)[/b]. The missing pallet will be found and brought to the dock.\n\n[b]Step 7 — Start loading[/b]\nClick [b]Start Loading[/b] to begin. The scanner is now active.\n\n[b]Step 8 — Load one Mecha pallet deliberately out of order[/b]\nClick any blue Mecha pallet. This teaches you what happens when you load out of sequence.\n\n[b]Step 9 — Unload it[/b]\nClick the blue pallet inside the truck view to remove it. This is rework.\n\n[b]Step 10 — Load in correct order[/b]\nNow load in sequence: [color=#f1c40f]Yellow (Service Center)[/color] first, then [color=#2ecc71]Green (Bikes)[/color], then [color=#e67e22]Orange (Bulky)[/color], then [color=#3498db]Blue (Mecha)[/color], then [color=#ffffff]White (C&C)[/color] last.\n\n[b]Step 11 — Check Help & SOPs[/b]\nClick [b]Help & SOPs[/b] in the top right. Time is paused while it is open.\n\n[b]Step 12 — Finish loading[/b]\nLoad all remaining pallets in the correct order.\n\n[b]Step 13 — Validate in the AS400[/b]\nOpen the AS400 and press [b]F10[/b] to confirm the RAQ.\n\n[b]Step 14 — Seal the truck[/b]\nClick [b]Seal Truck & Print Papers[/b]. Your shift summary appears.",
+		"content": "[font_size=28][color=#0082c3][b]Tutorial — Complete Walkthrough[/b][/color][/font_size]\n\nThis is your first shift. Every step is guided on screen. Here is the full sequence so you know what to expect.\n\n[b]Step 1 — Open the AS400[/b]\nClick [b]AS400[/b] in the side panel. You will see the Sign On screen.\n\n[b]Step 2 — Log in to the system[/b]\nType [b]BAYB2B[/b] and press Enter. Then type [b]123456[/b] and press Enter.\n\n[b]Step 3 — Navigate to the SAISIE screen[/b]\nFollow the prompts: type [b]50[/b], then [b]01[/b], then [b]02[/b], then [b]05[/b] (menu numbers auto-advance). Press [b]F6[/b] to create a shipment. A badge login appears — type [b]8600555[/b] and press Enter, then [b]123456[/b] and press Enter. You land on the SAISIE screen.\n\n[b]Step 4 — Enter the seal number[/b]\nOpen the [b]Shift Board[/b] from the right panel to find your seal number. Type it into the AS400 and press Enter. Then press [b]F10[/b] to confirm the SAISIE. You are now on the Scanning screen.\n\n[b]Step 5 — Open Dock View[/b]\nClick [b]Dock View[/b] in the side panel to see the pallets on the dock floor.\n\n[b]Step 6 — Check the RAQ[/b]\nWith the AS400 open, press [b]F13[/b] (or Shift+F1) to open the RAQ — the digital pallet list. Compare the white C&C rows to what is on the dock. One C&C pallet will be missing.\n\n[b]Step 7 — Call departments[/b]\nClick [b]Call Departments (C&C Check)[/b]. The missing pallet will be found and brought to the dock.\n\n[b]Step 8 — Start loading[/b]\nClick [b]Start Loading[/b] to begin. The scanner is now active.\n\n[b]Step 9 — Load one Mecha pallet deliberately out of order[/b]\nClick any blue Mecha pallet. This teaches you what happens when you load out of sequence.\n\n[b]Step 10 — Unload it[/b]\nClick the blue pallet inside the truck view to remove it. This is rework.\n\n[b]Step 11 — Load in correct order[/b]\nNow load in sequence: [color=#f1c40f]Yellow (Service Center)[/color] first, then [color=#2ecc71]Green (Bikes)[/color], then [color=#e67e22]Orange (Bulky)[/color], then [color=#3498db]Blue (Mecha)[/color], then [color=#ffffff]White (C&C)[/color] last.\n\n[b]Step 12 — Check Help & SOPs[/b]\nClick [b]Help & SOPs[/b] in the top right. Time is paused while it is open.\n\n[b]Step 13 — Finish loading[/b]\nLoad all remaining pallets in the correct order.\n\n[b]Step 14 — Validate in the AS400[/b]\nOpen the AS400 and press [b]F10[/b] to confirm the RAQ.\n\n[b]Step 15 — Seal the truck[/b]\nClick [b]Seal Truck & Print Papers[/b]. Your shift summary appears.",
 		"scenarios": [0],
 		"new_in": 0
 	},
 	{
 		"title": "Step-by-Step: Standard Loading",
 		"tags": ["standard", "guide", "walkthrough", "step", "how", "solo", "single", "store"],
-		"content": "[font_size=28][color=#0082c3][b]Standard Loading — Complete Walkthrough[/b][/color][/font_size]\n\nOne store, one truck. The most common loading type.\n\n[b]Before you start[/b]\nCheck the [b]Shift Board[/b] to confirm your store name, store code, and dock number. The store code is the 3–4 digit number next to your store (e.g. 1570 for Alkmaar). You will need it in the AS400.\n\n[b]Step 1 — Open the AS400 and log in[/b]\nType [b]BAYB2B[/b] → Enter → [b]123456[/b] → Enter.\n\n[b]Step 2 — Navigate to the shipment screen[/b]\nType [b]50[/b] → [b]01[/b] → [b]02[/b] → [b]05[/b] → [b]F6[/b]. Enter badge [b]8600555[/b] → Enter → [b]123456[/b] → Enter. The SAISIE screen appears. For solo loading the destination is already set. Press [b]F10[/b] to confirm. You are on the Scanning screen.\n\n[b]Step 3 — Check the RAQ[/b]\nPress [b]F13[/b] to open the RAQ. Check the pallet list:\n• Any [color=#ff4444]red rows[/color] — ADR in the yellow lockers. Click [b]⚠ Check Yellow Lockers[/b] before loading.\n• Any [color=#00ffff]TRANSIT rows[/color] — items on the transit rack. Click [b]Check Transit[/b] before sealing.\n• [color=#ffffff]White rows[/color] — C&C pallets. Count them and compare to the dock.\n\n[b]Step 4 — Call departments if needed[/b]\nIf a C&C pallet is missing from the dock, click [b]Call Departments (C&C Check)[/b] before starting. Do this before clicking Start Loading — it is free time.\n\n[b]Step 5 — Start loading[/b]\nClick [b]Start Loading[/b]. Load in this order:\n1. [color=#f1c40f]Service Center (yellow)[/color]\n2. [color=#2ecc71]Bikes (green)[/color]\n3. [color=#e67e22]Bulky (orange)[/color]\n4. [color=#3498db]Mecha (blue)[/color]\n5. [color=#ffffff]C&C (white)[/color] — always last\n\nIf pallets have mixed promise dates (D-, D, D+), load D- first within each type group, then D, then D+.\n\n[b]Step 6 — Watch the phone[/b]\nIf the Phone button flashes orange, open it. Late pallets may arrive. Check their promise date before deciding to wait or seal.\n\n[b]Step 7 — Check the transit rack[/b]\nIf the RAQ showed a TRANSIT row, click [b]Check Transit · +4 min[/b] before sealing.\n\n[b]Step 8 — Validate the RAQ[/b]\nOnce all pallets are loaded, press [b]F13[/b] to open the RAQ, then [b]F10[/b] to confirm.\n\n[b]Step 9 — Seal the truck[/b]\nClick [b]Seal Truck & Print Papers[/b].",
+		"content": "[font_size=28][color=#0082c3][b]Standard Loading — Complete Walkthrough[/b][/color][/font_size]\n\nOne store, one truck. The most common loading type.\n\n[b]Before you start[/b]\nCheck the [b]Shift Board[/b] to confirm your store name, store code, dock number, and [b]seal number[/b]. You will need the seal number in the AS400.\n\n[b]Step 1 — Open the AS400 and log in[/b]\nType [b]BAYB2B[/b] → Enter → [b]123456[/b] → Enter.\n\n[b]Step 2 — Navigate to the SAISIE screen[/b]\nType [b]50[/b] → [b]01[/b] → [b]02[/b] → [b]05[/b] → [b]F6[/b]. Enter badge [b]8600555[/b] → Enter → [b]123456[/b] → Enter. The SAISIE screen appears. The destination is already set. Type the [b]seal number[/b] from the Shift Board and press Enter. Press [b]F10[/b] to confirm. You are on the Scanning screen.\n\n[b]Step 3 — Check the RAQ[/b]\nPress [b]F13[/b] to open the RAQ. Check the pallet list:\n• Any [color=#ff4444]red rows[/color] — ADR in the yellow lockers. Click [b]⚠ Check Yellow Lockers[/b] before loading.\n• Any [color=#00ffff]TRANSIT rows[/color] — items on the transit rack. Click [b]Check Transit[/b] before sealing.\n• [color=#ffffff]White rows[/color] — C&C pallets. Count them and compare to the dock.\n\n[b]Step 4 — Call departments if needed[/b]\nIf a C&C pallet is missing from the dock, click [b]Call Departments (C&C Check)[/b] before starting. Do this before clicking Start Loading — it is free time.\n\n[b]Step 5 — Start loading[/b]\nClick [b]Start Loading[/b]. Load in this order:\n1. [color=#f1c40f]Service Center (yellow)[/color]\n2. [color=#2ecc71]Bikes (green)[/color]\n3. [color=#e67e22]Bulky (orange)[/color]\n4. [color=#3498db]Mecha (blue)[/color]\n5. [color=#ffffff]C&C (white)[/color] — always last\n\nIf pallets have mixed promise dates (D-, D, D+), load D- first within each type group, then D, then D+.\n\n[b]Step 6 — Watch the phone[/b]\nIf the Phone button flashes orange, open it. Late pallets may arrive. Check their promise date before deciding to wait or seal.\n\n[b]Step 7 — Check the transit rack[/b]\nIf the RAQ showed a TRANSIT row, click [b]Check Transit · +4 min[/b] before sealing.\n\n[b]Step 8 — Validate the RAQ[/b]\nOnce all pallets are loaded, press [b]F13[/b] to open the RAQ, then [b]F10[/b] to confirm.\n\n[b]Step 9 — Seal the truck[/b]\nClick [b]Seal Truck & Print Papers[/b].",
 		"scenarios": [1],
 		"new_in": 1
 	},
@@ -355,7 +361,7 @@ var sop_database: Array = [
 	{
 		"title": "Step-by-Step: Co-Loading",
 		"tags": ["co", "loading", "guide", "walkthrough", "step", "how", "two", "stores", "sequence", "partner"],
-		"content": "[font_size=28][color=#0082c3][b]Co-Loading — Complete Walkthrough[/b][/color][/font_size]\n\nTwo stores share one truck. You load Store 1 completely first (it goes deeper in the truck), then Store 2 (near the doors).\n\n[b]Before you start[/b]\nOpen the [b]Shift Board[/b]. Find your truck entry. It will show two stores with their codes and (Seq.1) / (Seq.2) labels. Write down both codes — you will need them in the AS400.\n\nExample: [b]KERKRADE 346 (Seq.1)[/b] / [b]ROERMOND 2094 (Seq.2)[/b]\n\n[b]Step 1 — Log in to the AS400[/b]\nType [b]BAYB2B[/b] → Enter → [b]123456[/b] → Enter.\n\n[b]Step 2 — Navigate to EXPEDITION EN COURS[/b]\nType [b]50[/b] → [b]01[/b] → [b]02[/b] → [b]05[/b].\n\n[b]Step 3 — Create shipment for Store 1 (Seq.1)[/b]\nPress [b]F6[/b]. Badge login: [b]8600555[/b] → Enter → [b]123456[/b] → Enter. You are on the SAISIE screen. Type the [b]Seq.1 store code[/b] (e.g. 346) and press Enter. Press [b]F10[/b] to confirm. You are now on the Scanning screen for Store 1.\n\n[b]Step 4 — Check the RAQ for Store 1[/b]\nPress [b]F13[/b]. Verify C&C pallets, any TRANSIT or ADR rows. Handle them before loading.\n\n[b]Step 5 — Load Store 1 completely[/b]\nLoad ALL pallets for Store 1 in sequence:\n1. [color=#f1c40f]Service Center[/color]\n2. [color=#2ecc71]Bikes[/color]\n3. [color=#e67e22]Bulky[/color]\n4. [color=#3498db]Mecha[/color]\n5. [color=#ffffff]C&C[/color] — last for Store 1\n\nPallet color tags show which store each pallet belongs to. Do not load Store 2 pallets yet.\n\n[b]Step 6 — Validate Store 1 in the AS400[/b]\nPress [b]F13[/b] to open Store 1 RAQ. Press [b]F10[/b] to confirm. Press [b]F3[/b] to return to EXPEDITION EN COURS.\n\n[b]Step 7 — Create shipment for Store 2 (Seq.2)[/b]\nPress [b]F6[/b]. Badge login again: [b]8600555[/b] → Enter → [b]123456[/b] → Enter. On SAISIE, type the [b]Seq.2 store code[/b] (e.g. 2094) and press Enter. Press [b]F10[/b]. You are on the Scanning screen for Store 2.\n\n[b]Tip — Path A (two tabs):[/b] Instead of steps 7 onward, you can click [b]▼ New Tab[/b] in the AS400 panel at any time, log in fresh, and set up Store 2 while Store 1 is still running. Switch tabs freely to see each store's RAQ. Either path is valid.\n\n[b]Step 8 — Check the RAQ for Store 2[/b]\nPress [b]F13[/b] on the Store 2 tab. Handle any TRANSIT or ADR rows.\n\n[b]Step 9 — Load Store 2 completely[/b]\nSame sequence: Service Center → Bikes → Bulky → Mecha → C&C last.\n\n[b]Step 10 — Validate Store 2[/b]\nF13 → F10 to confirm Store 2 RAQ.\n\n[b]Step 11 — Seal the truck[/b]\nClick [b]Seal Truck & Print Papers[/b].\n\n[b]Important:[/b] The AS400 will block you from scanning a Store 2 pallet while on the Store 1 tab, and vice versa. If the scanner rejects a pallet, check which tab is active.",
+		"content": "[font_size=28][color=#0082c3][b]Co-Loading — Complete Walkthrough[/b][/color][/font_size]\n\nTwo stores share one truck. You load Store 1 completely first (it goes deeper in the truck), then Store 2 (near the doors).\n\n[b]Before you start[/b]\nOpen the [b]Shift Board[/b]. Find your truck entry. It will show two stores with their codes, (Seq.1) / (Seq.2) labels, and [b]seal numbers[/b] for each sequence. Write down all four values — you will need them in the AS400.\n\nExample: [b]KERKRADE 346 (Seq.1)[/b] / [b]ROERMOND 2094 (Seq.2)[/b]\nSeal Seq.1: [b]08604521[/b]   Seal Seq.2: [b]08604527[/b]\n\n[b]Step 1 — Log in to the AS400[/b]\nType [b]BAYB2B[/b] → Enter → [b]123456[/b] → Enter.\n\n[b]Step 2 — Navigate to EXPEDITION EN COURS[/b]\nType [b]50[/b] → [b]01[/b] → [b]02[/b] → [b]05[/b].\n\n[b]Step 3 — Create shipment for Store 1 (Seq.1)[/b]\nPress [b]F6[/b]. Badge login: [b]8600555[/b] → Enter → [b]123456[/b] → Enter. You are on the SAISIE screen.\n1. Type the [b]Seq.1 store code[/b] (e.g. 346) and press Enter.\n2. Type the [b]Seq.1 seal number[/b] from the Shift Board and press Enter.\n3. Press [b]F10[/b] to confirm.\nYou are now on the Scanning screen for Store 1.\n\n[b]Step 4 — Check the RAQ for Store 1[/b]\nPress [b]F13[/b]. Verify C&C pallets, any TRANSIT or ADR rows. Handle them before loading.\n\n[b]Step 5 — Load Store 1 completely[/b]\nLoad ALL pallets for Store 1 in sequence:\n1. [color=#f1c40f]Service Center[/color]\n2. [color=#2ecc71]Bikes[/color]\n3. [color=#e67e22]Bulky[/color]\n4. [color=#3498db]Mecha[/color]\n5. [color=#ffffff]C&C[/color] — last for Store 1\n\nPallet color tags show which store each pallet belongs to. Do not load Store 2 pallets yet.\n\n[b]Step 6 — Validate Store 1 in the AS400[/b]\nPress [b]F13[/b] to open Store 1 RAQ. Press [b]F10[/b] to confirm. Press [b]F3[/b] to return to EXPEDITION EN COURS.\n\n[b]Step 7 — Create shipment for Store 2 (Seq.2)[/b]\nPress [b]F6[/b]. Badge login again: [b]8600555[/b] → Enter → [b]123456[/b] → Enter. On SAISIE:\n1. Type the [b]Seq.2 store code[/b] (e.g. 2094) and press Enter.\n2. Type the [b]Seq.2 seal number[/b] from the Shift Board and press Enter.\n3. Press [b]F10[/b].\nYou are on the Scanning screen for Store 2.\n\n[b]Tip — Path A (two tabs):[/b] Instead of steps 7 onward, you can click [b]▼ New Tab[/b] in the AS400 panel at any time, log in fresh, and set up Store 2 while Store 1 is still running. Switch tabs freely to see each store's RAQ. Either path is valid.\n\n[b]Step 8 — Check the RAQ for Store 2[/b]\nPress [b]F13[/b] on the Store 2 tab. Handle any TRANSIT or ADR rows.\n\n[b]Step 9 — Load Store 2 completely[/b]\nSame sequence: Service Center → Bikes → Bulky → Mecha → C&C last.\n\n[b]Step 10 — Validate Store 2[/b]\nF13 → F10 to confirm Store 2 RAQ.\n\n[b]Step 11 — Seal the truck[/b]\nClick [b]Seal Truck & Print Papers[/b].\n\n[b]Important:[/b] The AS400 will block you from scanning a Store 2 pallet while on the Store 1 tab, and vice versa. If the scanner rejects a pallet, check which tab is active.",
 		"scenarios": [3],
 		"new_in": 3
 	},
@@ -369,6 +375,7 @@ var sop_database: Array = [
 ]
 
 func _ready() -> void:
+	Locale.register_sop_database(sop_database)
 	var bg = ColorRect.new()
 	bg.color = Color(0.12, 0.14, 0.16) 
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -534,7 +541,17 @@ func _input(event: InputEvent) -> void:
 				pass  # Don't close debrief with Escape
 			elif portal_overlay != null and portal_overlay.visible:
 				get_tree().quit()  # Only quit from portal screen
-			# During active session, Escape does nothing (prevents accidental demo kill)
+			else:
+				# Close any open overlay panel (Shift Board, Phone, Notes, etc.)
+				var closed_one: bool = false
+				for panel_name: String in PANEL_NAMES:
+					if panel_name == "Dock View" or panel_name == "AS400":
+						continue  # These are workspace panels, not overlays
+					if bool(_panel_state.get(panel_name, false)):
+						_set_panel_visible(panel_name, false, false)
+						closed_one = true
+				if closed_one:
+					WOTSAudio.play_panel_click(self)
 		elif event.keycode == KEY_F3:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
 				if as400_state == 9: as400_state = 22
@@ -553,18 +570,24 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_F10:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
 				if as400_state == 19:
-					# Co-loading: require destinataire entered first
-					var tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
-					if current_dest2_name != "" and tab_code == "":
+					# Require seal for ALL scenarios
+					var tab_seal: String = _as400_tabs[_active_tab_idx].get("seal_entered", "") if not _as400_tabs.is_empty() else ""
+					if tab_seal == "":
 						if lbl_hover_info:
-							lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire requis![/b] Type the store code first, then press Enter, then F10.[/color][/font_size]"
+							lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Seal number requis![/b] " + Locale.t("as400.seal_required") + "[/color][/font_size]"
 						return
+					if current_dest2_name != "":
+						var tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
+						if tab_code == "":
+							if lbl_hover_info:
+								lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire requis![/b] " + Locale.t("as400.dest_required") + "[/color][/font_size]"
+							return
 					as400_state = 18
 					_save_tab_state()
 					_render_as400_screen()
 					WOTSAudio.play_as400_key(self)
-					if tutorial_active and tutorial_step == 2:
-						tutorial_step = 3
+					if tutorial_active and tutorial_step == 3:
+						tutorial_step = 4
 						_update_tutorial_ui()
 				else:
 					_confirm_as400_raq()
@@ -584,8 +607,8 @@ func _input(event: InputEvent) -> void:
 					_render_as400_screen()
 					WOTSAudio.play_as400_key(self)
 					_on_raq_opened()
-					if tutorial_active and tutorial_step == 4:
-						tutorial_step = 5
+					if tutorial_active and tutorial_step == 5:
+						tutorial_step = 6
 						_update_tutorial_ui()
 		elif event.keycode == KEY_F1 and event.shift_pressed:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
@@ -595,8 +618,8 @@ func _input(event: InputEvent) -> void:
 					_render_as400_screen()
 					WOTSAudio.play_as400_key(self)
 					_on_raq_opened()
-					if tutorial_active and tutorial_step == 4:
-						tutorial_step = 5
+					if tutorial_active and tutorial_step == 5:
+						tutorial_step = 6
 						_update_tutorial_ui()
 
 # ==========================================
@@ -678,72 +701,46 @@ func _build_tutorial_ui() -> void:
 	tutorial_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(tutorial_label)
 
-func _set_tutorial_focus(target: Control, _pos: String, _dim: bool):
+func _set_tutorial_focus(target: Control, _pos: String, _dim: bool) -> void:
 	_tut_target_node = target
 	tut_dim_overlay.visible = false
 
 func _update_tutorial_ui() -> void:
 	if not tutorial_active or tutorial_label == null: return
 	
-	var t = "[font_size=17][color=#2ecc71][b]TRAINING GUIDE[/b][/color]  "
+	var t: String = "[font_size=17][color=#2ecc71][b]" + Locale.t("tutorial.header") + "[/b][/color]  "
+	
+	var step_key: String = "tutorial.step_%d" % tutorial_step
+	t += Locale.t(step_key)
 	
 	match tutorial_step:
-		0: 
-			t += "Welcome to the dock! Your very first step is checking the RAQ list. Open the [color=#f1c40f][b]AS400[/b][/color] from the right panel menu."
-			_set_tutorial_focus(btn_as400, "top", true)
-		1: 
-			t += "Great. Now log in. Type [color=#f1c40f]BAYB2B[/color] and press Enter, then type [color=#f1c40f]123456[/color] and press Enter. Each screen shows a prompt telling you what to type next — follow those as you go."
-			_set_tutorial_focus(as400_terminal_input, "top", true)
-		2: 
-			t += "You're in the main menu. Each screen will tell you what to type. Navigate to the scanning screen: the placeholder text at the bottom guides you. Keep going until you see [color=#f1c40f]SCANNING QUAI[/color] — that's your main work screen."
-			_set_tutorial_focus(as400_terminal_input, "top", true)
-		3: 
-			t += "You're on the Scanning screen — this is where you work. Now open [color=#f1c40f][b]Dock View[/b][/color] from the panel menu. Dock View shows you the physical pallets sitting on your dock floor."
-			_set_tutorial_focus(btn_dock_view, "top", true)
-		4: 
-			t += "These are your pallets. Now check the [color=#f1c40f][b]AS400[/b][/color] and press [color=#f1c40f][b]F13[/b][/color] (or [color=#f1c40f]Shift+F1[/color]) to open the RAQ — the digital pallet list. Compare what the system shows to what's on the dock floor."
-			_set_tutorial_focus(btn_as400, "top", true)
-		5: 
-			t += "See the [color=#bdc3c7]White rows[/color] at the bottom of the RAQ? Those are Click & Collect pallets — customer orders. Compare the count in the RAQ to the dock. One C&C pallet isn't on the dock yet — it's somewhere in the warehouse. Click [color=#f1c40f][b]Call Departments (C&C Check)[/b][/color] to have it found and brought over."
-			_set_tutorial_focus(btn_call, "bottom", true)
-		6: 
-			t += "Good — the missing pallet is on its way. That call takes about [color=#f1c40f]5 minutes[/color] of shift time. Now click [color=#f1c40f][b]Start Loading[/b][/color] to begin the physical loading process."
-			_set_tutorial_focus(btn_start_load, "bottom", true)
-		7: 
-			t += "Time to load! Remember: the scanner only works on the [color=#f1c40f]Scanning screen[/color], not the RAQ. Make sure your AS400 shows [color=#f1c40f]SCANNING QUAI[/color] (press [color=#f1c40f]F3[/color] if needed). Then click any [color=#3498db]Blue Mecha[/color] pallet to intentionally load it out of order."
-			_set_tutorial_focus(null, "top", false)
-		8: 
-			t += "Oops! Mecha is the wrong sequence. Click the [color=#3498db]Blue[/color] pallet [b]inside the truck grid[/b] to remove it. In real shifts, removing a pallet adds a 1.1-minute rework penalty!"
-			_set_tutorial_focus(truck_grid, "top", false)
-		9: 
-			t += "Good recovery. Now, let's do it right. Always load [color=#f1c40f]Yellow Service Center[/color] pallets first. Click a yellow pallet to load it."
-			_set_tutorial_focus(null, "top", false)
-		10: 
-			t += "Perfect! Next is [color=#2ecc71]Green Bikes[/color]. Click a green pallet to load it."
-			_set_tutorial_focus(null, "top", false)
-		11: 
-			t += "Awesome! Before you finish, click [color=#3498db][b]Help & SOPs[/b][/color] in the top right. Time stops when this is open! Check out how new, important articles are highlighted."
-			_set_tutorial_focus(btn_sop, "bottom", true)
-		12: 
-			t += "Great! All the tutorial info is stored there. Now, finish loading all remaining pallets onto the truck (Yellow -> Green -> Orange -> Blue -> White C&C)."
-			_set_tutorial_focus(null, "top", false)
-		13: 
-			t += "All pallets loaded! Open the [color=#f1c40f][b]AS400[/b][/color] and press [color=#f1c40f][b]F10[/b][/color] on your keyboard to confirm the RAQ."
-			_set_tutorial_focus(btn_as400, "top", false)
-		14: 
-			t += "Validation Effectuée! Click [color=#f1c40f][b]Seal Truck & Print Papers[/b][/color]. You'll see a Shift Summary explaining what you did right or wrong. Finish your shift!"
-			_set_tutorial_focus(btn_seal, "bottom", true)
+		0: _set_tutorial_focus(btn_as400, "top", true)
+		1: _set_tutorial_focus(as400_terminal_input, "top", true)
+		2: _set_tutorial_focus(as400_terminal_input, "top", true)
+		3: _set_tutorial_focus(as400_terminal_input, "top", true)
+		4: _set_tutorial_focus(btn_dock_view, "top", true)
+		5: _set_tutorial_focus(btn_as400, "top", true)
+		6: _set_tutorial_focus(btn_call, "bottom", true)
+		7: _set_tutorial_focus(btn_start_load, "bottom", true)
+		8: _set_tutorial_focus(null, "top", false)
+		9: _set_tutorial_focus(truck_grid, "top", false)
+		10: _set_tutorial_focus(null, "top", false)
+		11: _set_tutorial_focus(null, "top", false)
+		12: _set_tutorial_focus(btn_sop, "bottom", true)
+		13: _set_tutorial_focus(null, "top", false)
+		14: _set_tutorial_focus(btn_as400, "top", false)
+		15: _set_tutorial_focus(btn_seal, "bottom", true)
 	
 	t += "[/font_size]"
 	tutorial_label.text = t
 	
-	if tutorial_step > 14:
+	if tutorial_step > 15:
 		tut_canvas.visible = false
 
 func _flash_tutorial_warning(msg: String) -> void:
 	if not tutorial_active or tutorial_label == null: return
 	WOTSAudio.play_error_buzz(self)
-	var t = "[font_size=17][color=#e74c3c][b]⚠️ INCORRECT ACTION[/b]  "
+	var t: String = "[font_size=17][color=#e74c3c][b]" + Locale.t("tutorial.incorrect") + "[/b]  "
 	t += msg + "[/color][/font_size]"
 	tutorial_label.text = t
 	get_tree().create_timer(2.5).timeout.connect(_update_tutorial_ui)
@@ -790,7 +787,7 @@ func _build_sop_modal() -> void:
 	header_hbox.add_child(title_margin)
 	
 	var title = Label.new()
-	title.text = "Help & SOPs"
+	title.text = Locale.t("sop.title")
 	title.add_theme_font_size_override("font_size", 24)
 	title_margin.add_child(title)
 
@@ -804,7 +801,7 @@ func _build_sop_modal() -> void:
 	tab_hbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	header_hbox.add_child(tab_hbox)
 
-	var tab_labels: Array[String] = ["Doing the Job", "Understanding the Job"]
+	var tab_labels: Array[String] = [Locale.t("sop.tab_doing"), Locale.t("sop.tab_understanding")]
 	sop_tab_btns.clear()
 	for ti: int in range(2):
 		var tab_num: int = ti + 1
@@ -826,7 +823,7 @@ func _build_sop_modal() -> void:
 			sop_active_tab = tab_num
 			_refresh_sop_tab_styles()
 			_on_sop_search_changed(sop_search_input.text)
-			sop_content_label.text = "[color=#95a5a6]Select an article from the left.[/color]"
+			sop_content_label.text = "[color=#95a5a6]" + Locale.t("sop.select_article") + "[/color]"
 		)
 		tab_hbox.add_child(tb)
 		sop_tab_btns.append(tb)
@@ -836,7 +833,7 @@ func _build_sop_modal() -> void:
 	header_hbox.add_child(tab_spacer_r)
 	
 	var btn_close = Button.new()
-	btn_close.text = " Resume Shift "
+	btn_close.text = Locale.t("sop.resume")
 	btn_close.custom_minimum_size = Vector2(150, 40)
 	btn_close.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	btn_close.focus_mode = Control.FOCUS_NONE
@@ -906,7 +903,7 @@ func _build_sop_modal() -> void:
 	sop_content_label.bbcode_enabled = true
 	sop_content_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sop_content_label.add_theme_color_override("default_color", Color.BLACK)
-	sop_content_label.text = "[color=#95a5a6]Select an article from the left to read the standard operating procedure.[/color]"
+	sop_content_label.text = "[color=#95a5a6]" + Locale.t("sop.select_article_long") + "[/color]"
 	right_margin.add_child(sop_content_label)
 
 func _refresh_sop_tab_styles() -> void:
@@ -923,12 +920,12 @@ func _open_sop_modal() -> void:
 	sop_active_tab = 1
 	_refresh_sop_tab_styles()
 	sop_search_input.text = ""
-	sop_content_label.text = "[color=#95a5a6]Select an article from the left.[/color]"
+	sop_content_label.text = "[color=#95a5a6]" + Locale.t("sop.select_article") + "[/color]"
 	_on_sop_search_changed("")
 	sop_overlay.visible = true
 
-	if tutorial_active and tutorial_step == 11:
-		tutorial_step = 12
+	if tutorial_active and tutorial_step == 12:
+		tutorial_step = 13
 		_update_tutorial_ui()
 
 func _close_sop_modal() -> void:
@@ -1075,7 +1072,8 @@ func _build_start_portal() -> void:
 	vbox.add_child(title)
 	
 	var sub = Label.new()
-	sub.text = "Operational Training Simulator"
+	_portal_sub = sub
+	sub.text = Locale.t("portal.subtitle")
 	sub.add_theme_font_size_override("font_size", 15)
 	sub.add_theme_color_override("font_color", Color(0.45, 0.48, 0.52))
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1087,8 +1085,56 @@ func _build_start_portal() -> void:
 	div.color = Color(0.25, 0.27, 0.3)
 	vbox.add_child(div)
 
+	# Language selector
+	var lbl_lang = Label.new()
+	_portal_lbl_lang = lbl_lang
+	lbl_lang.text = Locale.t("portal.select_language")
+	lbl_lang.add_theme_font_size_override("font_size", 14)
+	lbl_lang.add_theme_color_override("font_color", Color(0.6, 0.63, 0.67))
+	vbox.add_child(lbl_lang)
+
+	portal_language_dropdown = OptionButton.new()
+	portal_language_dropdown.custom_minimum_size = Vector2(0, 40)
+	for i in range(Locale.LANG_NAMES.size()):
+		portal_language_dropdown.add_item(Locale.LANG_NAMES[i])
+	portal_language_dropdown.select(Locale.current_lang)
+	portal_language_dropdown.focus_mode = Control.FOCUS_NONE
+	var lang_dd_sb := StyleBoxFlat.new()
+	lang_dd_sb.bg_color = Color(0.18, 0.19, 0.22)
+	lang_dd_sb.corner_radius_top_left = 4; lang_dd_sb.corner_radius_top_right = 4
+	lang_dd_sb.corner_radius_bottom_left = 4; lang_dd_sb.corner_radius_bottom_right = 4
+	lang_dd_sb.border_width_left = 1; lang_dd_sb.border_width_top = 1
+	lang_dd_sb.border_width_right = 1; lang_dd_sb.border_width_bottom = 1
+	lang_dd_sb.border_color = Color(0.3, 0.32, 0.35)
+	portal_language_dropdown.add_theme_stylebox_override("normal", lang_dd_sb)
+	var lang_dd_h := lang_dd_sb.duplicate()
+	lang_dd_h.bg_color = Color(0.22, 0.24, 0.28)
+	lang_dd_h.border_color = Color(0.0, 0.51, 0.76)
+	portal_language_dropdown.add_theme_stylebox_override("hover", lang_dd_h)
+	portal_language_dropdown.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	portal_language_dropdown.add_theme_color_override("font_color", Color(0.85, 0.87, 0.9))
+	portal_language_dropdown.add_theme_color_override("font_hover_color", Color.WHITE)
+	var lang_popup := portal_language_dropdown.get_popup()
+	if lang_popup:
+		var lp_sb := StyleBoxFlat.new()
+		lp_sb.bg_color = Color(0.14, 0.15, 0.18)
+		lp_sb.border_width_left = 1; lp_sb.border_width_top = 1
+		lp_sb.border_width_right = 1; lp_sb.border_width_bottom = 1
+		lp_sb.border_color = Color(0.3, 0.32, 0.35)
+		lp_sb.corner_radius_top_left = 4; lp_sb.corner_radius_top_right = 4
+		lp_sb.corner_radius_bottom_left = 4; lp_sb.corner_radius_bottom_right = 4
+		lang_popup.add_theme_stylebox_override("panel", lp_sb)
+		var lp_hover := StyleBoxFlat.new()
+		lp_hover.bg_color = Color(0.0, 0.35, 0.55)
+		lang_popup.add_theme_stylebox_override("hover", lp_hover)
+		lang_popup.add_theme_color_override("font_color", Color(0.8, 0.82, 0.85))
+		lang_popup.add_theme_color_override("font_hover_color", Color.WHITE)
+	portal_language_dropdown.item_selected.connect(_on_portal_language_changed)
+	vbox.add_child(portal_language_dropdown)
+
 	var lbl_scen = Label.new()
-	lbl_scen.text = "Select Training Scenario"
+	_portal_lbl_scen = lbl_scen
+	lbl_scen.text = Locale.t("portal.select_scenario")
 	lbl_scen.add_theme_font_size_override("font_size", 14)
 	lbl_scen.add_theme_color_override("font_color", Color(0.6, 0.63, 0.67))
 	vbox.add_child(lbl_scen)
@@ -1160,7 +1206,8 @@ func _build_start_portal() -> void:
 	vbox.add_child(wh_lbl)
 
 	var btn_start = Button.new()
-	btn_start.text = "Begin Shift"
+	_portal_btn_start = btn_start
+	btn_start.text = Locale.t("portal.begin_shift")
 	btn_start.custom_minimum_size = Vector2(0, 55)
 	
 	var start_sb_normal = StyleBoxFlat.new()
@@ -1187,7 +1234,8 @@ func _build_start_portal() -> void:
 
 	# Dev bypass — unlocks all scenarios for testing
 	var btn_dev := Button.new()
-	btn_dev.text = "🔧 Dev: Unlock All Scenarios"
+	_portal_btn_dev = btn_dev
+	btn_dev.text = "🔧 " + Locale.t("portal.dev_unlock")
 	btn_dev.custom_minimum_size = Vector2(0, 32)
 	btn_dev.focus_mode = Control.FOCUS_NONE
 	var dev_sb := StyleBoxFlat.new()
@@ -1247,7 +1295,7 @@ func _build_debrief_modal() -> void:
 	vbox.add_child(lbl_debrief_text)
 
 	var btn_close = Button.new()
-	btn_close.text = "Finish & Return to Portal"
+	btn_close.text = Locale.t("debrief.close")
 	btn_close.custom_minimum_size = Vector2(280, 48)
 	btn_close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	btn_close.focus_mode = Control.FOCUS_NONE
@@ -1311,25 +1359,25 @@ func _build_operational_layout() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		return b
 
-	btn_start_load = make_action_btn.call(" Start Loading ", false)
+	btn_start_load = make_action_btn.call(Locale.t("btn.start_loading"), false)
 	btn_start_load.pressed.connect(func() -> void: _on_decision_pressed("Start Loading"))
 	top_actions_hbox.add_child(btn_start_load)
 
-	btn_call = make_action_btn.call(" Call Departments (C&C Check) ", true)
+	btn_call = make_action_btn.call(Locale.t("btn.call_depts"), true)
 	btn_call.pressed.connect(func() -> void: _on_decision_pressed("Call departments (C&C check)"))
 	top_actions_hbox.add_child(btn_call)
 
-	btn_seal = make_action_btn.call(" Seal Truck & Print Papers ", false)
+	btn_seal = make_action_btn.call(Locale.t("btn.seal_truck"), false)
 	btn_seal.pressed.connect(func() -> void: _on_decision_pressed("Seal Truck"))
 	top_actions_hbox.add_child(btn_seal)
 
-	btn_transit = make_action_btn.call(" Check Transit · +4 min ", false)
+	btn_transit = make_action_btn.call(Locale.t("btn.check_transit"), false)
 	btn_transit.pressed.connect(func() -> void: _on_decision_pressed("Check Transit"))
 	btn_transit.visible = false
 	btn_transit.disabled = true
 	top_actions_hbox.add_child(btn_transit)
 
-	btn_adr = make_action_btn.call(" ⚠ Check Yellow Lockers · +2 min ", true)
+	btn_adr = make_action_btn.call(Locale.t("btn.check_adr"), true)
 	btn_adr.pressed.connect(func() -> void: _on_decision_pressed("Check Yellow Lockers"))
 	btn_adr.visible = false
 	btn_adr.disabled = true
@@ -1342,7 +1390,7 @@ func _build_operational_layout() -> void:
 	btn_adr.add_theme_color_override("font_color", Color(1.0, 0.65, 0.2))
 	top_actions_hbox.add_child(btn_adr)
 
-	btn_combine = make_action_btn.call(" ⊕ Combine · +8 min ", false)
+	btn_combine = make_action_btn.call(Locale.t("btn.combine"), false)
 	btn_combine.pressed.connect(func() -> void: _on_decision_pressed("Combine Pallets"))
 	btn_combine.visible = false
 	btn_combine.disabled = true
@@ -1360,7 +1408,7 @@ func _build_operational_layout() -> void:
 	top_actions_hbox.add_child(top_spacer)
 	
 	btn_sop = Button.new()
-	btn_sop.text = " Help & SOPs "
+	btn_sop.text = Locale.t("btn.help_sops")
 	btn_sop.custom_minimum_size = Vector2(140, 38)
 	btn_sop.add_theme_font_size_override("font_size", 13)
 	var sop_sb = StyleBoxFlat.new()
@@ -1390,7 +1438,7 @@ func _build_operational_layout() -> void:
 	lbl_standby.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lbl_standby.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_standby.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl_standby.text = "Shift Started.\n\nSelect a tool from the Panels menu to begin operations.\n\n(If you don't know what to do, click 'Help & SOPs' in the top right.)"
+	lbl_standby.text = Locale.t("standby.message")
 	lbl_standby.add_theme_color_override("font_color", Color(0.45, 0.48, 0.52))
 	lbl_standby.add_theme_font_size_override("font_size", 22)
 	stage_hbox.add_child(lbl_standby)
@@ -1399,7 +1447,7 @@ func _build_operational_layout() -> void:
 	_build_as400_stage()
 	
 	btn_dock_view = Button.new()
-	btn_dock_view.text = "Dock View"
+	btn_dock_view.text = Locale.t("btn.dock_view")
 	btn_dock_view.clip_text = true
 	btn_shift_board.get_parent().add_child(btn_dock_view)
 	btn_shift_board.get_parent().move_child(btn_dock_view, 2)
@@ -1421,7 +1469,7 @@ func _build_operational_layout() -> void:
 	btn_dock_view.focus_mode = Control.FOCUS_NONE
 	btn_dock_view.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
 	btn_dock_view.add_theme_color_override("font_hover_color", Color(1, 1, 1))
-	_sidebar_btn_labels[btn_dock_view] = {"icon": "DV", "label": "Dock View"}
+	_sidebar_btn_labels[btn_dock_view] = {"icon": "DV", "label": Locale.t("btn.dock_view")}
 	
 	_init_panel_nodes_and_buttons(btn_dock_view)
 
@@ -1607,7 +1655,7 @@ func _build_dock_stage() -> void:
 	truck_inner.add_child(truck_vbox)
 
 	var truck_header = Label.new()
-	truck_header.text = "TRAILER"
+	truck_header.text = Locale.t("dock.trailer")
 	truck_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	truck_header.add_theme_font_size_override("font_size", 11)
 	truck_header.add_theme_color_override("font_color", Color(0.5, 0.52, 0.55))
@@ -1640,7 +1688,7 @@ func _build_dock_stage() -> void:
 	truck_vbox.add_child(truck_grid)
 
 	var lifo_lbl = Label.new()
-	lifo_lbl.text = "← UNLOAD FIRST"
+	lifo_lbl.text = Locale.t("dock.unload_first")
 	lifo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lifo_lbl.add_theme_font_size_override("font_size", 10)
 	lifo_lbl.add_theme_color_override("font_color", Color(0.6, 0.35, 0.35))
@@ -1672,7 +1720,7 @@ func _build_dock_stage() -> void:
 	lbl_hover_info.bbcode_enabled = true
 	lbl_hover_info.custom_minimum_size = Vector2(0, 78)
 	lbl_hover_info.scroll_active = false
-	lbl_hover_info.text = "[font_size=15][color=#7a8a9a]▶ Hover over a pallet to scan...[/color][/font_size]"
+	lbl_hover_info.text = "[font_size=15][color=#7a8a9a]" + Locale.t("dock.hover_scan") + "[/color][/font_size]"
 	scanner_margin.add_child(lbl_hover_info)
 
 # ==========================================
@@ -1912,13 +1960,14 @@ func _build_as400_stage() -> void:
 			_on_as400_input_submitted(as400_terminal_input.text)
 			as400_terminal_input.accept_event() 
 	)
+	as400_terminal_input.text_changed.connect(_on_as400_text_changed)
 	input_hbox.add_child(as400_terminal_input)
 
 	var btn_hbox = HBoxContainer.new()
 	as400_vbox.add_child(btn_hbox)
 	
 	var btn_confirm = Button.new()
-	btn_confirm.text = " [F10] Confirm RAQ "
+	btn_confirm.text = Locale.t("btn.confirm_raq")
 	btn_confirm.custom_minimum_size = Vector2(0, 40)
 	btn_confirm.focus_mode = Control.FOCUS_NONE 
 	var btn_sb = StyleBoxFlat.new()
@@ -1937,11 +1986,11 @@ func _build_as400_stage() -> void:
 
 func _confirm_as400_raq() -> void:
 	if tutorial_active:
-		if tutorial_step < 13:
-			_flash_tutorial_warning("Finish loading all pallets into the truck before confirming the RAQ!")
+		if tutorial_step < 14:
+			_flash_tutorial_warning(Locale.t("warn.finish_loading_first"))
 			return
-		elif tutorial_step == 13:
-			tutorial_step = 14
+		elif tutorial_step == 14:
+			tutorial_step = 15
 			_update_tutorial_ui()
 
 	if _session != null:
@@ -1958,7 +2007,7 @@ func _confirm_as400_raq() -> void:
 func _init_as400_tabs() -> void:
 	_as400_tabs.clear()
 	_active_tab_idx = 0
-	_as400_tabs.append({"state": 0, "badge_target": 18, "dest_code": "", "dest_name": ""})
+	_as400_tabs.append({"state": 0, "badge_target": 18, "dest_code": "", "dest_name": "", "seal_entered": ""})
 	_rebuild_as400_tab_bar()
 
 func _save_tab_state() -> void:
@@ -1985,7 +2034,7 @@ func _add_as400_tab() -> void:
 	if _as400_tabs.size() >= 2: return
 	if current_dest2_name == "": return
 	_save_tab_state()
-	_as400_tabs.append({"state": 0, "badge_target": 18, "dest_code": "", "dest_name": ""})
+	_as400_tabs.append({"state": 0, "badge_target": 18, "dest_code": "", "dest_name": "", "seal_entered": ""})
 	_active_tab_idx = _as400_tabs.size() - 1
 	_load_tab_state()
 	_rebuild_as400_tab_bar()
@@ -2033,7 +2082,7 @@ func _rebuild_as400_tab_bar() -> void:
 	# "New Tab" arrow button — only for co-loading with room for a second tab
 	if current_dest2_name != "" and _as400_tabs.size() < 2:
 		var plus_btn := Button.new()
-		plus_btn.text = " ▼ New Tab "
+		plus_btn.text = Locale.t("btn.new_tab")
 		plus_btn.focus_mode = Control.FOCUS_NONE
 		plus_btn.tooltip_text = "Open a second tab for %s %s" % [current_dest2_name, current_dest2_code]
 		var plus_sb := StyleBoxFlat.new()
@@ -2281,10 +2330,17 @@ func _render_as400_screen() -> void:
 		t += "%s19:32:25%s                                    %sAFFICH.%s  %sPJJIDFR%s\n\n" % [H, E, Y, E, H, E]
 		# Filter RAQ to active tab's destination sequence (0 = no filter for single-store)
 		var raq_seq_filter: int = _get_tab_dest_seq(_active_tab_idx)
-		var total_colis: int = 0
+		# Combine all pallets (loaded + available) — RAQ is the full shipment manifest
+		var all_raq_pallets: Array = []
 		for p: Dictionary in last_avail_cache:
 			if raq_seq_filter > 0 and p.get("dest", 1) != raq_seq_filter: continue
-			if p.is_uat: total_colis += p.collis
+			if p.is_uat: all_raq_pallets.append(p)
+		for p: Dictionary in last_loaded_cache:
+			if raq_seq_filter > 0 and p.get("dest", 1) != raq_seq_filter: continue
+			all_raq_pallets.append(p)
+		var total_colis: int = 0
+		for p: Dictionary in all_raq_pallets:
+			total_colis += p.collis
 		t += "%sExp{diteur   :   14    390   CAR TILBURG EXPE%s       %sTotal colis :   %d%s\n" % [H, E, H, total_colis, E]
 		if current_dest2_name != "":
 			var raq_tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
@@ -2301,41 +2357,34 @@ func _render_as400_screen() -> void:
 		t += "%s                              CFP     CD                       Dt Exp Adresse%s\n" % [H, E]
 		var regular_uats: Array = []
 		var cc_uats: Array = []
-		for p: Dictionary in last_avail_cache:
-			if raq_seq_filter > 0 and p.get("dest", 1) != raq_seq_filter: continue
-			if p.is_uat:
-				if p.type == "C&C": cc_uats.append(p)
-				else: regular_uats.append(p)
-		var se_map: Dictionary = {"Mecha": "86", "Bulky": "90", "Bikes": "89", "ServiceCenter": "86", "C&C": "86"}
-		var uni_map: Dictionary = {"Mecha": "62*", "Bulky": "10 ", "Bikes": "63*", "ServiceCenter": "02*", "C&C": "61*"}
-		var em_map: Dictionary = {"Mecha": "11", "Bulky": "11", "Bikes": "11", "ServiceCenter": "11", "C&C": "11"}
-		var rng_dt := RandomNumberGenerator.new()
-		rng_dt.seed = 42
-		for p in regular_uats:
+		for p: Dictionary in all_raq_pallets:
+			if p.type == "C&C": cc_uats.append(p)
+			elif p.type == "ADR": pass  # ADR handled in its own section below
+			else: regular_uats.append(p)
+		var se_map: Dictionary = {"Mecha": "86", "Bulky": "90", "Bikes": "89", "ServiceCenter": "86", "C&C": "86", "ADR": "86"}
+		var uni_map: Dictionary = {"Mecha": "62*", "Bulky": "10 ", "Bikes": "63*", "ServiceCenter": "02*", "C&C": "61*", "ADR": "62*"}
+		var em_map: Dictionary = {"Mecha": "11", "Bulky": "11", "Bikes": "11", "ServiceCenter": "11", "C&C": "11", "ADR": "11"}
+		for p: Dictionary in regular_uats:
 			var se: String = se_map.get(p.type, "86")
 			var uni: String = uni_map.get(p.type, "02*")
 			var em: String = em_map.get(p.type, "11")
-			var hr: int = 11 + rng_dt.randi_range(0, 3)
-			var mn: int = rng_dt.randi_range(10, 59)
 			var ddate: String = p.get("delivery_date", "")
 			var date_col: String = ddate if ddate != "" else "250326"
-			t += "%s  %-20s  MAG %s   0 %s %s %-20s %s %d:%02d:%02d%s\n" % [C, p.id, uni, se, em, p.get("colis_id", "N/A"), date_col, hr, mn, rng_dt.randi_range(0,59), E]
-		for p in cc_uats:
-			var hr: int = 13 + rng_dt.randi_range(0, 2)
-			var mn: int = rng_dt.randi_range(10, 59)
-			t += "%s  %-20s  MAP 10    0 86 11 %-20s 170326 %d:%02d:%02d%s\n" % [W, p.id, p.get("colis_id", "N/A"), hr, mn, rng_dt.randi_range(0,59), E]
-		# Transit loose collis rows (no UAT, not yet collected)
+			var stime: String = p.get("scan_time", "")
+			var time_col: String = stime if stime != "" else ""
+			var row_color: String = H if stime != "" else C
+			t += "%s  %-20s  MAG %s   0 %s %s %-20s %s %s%s\n" % [row_color, p.id, uni, se, em, p.get("colis_id", "N/A"), date_col, time_col, E]
+		for p: Dictionary in cc_uats:
+			var stime: String = p.get("scan_time", "")
+			var time_col: String = stime if stime != "" else ""
+			var row_color: String = H if stime != "" else W
+			t += "%s  %-20s  MAP 10    0 86 11 %-20s 170326 %s%s\n" % [row_color, p.id, p.get("colis_id", "N/A"), time_col, E]
+		# Transit: individual loose collis entries (no UAT, just colis numbers)
 		if _session != null and not _session.transit_collected:
-			var t_loose: int = _session.transit_loose_collis
-			var t_loose2: int = _session.transit_loose_dest2_collis
-			if current_dest2_name != "":
-				var t_seq: int = _get_tab_dest_seq(_active_tab_idx)
-				if t_seq == 2:
-					t_loose = t_loose2
-				else:
-					t_loose2 = 0
-			if t_loose > 0:
-				t += "%s  TRANSIT RACK            MAG ---   -- -- -- %-20s TRANSIT%s\n" % [C, "(" + str(t_loose) + " loose collis — no UAT)", E]
+			for entry: Dictionary in _session.transit_loose_entries:
+				var e_dest: int = entry.get("dest", 1)
+				if raq_seq_filter > 0 and e_dest != raq_seq_filter: continue
+				t += "%s  %-20s  MAG ---   -- -- -- %-20s         TRANSIT%s\n" % [C, "", entry.get("colis_id", "N/A"), E]
 		# Transit UATs not yet collected
 		if _session != null and not _session.transit_collected:
 			for p_tr: Dictionary in _session.transit_items:
@@ -2345,7 +2394,7 @@ func _render_as400_screen() -> void:
 					if tr_seq > 0 and p_tr_dest != tr_seq:
 						continue
 				t += "%s  %-20s  MAP ---   0 86 -- %-20s TRANSIT%s\n" % [C, p_tr.id, p_tr.get("colis_id", ""), E]
-		# ADR rows — always red, visible from session start; in locker until collected, then on dock
+		# ADR rows — always red, visible from session start; in locker until collected, then on dock or loaded
 		if _session != null and _session.has_adr:
 			for p_adr: Dictionary in _session.adr_items:
 				var p_adr_dest: int = p_adr.get("dest", 1)
@@ -2362,6 +2411,12 @@ func _render_as400_screen() -> void:
 						if adr_seq > 0 and p_adr_dest != adr_seq:
 							continue
 					t += "%s  %-20s  MAP ADR  %2d 86 11 %-20s ON DOCK%s\n" % [R, p_adr.id, p_adr.collis, p_adr.get("colis_id", ""), E]
+			for p_adr: Dictionary in last_loaded_cache:
+				if p_adr.get("type", "") == "ADR":
+					var p_adr_dest: int = p_adr.get("dest", 1)
+					if raq_seq_filter > 0 and p_adr_dest != raq_seq_filter: continue
+					var adr_stime: String = p_adr.get("scan_time", "")
+					t += "%s  %-20s  MAP ADR  %2d 86 11 %-20s %s%s\n" % [H, p_adr.id, p_adr.collis, p_adr.get("colis_id", ""), adr_stime, E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
 		t += "%sF3=Sortie  F5=Ttes UAT  F7=UAT non Adress{es  F8=UAT Adress{es  F9=CCC/ADR%s\n" % [C, E]
 		t += "%sF10=NBC/CFP   F11=EM/CD   F15=Tri F&R%s\n" % [C, E]
@@ -2472,7 +2527,7 @@ func _render_as400_screen() -> void:
 		var load_secs: int = 0
 		if _session != null:
 			var t_total: float = _session.total_time
-			load_mins = int(t_total) / 60
+			load_mins = int(t_total / 60.0)
 			load_secs = int(t_total) % 60
 		t += "%s------------------------------]TEMPS CHARGEMENT]------------------------------%s\n" % [C, E]
 		t += "  %sCOLIS CHARGES%s              %s]   %02d:%02d:%02d   ]%s      %sUAT CHARGEES%s\n" % [H, E, H, load_mins, load_secs, 0, E, H, E]
@@ -2492,16 +2547,22 @@ func _render_as400_screen() -> void:
 	elif as400_state == 19:
 		var tab_dest_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
 		var tab_dest_name: String = _as400_tabs[_active_tab_idx].get("dest_name", "") if not _as400_tabs.is_empty() else ""
+		var tab_seal: String = _as400_tabs[_active_tab_idx].get("seal_entered", "") if not _as400_tabs.is_empty() else ""
 		var dest_filled: bool = tab_dest_code != ""
-		# For non-co-loading, auto-fill from scenario as before
-		if current_dest2_name == "" and not dest_filled:
+		var seal_filled: bool = tab_seal != ""
+		# For non-co-loading, auto-fill dest from scenario (seal is never auto-filled)
+		# Tutorial forces manual entry so the trainee learns the flow
+		if current_dest2_name == "" and not dest_filled and not tutorial_active:
 			tab_dest_code = current_dest_code
 			tab_dest_name = current_dest_name
 			dest_filled = true
-		if dest_filled:
-			as400_terminal_input.placeholder_text = "F10=Valider (proceed to scanning) — F3=Sortie"
-		else:
+		# Set placeholder based on current stage
+		if not dest_filled:
 			as400_terminal_input.placeholder_text = "Enter store destination code, then press Enter"
+		elif not seal_filled:
+			as400_terminal_input.placeholder_text = "Enter seal number, then press Enter"
+		else:
+			as400_terminal_input.placeholder_text = "F10=Valider (proceed to scanning) — F3=Sortie"
 		t += "%s%s%s   %s***%s    %s[u]SAISIE D'UNE EXPEDITION[/u]%s  %s***%s  %sQUAI390%s    %sNLDKL01%s\n" % [H, d, E, H, E, C, E, H, E, H, E, H, E]
 		t += "%s19:30:24%s                                    %sAJOUTER%s  %sPID2E1R%s\n\n" % [H, E, R, E, H, E]
 		t += "%sN{exp{dition    :%s  %s06948174%s              %sExp{diteur camion:%s %s[u]14    390[/u]%s\n\n" % [H, E, Y, E, H, E, Y, E]
@@ -2509,16 +2570,14 @@ func _render_as400_screen() -> void:
 		if dest_filled:
 			t += "%sDestinataire     :%s  %s 7  %s%s   %s%s%s\n\n" % [H, E, Y, tab_dest_code, E, H, tab_dest_name, E]
 		else:
-			t += "%sDestinataire     :%s  %s 7  ________%s   %s← Type store code above%s\n\n" % [H, E, Y, E, R, E]
-		# Seal number 1: co-loading tabs get different numbers from same booklet
-		var seal1_base: int = 8600000 + (hash(current_dest_name) % 9999)
-		var seal1: String
-		if current_dest2_name != "" and _get_tab_dest_seq(_active_tab_idx) == 2:
-			var seal_offset: int = 1 + (hash(current_dest_name + current_dest2_name) % 10)
-			seal1 = str(seal1_base + seal_offset)
+			t += "%sDestinataire     :%s  %s 7  ________%s   %s" % [H, E, Y, E, R] + Locale.t("as400.saisie_dest_hint") + "%s\n\n" % E
+		# Seal number display
+		if seal_filled:
+			t += "%sSEAL number 1    :%s  %s[u]%s[/u]%s\n" % [H, E, Y, tab_seal, E]
+		elif dest_filled:
+			t += "%sSEAL number 1    :%s  %s________%s   %s" % [H, E, Y, E, R] + Locale.t("as400.saisie_seal_hint") + "%s\n" % E
 		else:
-			seal1 = str(seal1_base)
-		t += "%sSEAL number 1    :%s  %s[u]%s[/u]%s\n" % [H, E, Y, seal1, E]
+			t += "%sSEAL number 1    :%s  %s________%s\n" % [H, E, Y, E]
 		t += "%sSEAL number 2    :%s  %s________%s\n\n" % [H, E, Y, E]
 		t += "%sType transport :%s %s1%s\n" % [H, E, Y, E]
 		t += "%sPrestataire    :%s %sDHL%s\n" % [H, E, Y, E]
@@ -2590,6 +2649,19 @@ func _render_as400_screen() -> void:
 	t += "[/font_size]"
 	as400_terminal_display.text = t
 
+func _on_as400_text_changed(new_text: String) -> void:
+	var input: String = new_text.strip_edges().to_upper()
+	# Auto-advance for menu states — no Enter needed, just type the number
+	var auto_submit: bool = false
+	if as400_state == 2 and input in ["50", "40", "20"]: auto_submit = true
+	elif as400_state == 3 and input == "01": auto_submit = true
+	elif as400_state == 4 and input == "02": auto_submit = true
+	elif as400_state == 5 and input in ["05", "06"]: auto_submit = true
+	elif as400_state == 20 and input == "1": auto_submit = true
+	if auto_submit:
+		# Defer so the text_changed signal finishes cleanly
+		call_deferred("_on_as400_input_submitted", new_text)
+
 func _on_as400_input_submitted(text: String) -> void:
 	var input: String = text.strip_edges().to_upper()
 	as400_terminal_input.text = ""
@@ -2615,27 +2687,44 @@ func _on_as400_input_submitted(text: String) -> void:
 	elif as400_state == 7 and input == "123456": as400_state = _badge_target
 	elif as400_state == 19:
 		if input == "F10":
-			# For co-loading: require destinataire to be entered first
-			var tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
-			if current_dest2_name != "" and tab_code == "":
-				# Reject — show error on screen (re-render with error hint)
-				_as400_tabs[_active_tab_idx]["dest_code"] = "__ERROR__"
-				_render_as400_screen()
-				_as400_tabs[_active_tab_idx]["dest_code"] = ""
+			# For co-loading or tutorial: require destinataire first
+			if current_dest2_name != "" or tutorial_active:
+				var tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
+				if tab_code == "":
+					if lbl_hover_info:
+						lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire requis![/b] " + Locale.t("as400.dest_required") + "[/color][/font_size]"
+					_save_tab_state()
+					_render_as400_screen()
+					return
+			# Require seal to be entered for ALL scenarios
+			var tab_seal: String = _as400_tabs[_active_tab_idx].get("seal_entered", "") if not _as400_tabs.is_empty() else ""
+			if tab_seal == "":
 				if lbl_hover_info:
-					lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire requis![/b] Type the store code first, then press Enter, then F10.[/color][/font_size]"
+					lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Seal number requis![/b] " + Locale.t("as400.seal_required") + "[/color][/font_size]"
 				_save_tab_state()
+				_render_as400_screen()
 				return
 			as400_state = 18
 		elif input == "F3":
 			as400_state = 22
 		else:
-			# User is typing the destinataire store code
-			_handle_saisie_dest_input(input)
-			_save_tab_state()
-			_render_as400_screen()
-			WOTSAudio.play_as400_key(self)
-			return
+			# Determine what the user is entering based on current stage
+			var tab_code_cur: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
+			var tab_seal_cur: String = _as400_tabs[_active_tab_idx].get("seal_entered", "") if not _as400_tabs.is_empty() else ""
+			# For co-loading or tutorial: dest first, then seal
+			if (current_dest2_name != "" or tutorial_active) and tab_code_cur == "":
+				_handle_saisie_dest_input(input)
+				_save_tab_state()
+				_render_as400_screen()
+				WOTSAudio.play_as400_key(self)
+				return
+			# All scenarios: seal entry (for solo, dest is auto-filled so this is the first input)
+			if tab_seal_cur == "":
+				_handle_saisie_seal_input(input)
+				_save_tab_state()
+				_render_as400_screen()
+				WOTSAudio.play_as400_key(self)
+				return
 	elif as400_state == 18:
 		if input == "F3": as400_state = 5
 		elif input == "F13" or input == "SHIFT+F1":
@@ -2662,11 +2751,11 @@ func _on_as400_input_submitted(text: String) -> void:
 		if tutorial_step == 1 and as400_state == 2:
 			tutorial_step = 2
 			_update_tutorial_ui()
-		elif tutorial_step == 2 and as400_state == 18:
+		elif tutorial_step == 2 and as400_state == 19:
 			tutorial_step = 3
 			_update_tutorial_ui()
-		elif tutorial_step == 4 and as400_state == 8:
-			tutorial_step = 5
+		elif tutorial_step == 5 and as400_state == 8:
+			tutorial_step = 6
 			_update_tutorial_ui()
 
 func _handle_saisie_dest_input(input: String) -> void:
@@ -2679,26 +2768,52 @@ func _handle_saisie_dest_input(input: String) -> void:
 			break
 	if matched_store.is_empty():
 		if lbl_hover_info:
-			lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire inconnu:[/b] Code '%s' not found. Try again.[/color][/font_size]" % input
+			lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire inconnu:[/b] " + (Locale.t("as400.dest_unknown") % input) + "[/color][/font_size]"
 		return
 	# For co-loading: must be one of the two assigned stores
 	if current_dest2_name != "":
 		if input != current_dest_code and input != current_dest2_code:
 			if lbl_hover_info:
-				lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire incorrect:[/b] Code '%s' is not assigned to this truck. Check the Shift Board for the correct store codes.[/color][/font_size]" % input
+				lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire incorrect:[/b] " + (Locale.t("as400.dest_wrong_truck") % input) + "[/color][/font_size]"
 			return
 		# Check if other tab already claimed this store
 		for i: int in range(_as400_tabs.size()):
 			if i == _active_tab_idx: continue
 			if _as400_tabs[i].get("dest_code", "") == input:
 				if lbl_hover_info:
-					lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Already open:[/b] Store %s is already open in the other tab.[/color][/font_size]" % input
+					lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Already open:[/b] " + (Locale.t("as400.dest_already_open") % input) + "[/color][/font_size]"
 				return
+	else:
+		# Solo loading (including tutorial): must match the assigned store
+		if input != current_dest_code:
+			if lbl_hover_info:
+				lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire incorrect:[/b] " + (Locale.t("as400.dest_wrong_truck") % input) + "[/color][/font_size]"
+			return
 	_as400_tabs[_active_tab_idx]["dest_code"] = matched_store.code
 	_as400_tabs[_active_tab_idx]["dest_name"] = matched_store.name
 	_rebuild_as400_tab_bar()
 	if lbl_hover_info:
-		lbl_hover_info.text = "[font_size=15][color=#2ecc71][b]Destinataire OK:[/b] %s %s — press F10 to validate.[/color][/font_size]" % [matched_store.name, matched_store.code]
+		# Always show "enter seal" hint — seal is never auto-filled
+		lbl_hover_info.text = "[font_size=15][color=#2ecc71][b]Destinataire OK:[/b] %s %s — " % [matched_store.name, matched_store.code] + Locale.t("as400.dest_ok_enter_seal") + "[/color][/font_size]"
+
+func _handle_saisie_seal_input(input: String) -> void:
+	if _as400_tabs.is_empty(): return
+	var tab_seq: int = _get_tab_dest_seq(_active_tab_idx)
+	var expected_seal: String = ""
+	if tab_seq == 1:
+		expected_seal = seal_number_1
+	elif tab_seq == 2:
+		expected_seal = seal_number_2
+	elif tab_seq == 0:
+		# Solo loading — always seal_number_1
+		expected_seal = seal_number_1
+	if input == expected_seal:
+		_as400_tabs[_active_tab_idx]["seal_entered"] = input
+		if lbl_hover_info:
+			lbl_hover_info.text = "[font_size=15][color=#2ecc71][b]Seal OK:[/b] %s — " % input + Locale.t("as400.seal_ok") + "[/color][/font_size]"
+	else:
+		if lbl_hover_info:
+			lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Seal incorrect:[/b] " + (Locale.t("as400.seal_incorrect") % input) + "[/color][/font_size]"
 
 # ==========================================
 # FLOW LOGIC & DATA UPDATES
@@ -2710,8 +2825,8 @@ func set_enabled(enabled: bool) -> void:
 
 func _on_portal_start_pressed() -> void:
 	if _session == null: return
-	var scenario_name: String = "default"
-	if portal_scenario_dropdown != null: scenario_name = portal_scenario_dropdown.get_item_text(portal_scenario_dropdown.get_selected_id())
+	var _scenario_name: String = "default"
+	if portal_scenario_dropdown != null: _scenario_name = portal_scenario_dropdown.get_item_text(portal_scenario_dropdown.get_selected_id())
 	
 	_current_scenario_index = portal_scenario_dropdown.get_selected_id()
 	if _current_scenario_index == 0: _current_scenario_name = "0. Tutorial"
@@ -2736,6 +2851,14 @@ func _on_portal_start_pressed() -> void:
 		current_dest2_name = pair.store2
 		current_dest2_code = pair.code2
 	
+	# Generate seal numbers for every scenario (realistic 8-digit from seal booklet)
+	var seal_base: int = 8600000 + (hash(current_dest_name) % 9000)
+	seal_number_1 = "%08d" % seal_base
+	if current_dest2_name != "":
+		seal_number_2 = "%08d" % (seal_base + randi_range(1, 10))
+	else:
+		seal_number_2 = ""
+	
 	# Rebuild dock lanes for current scenario type
 	_rebuild_dock_lanes(_current_scenario_index == 3)
 	phone_messages.clear()
@@ -2759,7 +2882,7 @@ func _on_portal_start_pressed() -> void:
 		tutorial_step = 0
 		tut_canvas.visible = true
 		_update_tutorial_ui()
-		lbl_standby.text = "Your first shift starts here.\n\nFollow the green Training Guide at the top.\nIt will walk you through every step."
+		lbl_standby.text = Locale.t("standby.tutorial")
 		lbl_standby.visible = true
 		# Keep sidebar pinned open during tutorial so labels are visible
 		_sidebar_pinned = true
@@ -2834,27 +2957,27 @@ func _on_raq_opened() -> void:
 	# btn_call is always enabled — no gate needed
 
 func _render_debrief() -> void:
-	var bb := "[center][font_size=28][color=#0082c3][b]Story of the Shift[/b][/color][/font_size][/center]\n\n"
+	var bb := "[center][font_size=28][color=#0082c3][b]" + Locale.t("debrief.title") + "[/b][/color][/font_size][/center]\n\n"
 	# Truck load summary line
-	bb += "[center][font_size=16][color=#7f8fa6]Truck load: [b]%.0f kg[/b]  ·  [b]%d dm³[/b]" % [_debrief_total_weight_kg, _debrief_total_dm3]
+	bb += "[center][font_size=16][color=#7f8fa6]" + Locale.t("debrief.truck_load") + " [b]%.0f kg[/b]  ·  [b]%d dm³[/b]" % [_debrief_total_weight_kg, _debrief_total_dm3]
 	if _debrief_combine_count > 0:
-		bb += "  ·  [color=#2ecc71][b]%d deckstacker combine(s)[/b][/color]" % _debrief_combine_count
+		bb += "  ·  [color=#2ecc71][b]%d %s[/b][/color]" % [_debrief_combine_count, Locale.t("debrief.combines")]
 	bb += "[/color][/font_size][/center]\n\n"
-	bb += "[font_size=24][b]Operational Timeline & Decisions[/b][/font_size]\n"
+	bb += "[font_size=24][b]" + Locale.t("debrief.timeline") + "[/b][/font_size]\n"
 	bb += _debrief_what_happened + "\n"
 
 	if _as400_wrong_store_scans > 0:
-		bb += "\n[font_size=18][color=#f1c40f]• AS400 soft error:[/color][/font_size] [font_size=16]The scanner blocked %d attempt(s) to scan a pallet belonging to the wrong store. AS400 prevented incorrect scanning — this is the system working correctly, but it signals the wrong tab was active.[/font_size]\n" % _as400_wrong_store_scans
+		bb += "\n[font_size=18][color=#f1c40f]• " + Locale.t("debrief.wrong_store") + "[/color][/font_size] [font_size=16]" + (Locale.t("debrief.wrong_store_detail") % _as400_wrong_store_scans) + "[/font_size]\n"
 
 	if _session != null:
-		var had_transit: bool = (_session.transit_items.size() > 0 or _session.transit_loose_collis > 0 or _session.transit_loose_dest2_collis > 0 or _session.transit_collected)
+		var had_transit: bool = (_session.transit_items.size() > 0 or _session.transit_loose_entries.size() > 0 or _session.transit_collected)
 		if had_transit and not _session.transit_collected:
-			bb += "\n[font_size=18][color=#f1c40f]• Transit rack not checked:[/color][/font_size] [font_size=16]Collis or UATs were waiting on the transit rack but were never collected before sealing.[/font_size]\n"
+			bb += "\n[font_size=18][color=#f1c40f]• " + Locale.t("debrief.transit_not_checked") + "[/color][/font_size] [font_size=16]" + Locale.t("debrief.transit_detail") + "[/font_size]\n"
 		if _session.has_adr and not _session.adr_collected:
-			bb += "\n[font_size=18][color=#e74c3c]• ADR pallet not collected:[/color][/font_size] [font_size=16]The ADR pallet was in the yellow lockers but was never retrieved. Dangerous goods cannot be left unsecured when committed to a shipment.[/font_size]\n"
+			bb += "\n[font_size=18][color=#e74c3c]• " + Locale.t("debrief.adr_not_collected") + "[/color][/font_size] [font_size=16]" + Locale.t("debrief.adr_detail") + "[/font_size]\n"
 
 	if _debrief_why_it_mattered.strip_edges() != "":
-		bb += "\n[font_size=24][b]Managerial Review[/b][/font_size]\n"
+		bb += "\n[font_size=24][b]" + Locale.t("debrief.review") + "[/b][/font_size]\n"
 		bb += _debrief_why_it_mattered + "\n"
 
 	if lbl_debrief_text != null: lbl_debrief_text.text = bb
@@ -2878,15 +3001,14 @@ func _populate_scenarios() -> void:
 	portal_scenario_dropdown.clear()
 	
 	var names: Array[String] = [
-		"0. Tutorial", 
-		"1. Standard Loading", 
-		"2. Priority Loading",
-		"3. Co-Loading"
+		Locale.t("portal.scenario_0"),
+		Locale.t("portal.scenario_1"),
+		Locale.t("portal.scenario_2"),
+		Locale.t("portal.scenario_3"),
 	]
-	names.sort() 
 		
 	for i in range(names.size()):
-		var n = names[i]
+		var n: String = names[i]
 		if i > highest_unlocked_scenario:
 			portal_scenario_dropdown.add_item("🔒 " + n)
 			portal_scenario_dropdown.set_item_disabled(i, true)
@@ -2899,38 +3021,50 @@ func _populate_scenarios() -> void:
 
 func _on_portal_scenario_changed(idx: int) -> void:
 	if portal_scenario_desc == null: return
-	var descriptions = [
-		"[b]Tutorial[/b] — Guided walkthrough of a standard loading shift. Learn to navigate the AS400, check the RAQ, identify C&C pallets, load in the correct sequence, and validate your work.",
-		"[b]Standard Loading[/b] — Load a truck for a single store without guidance. Apply everything from the tutorial. New SOP articles unlock: CMR, Loading Sheet, dock lines, quality rules.",
-		"[b]Priority Loading[/b] — More pallets than the truck can hold. You must choose what to leave behind based on promise dates (D-, D, D+). Critical decision-making under pressure.",
-		"[b]Co-Loading[/b] — Two stores share one truck. Load sequence 1 first (deeper), then sequence 2 (near doors). Never mix destinations. Real CO pairs from the loading plan."
+	var desc_keys: Array[String] = [
+		"portal.desc_0", "portal.desc_1", "portal.desc_2", "portal.desc_3"
 	]
-	if idx >= 0 and idx < descriptions.size():
-		portal_scenario_desc.text = descriptions[idx]
+	if idx >= 0 and idx < desc_keys.size():
+		portal_scenario_desc.text = Locale.t(desc_keys[idx])
 	else:
 		portal_scenario_desc.text = ""
 
+func _on_portal_language_changed(idx: int) -> void:
+	Locale.current_lang = idx
+	# Refresh all portal labels
+	if _portal_sub != null:
+		_portal_sub.text = Locale.t("portal.subtitle")
+	if _portal_lbl_lang != null:
+		_portal_lbl_lang.text = Locale.t("portal.select_language")
+	if _portal_lbl_scen != null:
+		_portal_lbl_scen.text = Locale.t("portal.select_scenario")
+	if _portal_btn_start != null:
+		_portal_btn_start.text = Locale.t("portal.begin_shift")
+	if _portal_btn_dev != null:
+		_portal_btn_dev.text = "🔧 " + Locale.t("portal.dev_unlock")
+	_populate_scenarios()
+
 func _on_decision_pressed(action: String) -> void:
 	if tutorial_active:
-		if tutorial_step < 5:
-			_flash_tutorial_warning("Follow the guide! We aren't ready for this yet.")
+		if tutorial_step < 6:
+			_flash_tutorial_warning(Locale.t("warn.not_ready"))
 			return
-		if tutorial_step == 5:
+		if tutorial_step == 6:
 			if action != "Call departments (C&C check)":
-				_flash_tutorial_warning("Count the C&C pallets first and click 'Call Departments'!")
-				return
-			else:
-				tutorial_step = 6
-				_update_tutorial_ui()
-		elif tutorial_step == 6:
-			if action != "Start Loading":
-				_flash_tutorial_warning("Now click 'Start Loading' to begin!")
+				_flash_tutorial_warning(Locale.t("warn.call_depts"))
 				return
 			else:
 				tutorial_step = 7
 				_update_tutorial_ui()
-		elif tutorial_step < 14 and action == "Seal Truck":
-			_flash_tutorial_warning("You haven't finished the loading and AS400 validation yet!")
+		elif tutorial_step == 7:
+			if action != "Start Loading":
+				_flash_tutorial_warning(Locale.t("warn.start_loading"))
+				return
+			else:
+				tutorial_step = 8
+				_update_tutorial_ui()
+		elif tutorial_step < 15 and action == "Seal Truck":
+			_flash_tutorial_warning(Locale.t("warn.not_finished"))
 			return
 			
 	if _session == null: return
@@ -2943,7 +3077,7 @@ func _on_decision_pressed(action: String) -> void:
 		WOTSAudio.play_panel_click(self)
 		# Combine is the only button gated behind Start Loading
 		if btn_combine != null and btn_combine.visible:
-			btn_combine.disabled = false
+			_refresh_combine_btn()
 	elif action == "Check Transit":
 		if btn_transit != null:
 			btn_transit.disabled = true
@@ -2965,7 +3099,9 @@ func _update_top_time(total_time: float) -> void:
 		top_time_label.text = "09:00:00"
 		return
 	var total_secs: int = int(total_time)
+	@warning_ignore("integer_division")
 	var hours: int = base_hour + (total_secs / 3600)
+	@warning_ignore("integer_division")
 	var mins: int = (total_secs % 3600) / 60
 	var secs: int = total_secs % 60
 	top_time_label.text = "%02d:%02d:%02d" % [hours, mins, secs]
@@ -2982,7 +3118,7 @@ func _update_strip_text() -> void:
 	if role_strip_label == null: return
 	var window_text := "Not Active"
 	if _strip_window_active: window_text = "Active"
-	role_strip_label.text = "Assignment: %s | Window: %s" % [_strip_assignment, window_text]
+	role_strip_label.text = Locale.t("dock.assignment") % [_strip_assignment, window_text]
 
 func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max: float) -> void:
 	last_avail_cache = avail.duplicate(true)
@@ -2993,8 +3129,8 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 		_render_as400_screen() 
 
 	if truck_cap_label != null:
-		var spaces_left = cap_max - cap_used
-		var pct = cap_used / cap_max if cap_max > 0 else 0
+		var _spaces_left: float = cap_max - cap_used
+		var pct: float = cap_used / cap_max if cap_max > 0 else 0.0
 		var color_hex = "#8fa6bf"
 		if pct > 0.85: color_hex = "#e74c3c"
 		elif pct > 0.6: color_hex = "#f1c40f"
@@ -3093,34 +3229,34 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 	_update_truck_visualizer(loaded)
 	
 	if tutorial_active:
-		if tutorial_step == 7:
+		if tutorial_step == 8:
 			for p in loaded:
 				if p.type == "Mecha":
-					tutorial_step = 8
+					tutorial_step = 9
 					_update_tutorial_ui()
 					break
-		elif tutorial_step == 8:
+		elif tutorial_step == 9:
 			var has_mecha = false
 			for p in loaded:
 				if p.type == "Mecha": has_mecha = true
 			if not has_mecha:
-				tutorial_step = 9
+				tutorial_step = 10
 				_update_tutorial_ui()
-		elif tutorial_step == 9:
-			for p in loaded:
-				if p.type == "ServiceCenter":
-					tutorial_step = 10
-					_update_tutorial_ui()
-					break
 		elif tutorial_step == 10:
 			for p in loaded:
-				if p.type == "Bikes":
+				if p.type == "ServiceCenter":
 					tutorial_step = 11
 					_update_tutorial_ui()
 					break
-		elif tutorial_step == 12:
+		elif tutorial_step == 11:
+			for p in loaded:
+				if p.type == "Bikes":
+					tutorial_step = 12
+					_update_tutorial_ui()
+					break
+		elif tutorial_step == 13:
 			if avail.is_empty():
-				tutorial_step = 13
+				tutorial_step = 14
 				_update_tutorial_ui()
 
 # ==========================================
@@ -3139,7 +3275,7 @@ func _clear_phone_flash() -> void:
 func _on_phone_pallets_delivered() -> void:
 	_update_phone_content()
 	if lbl_hover_info:
-		lbl_hover_info.text = "[font_size=15][color=#2ecc71][b]Pallets arrived on the dock.[/b][/color][/font_size]"
+		lbl_hover_info.text = "[font_size=15][color=#2ecc71][b]" + Locale.t("dock.pallets_arrived") + "[/b][/color][/font_size]"
 
 func _on_phone_notification(message: String, _pallets_added: int) -> void:
 	phone_messages.append(message)
@@ -3397,15 +3533,15 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 			hover_text = "[font_size=15][color=#e74c3c][b]⚠ UNLOAD PALLET[/b][/color]\n[color=#c0c8d0]U.A.T:[/color] [b][color=#ffffff]%s[/color][/b]\n[color=#c0c8d0]Colis:[/color] [color=#ffffff]%s[/color]\n[color=#e74c3c]Penalty: +1.1 min rework[/color][/font_size]" % [p.id, p.get("colis_id", "N/A")]
 		else:
 			btn.modulate = Color(0.6, 0.6, 0.6) 
-			hover_text = "[font_size=15][color=#95a5a6][b]BLOCKED[/b]\n%s\nUnload the pallets near the door first.[/color][/font_size]" % p.id
+			hover_text = "[font_size=15][color=#95a5a6][b]BLOCKED[/b]\n%s\n" % p.id + Locale.t("dock.blocked_unload") + "[/color][/font_size]"
 
 		btn.mouse_entered.connect(func() -> void: if lbl_hover_info: lbl_hover_info.text = hover_text)
-		btn.mouse_exited.connect(func() -> void: if lbl_hover_info: lbl_hover_info.text = "[font_size=15][color=#7a8a9a]▶ Hover over a pallet to scan...[/color][/font_size]")
+		btn.mouse_exited.connect(func() -> void: if lbl_hover_info: lbl_hover_info.text = "[font_size=15][color=#7a8a9a]" + Locale.t("dock.hover_scan") + "[/color][/font_size]")
 		
 		btn.pressed.connect(func() -> void: 
 			if _load_cooldown: return
-			if tutorial_active and tutorial_step != 8:
-				_flash_tutorial_warning("Don't unload anything right now, follow the guide!")
+			if tutorial_active and tutorial_step != 9:
+				_flash_tutorial_warning(Locale.t("warn.dont_unload"))
 				return
 			_load_cooldown = true
 			btn.modulate = Color(1.5, 0.5, 0.5)
@@ -3502,39 +3638,39 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	hover_text += "[/font_size]"
 	
 	btn.mouse_entered.connect(func() -> void: if lbl_hover_info: lbl_hover_info.text = hover_text)
-	btn.mouse_exited.connect(func() -> void: if lbl_hover_info: lbl_hover_info.text = "[font_size=15][color=#7a8a9a]▶ Hover over a pallet to scan...[/color][/font_size]")
+	btn.mouse_exited.connect(func() -> void: if lbl_hover_info: lbl_hover_info.text = "[font_size=15][color=#7a8a9a]" + Locale.t("dock.hover_scan") + "[/color][/font_size]")
 
 	btn.pressed.connect(func() -> void: 
 		# Loading cooldown — prevents spam clicking
 		if _load_cooldown: return
 		
 		if tutorial_active:
-			if tutorial_step < 7:
-				_flash_tutorial_warning("We aren't ready to load pallets yet. Follow the guide!")
+			if tutorial_step < 8:
+				_flash_tutorial_warning(Locale.t("warn.not_ready_load"))
 				return
-			if tutorial_step == 7 and p_data.type != "Mecha":
-				_flash_tutorial_warning("Click a Blue Mecha pallet so we can learn how to fix mistakes!")
+			if tutorial_step == 8 and p_data.type != "Mecha":
+				_flash_tutorial_warning(Locale.t("warn.click_mecha"))
 				return
-			if tutorial_step == 8:
-				_flash_tutorial_warning("Remove the Blue Mecha pallet from the truck first by clicking it in the trailer!")
+			if tutorial_step == 9:
+				_flash_tutorial_warning(Locale.t("warn.remove_mecha"))
 				return
-			if tutorial_step == 9 and p_data.type != "ServiceCenter":
-				_flash_tutorial_warning("Wait! You must load the Yellow Service Center pallet first.")
+			if tutorial_step == 10 and p_data.type != "ServiceCenter":
+				_flash_tutorial_warning(Locale.t("warn.service_first"))
 				return
-			if tutorial_step == 10 and p_data.type != "Bikes":
-				_flash_tutorial_warning("Wait! You must load the Green Bikes pallet next.")
+			if tutorial_step == 11 and p_data.type != "Bikes":
+				_flash_tutorial_warning(Locale.t("warn.bikes_next"))
 				return
-			if tutorial_step == 11:
-				_flash_tutorial_warning("Click 'Help & SOPs' in the top right before continuing!")
+			if tutorial_step == 12:
+				_flash_tutorial_warning(Locale.t("warn.help_sops_first"))
 				return
 				
 		# Scanner only works on scanning screen, not RAQ
 		if as400_state == 8:
 			WOTSAudio.play_error_buzz(self)
-			if tutorial_active and tutorial_step == 7:
-				_flash_tutorial_warning("The scanner doesn't work on the RAQ screen! Press [color=#f1c40f]F3[/color] on your keyboard to return to the Scanning screen, then try again.")
+			if tutorial_active and tutorial_step == 8:
+				_flash_tutorial_warning(Locale.t("warn.scanner_raq_tutorial"))
 			elif lbl_hover_info:
-				lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Scanner inactive on RAQ screen![/b] Press F3 to return to the Scanning screen first.[/color][/font_size]"
+				lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]" + Locale.t("dock.scanner_inactive") + "[/b] " + Locale.t("dock.scanner_inactive_detail") + "[/color][/font_size]"
 			return
 
 		# Co-loading: wrong-store tab check (scanner blocks wrong-store pallets)
@@ -3545,7 +3681,7 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 				var wrong_store_name: String = current_dest_name if p_data.get("dest", 1) == 1 else current_dest2_name
 				var wrong_store_code: String = current_dest_code if p_data.get("dest", 1) == 1 else current_dest2_code
 				if lbl_hover_info:
-					lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]AS400 ERROR — Wrong Store:[/b] This pallet belongs to %s %s. Switch to the correct tab first.[/color][/font_size]" % [wrong_store_name, wrong_store_code]
+					lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]" + Locale.t("dock.wrong_store") + "[/b] " + (Locale.t("dock.wrong_store_detail") % [wrong_store_name, wrong_store_code]) + "[/color][/font_size]"
 				_as400_wrong_store_scans += 1
 				return
 		
@@ -3553,7 +3689,7 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 		_load_cooldown = true
 		
 		# Visual feedback: flash pallet before loading
-		var orig_mod: Color = btn.modulate
+		var _orig_mod: Color = btn.modulate
 		btn.modulate = Color(1.5, 1.5, 1.5)
 		WOTSAudio.play_scan_beep(self)
 		
@@ -3571,7 +3707,7 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	)
 	parent.add_child(btn)
 
-func _init_panel_nodes_and_buttons(btn_dock_view: Button) -> void:
+func _init_panel_nodes_and_buttons(dock_view_button: Button) -> void:
 	_panel_nodes.clear()
 	_panel_nodes["Dock View"] = pnl_dock_stage
 	_panel_nodes["AS400"] = pnl_as400_stage
@@ -3581,7 +3717,7 @@ func _init_panel_nodes_and_buttons(btn_dock_view: Button) -> void:
 	_panel_nodes["Phone"] = pnl_phone
 	_panel_nodes["Notes"] = pnl_notes
 	
-	if btn_dock_view != null: btn_dock_view.pressed.connect(func() -> void: _toggle_panel("Dock View"))
+	if dock_view_button != null: dock_view_button.pressed.connect(func() -> void: _toggle_panel("Dock View"))
 	if btn_shift_board != null: btn_shift_board.pressed.connect(func() -> void: _toggle_panel("Shift Board"))
 	if btn_as400 != null: btn_as400.pressed.connect(func() -> void: _toggle_panel("AS400"))
 	if btn_trailer_capacity != null: btn_trailer_capacity.pressed.connect(func() -> void: _toggle_panel("Trailer Capacity"))
@@ -3699,22 +3835,26 @@ func _close_all_panels(silent: bool) -> void:
 	for panel_name in PANEL_NAMES: _set_panel_visible(panel_name, false, silent)
 
 func _toggle_panel(panel_name: String) -> void:
-	if tutorial_active:
+	var is_open: bool = bool(_panel_state.get(panel_name, false))
+	# Tutorial gates only block OPENING panels, never closing
+	if tutorial_active and not is_open:
 		if tutorial_step < 3 and panel_name != "AS400":
-			_flash_tutorial_warning("Please open the AS400 panel first!")
+			_flash_tutorial_warning(Locale.t("warn.open_as400_first"))
 			return
-		if tutorial_step == 3 and panel_name != "Dock View" and panel_name != "AS400":
-			_flash_tutorial_warning("Please open the Dock View to see the pallets!")
+		if tutorial_step == 3 and panel_name != "AS400" and panel_name != "Shift Board":
+			_flash_tutorial_warning(Locale.t("warn.check_shift_board_seal"))
 			return
-		if tutorial_step == 4 and panel_name != "AS400" and panel_name != "Dock View":
-			_flash_tutorial_warning("Open the AS400 and press F13 to check the RAQ pallet list!")
+		if tutorial_step == 4 and panel_name != "Dock View" and panel_name != "AS400":
+			_flash_tutorial_warning(Locale.t("warn.open_dock_view"))
+			return
+		if tutorial_step == 5 and panel_name != "AS400" and panel_name != "Dock View":
+			_flash_tutorial_warning(Locale.t("warn.open_as400_f13"))
 			return
 
-	var is_open: bool = bool(_panel_state.get(panel_name, false))
 	_set_panel_visible(panel_name, not is_open, false)
 	WOTSAudio.play_panel_click(self)
 
-func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) -> void:
+func _set_panel_visible(panel_name: String, make_visible: bool, _silent: bool) -> void:
 	_panel_state[panel_name] = make_visible
 	if make_visible: panels_ever_opened[panel_name] = true 
 	
@@ -3748,8 +3888,8 @@ func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) ->
 		if tutorial_step == 0 and panel_name == "AS400" and make_visible:
 			tutorial_step = 1
 			_update_tutorial_ui()
-		elif tutorial_step == 3 and panel_name == "Dock View" and make_visible:
-			tutorial_step = 4
+		elif tutorial_step == 4 and panel_name == "Dock View" and make_visible:
+			tutorial_step = 5
 			_update_tutorial_ui()
 
 # ==========================================
@@ -3807,8 +3947,15 @@ func _populate_overlay_panels() -> void:
 		if current_dest2_name != "":
 			t += "[color=#f1c40f]09:00   %s %s (Seq.1) /  CO     DHL        13.6m  ← YOUR LOAD[/color]\n" % [current_dest_name, current_dest_code]
 			t += "[color=#f1c40f]        %s %s (Seq.2)[/color]\n" % [current_dest2_name, current_dest2_code]
+			t += "[color=#f1c40f]        Seal Seq.1: [b]%s[/b]   Seal Seq.2: [b]%s[/b][/color]\n" % [seal_number_1, seal_number_2]
 		else:
-			t += "[color=#f1c40f]09:00   %-14s %-5s  SOLO   DHL        13.6m  ← YOUR LOAD[/color]\n" % [current_dest_name, current_dest_code]
+			# During tutorial, highlight the store code and seal in a vivid color
+			if tutorial_active:
+				t += "[color=#f1c40f]09:00   %-14s [/color][color=#ff44ff][b]%s[/b]  ← STORE CODE[/color][color=#f1c40f]  SOLO   DHL        13.6m  ← YOUR LOAD[/color]\n" % [current_dest_name, current_dest_code]
+				t += "[color=#f1c40f]        Seal: [/color][color=#ff44ff][b]%s[/b]  ← SEAL NUMBER[/color]\n" % seal_number_1
+			else:
+				t += "[color=#f1c40f]09:00   %-14s %-5s  SOLO   DHL        13.6m  ← YOUR LOAD[/color]\n" % [current_dest_name, current_dest_code]
+				t += "[color=#f1c40f]        Seal: [b]%s[/b][/color]\n" % seal_number_1
 		t += "10:30   DEN BOSCH 3619             SOLO   DHL        13.6m\n"
 		t += "11:00   ARENA 256                  SOLO   DHL        13.6m\n"
 		t += "11:30   KERKRADE 346 /             CO     SCHOTPOORT 13.6m\n"

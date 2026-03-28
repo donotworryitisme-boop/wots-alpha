@@ -1,4 +1,5 @@
 extends Node
+class_name SessionManager
 
 signal time_updated(total_time, loading_time)
 signal session_ended(debrief_payload)
@@ -45,8 +46,7 @@ var co_dest_2: Dictionary = {}  # Sequence 2 — loaded second (near door)
 
 # Transit rack
 var transit_items: Array = []       # Items physically on transit rack, not yet on dock
-var transit_loose_collis: int = 0   # Loose collis with no UAT (show in RAQ, 0 on scanning)
-var transit_loose_dest2_collis: int = 0  # Same for dest 2 in co-loading
+var transit_loose_entries: Array = []  # Individual loose colis dicts {colis_id, dest, is_loose}
 var transit_collected: bool = false
 
 # ADR / Dangerous Goods
@@ -121,8 +121,7 @@ func start_session_with_scenario(scenario_name: String) -> void:
 	is_paused = false
 	is_co_load = false
 	transit_items.clear()
-	transit_loose_collis = 0
-	transit_loose_dest2_collis = 0
+	transit_loose_entries.clear()
 	transit_collected = false
 	has_adr = false
 	adr_items.clear()
@@ -386,9 +385,21 @@ func _generate_inventory(scenario_name: String) -> void:
 	if scenario_name != "0. Tutorial" and rng.randf() < 0.35:
 		var use_loose: bool = rng.randf() < 0.30
 		if use_loose:
-			transit_loose_collis = rng.randi_range(1, 2)
+			var n_loose_d1: int = rng.randi_range(1, 4)
+			for _li: int in range(n_loose_d1):
+				transit_loose_entries.append({
+					"colis_id": _generate_real_colis("Mecha", rng),
+					"dest": 1,
+					"is_loose": true
+				})
 			if is_co_load:
-				transit_loose_dest2_collis = rng.randi_range(1, 2)
+				var n_loose_d2: int = rng.randi_range(1, 3)
+				for _li: int in range(n_loose_d2):
+					transit_loose_entries.append({
+						"colis_id": _generate_real_colis("Mecha", rng),
+						"dest": 2,
+						"is_loose": true
+					})
 		else:
 			var uat_count: int = rng.randi_range(1, 2)
 			for _ti: int in range(uat_count):
@@ -488,6 +499,7 @@ func load_pallet_by_id(id: String) -> void:
 			target = p
 			break
 	if not target.is_empty() and (capacity_used + target.cap) <= capacity_max:
+		target["scan_time"] = _format_scan_time(total_time)
 		inventory_available.erase(target)
 		inventory_loaded.append(target)
 		capacity_used += target.cap
@@ -504,6 +516,7 @@ func unload_pallet_by_id(id: String) -> void:
 			break
 
 	if not target.is_empty() and idx >= (inventory_loaded.size() - 3):
+		target["scan_time"] = ""
 		inventory_loaded.erase(target)
 		inventory_available.append(target)
 		capacity_used -= target.cap
@@ -590,6 +603,16 @@ func _promise_to_date(promise: String, rng: RandomNumberGenerator) -> String:
 		var feb_day: int = 28 + day
 		return "%02d/02/2026" % feb_day
 
+# Formats sim time as DD/MM/YYYY HH:MM:SS (clock starts at 09:00)
+func _format_scan_time(sim_time: float) -> String:
+	var total_secs: int = int(sim_time)
+	@warning_ignore("integer_division")
+	var hours: int = 9 + (total_secs / 3600)
+	@warning_ignore("integer_division")
+	var mins: int = (total_secs % 3600) / 60
+	var secs: int = total_secs % 60
+	return "25/03/2026 %02d:%02d:%02d" % [hours, mins, secs]
+
 func _make_pallet(rng: RandomNumberGenerator, ptype: String, code: String,
 				  promise: String, collis: int, cap: float, dest: int,
 				  subtype: String = "", missing: bool = false) -> Dictionary:
@@ -610,7 +633,8 @@ func _make_pallet(rng: RandomNumberGenerator, ptype: String, code: String,
 		"dm3": _pallet_dm3(ptype, subtype, rng),
 		"combined_uats": [],
 		"combined_collis": 0,
-		"delivery_date": ""
+		"delivery_date": "",
+		"scan_time": ""
 	}
 
 # Auto-places incoming boxes (ADR, transit) onto an existing dock pallet.
@@ -769,7 +793,7 @@ func end_session() -> void:
 		feedback.append("[color=#e74c3c]• Priority:[/color] " + str(left_behind_priority) + " critical (D/D-) pallet(s) left behind while D+ was loaded.")
 
 	# Transit rack — soft penalty if items existed but were never collected
-	var had_transit_items: bool = (transit_loose_collis > 0 or transit_loose_dest2_collis > 0 or transit_items.size() > 0)
+	var had_transit_items: bool = (transit_loose_entries.size() > 0 or transit_items.size() > 0)
 	# Also covers the case where UATs were pre-placed (transit_collected = true at start)
 	if had_transit_items and not transit_collected:
 		score -= 10
@@ -785,6 +809,7 @@ func end_session() -> void:
 	var passed: bool = score >= 85 and not critical_fail
 
 	var what_happened: String = ""
+	@warning_ignore("integer_division")
 	var mins: int = int(total_time) / 60
 	var secs: int = int(total_time) % 60
 	what_happened += "[color=#7f8fa6]Shift duration: %02d:%02d[/color]\n\n" % [mins, secs]

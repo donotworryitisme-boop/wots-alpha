@@ -68,7 +68,7 @@ static func _play_tone(node: Node, freq: float, duration: float, volume: float) 
 		# Simple sine wave with envelope
 		var envelope = 1.0
 		var attack = 0.005
-		var release = mini(duration * 0.3, 0.05)
+		var release: float = minf(duration * 0.3, 0.05)
 		if t < attack:
 			envelope = t / attack
 		elif t > duration - release:
