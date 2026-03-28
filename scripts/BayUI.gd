@@ -3,7 +3,7 @@ extends CanvasLayer
 signal trust_contract_requested
 
 const PANEL_NAMES: Array[String] = [
-	"Dock View", "Shift Board", "Loading Plan", "AS400", "Trailer Capacity", "Phone", "Notes"
+	"Dock View", "Shift Board", "AS400", "Trailer Capacity", "Phone", "Notes"
 ]
 
 @onready var top_time_label: Label = $Root/FrameVBox/TopBar/TopBarMargin/TopBarHBox/TopTimeLabel
@@ -28,6 +28,9 @@ var _session = null
 var _is_active: bool = false
 var _debrief_what_happened: String = ""
 var _debrief_why_it_mattered: String = ""
+var _debrief_total_weight_kg: float = 0.0
+var _debrief_total_dm3: int = 0
+var _debrief_combine_count: int = 0
 var _strip_assignment: String = "Unassigned"
 var _strip_window_active: bool = false
 var _panel_state: Dictionary = {} 
@@ -53,6 +56,9 @@ var pnl_as400_stage: PanelContainer
 var btn_start_load: Button
 var btn_call: Button
 var btn_seal: Button
+var btn_transit: Button = null
+var btn_adr: Button = null
+var btn_combine: Button = null
 
 # Dock lane rebuild support
 var dock_signs_hbox: HBoxContainer
@@ -65,6 +71,7 @@ var co_lanes: Dictionary = {}  # Key: "s1_mecha", "s1_bulky", "s1_misc", "s2_mec
 # Phone notification system
 var phone_messages: Array = []
 var phone_flash_active: bool = false
+var _phone_flash_timer: Timer = null
 var _load_cooldown: bool = false  # Prevents spam-clicking pallets
 var btn_sop: Button
 var btn_dock_view: Button
@@ -103,6 +110,10 @@ var as400_terminal_display: RichTextLabel
 var as400_terminal_input: LineEdit
 var as400_state: int = 0
 var _badge_target: int = 18  # Where to go after badge login (18=scanning, 19=SAISIE)
+var as400_tab_bar: HBoxContainer = null
+var _as400_tabs: Array = []
+var _active_tab_idx: int = 0
+var _as400_wrong_store_scans: int = 0
 var last_avail_cache: Array = []
 var last_loaded_cache: Array = []
 
@@ -143,6 +154,8 @@ var sop_overlay: ColorRect
 var sop_search_input: LineEdit
 var sop_results_vbox: VBoxContainer
 var sop_content_label: RichTextLabel
+var sop_active_tab: int = 1  # 1 = Doing the Job, 2 = Understanding the Job
+var sop_tab_btns: Array = []
 
 # --- NEW SPOTLIGHT TUTORIAL SYSTEM ---
 var tut_canvas: CanvasLayer
@@ -157,21 +170,202 @@ var tutorial_active: bool = false
 var tutorial_step: int = -1
 
 var sop_database: Array = [
-	{"title": "AS400: Login & Shortcuts", "tags": ["as400", "login", "password", "f3", "f10", "terminal", "code", "badge"], "content": "[font_size=28][color=#0082c3][b]AS400: Login & Shortcuts[/b][/color][/font_size]\n\nThe AS400 (nldkl01.neptune.dkcorp.net) is your primary system.\n\n[b]Two logins required:[/b]\n\n[b]1. System login (Sign On screen):[/b]\n• User: [b]BAYB2B[/b]\n• Password: [b]123456[/b]\n\n[b]2. Badge login (before scanning screen):[/b]\n• Code opé/badge: [b]8600555[/b]\n• Mot de passe: [b]123456[/b]\n\n[b]Navigation to RAQ:[/b]\n50 (Ship Dock) → 01 (International Parcel) → 02 (Operation) → 05 (Create shipment) → F6 (Créer) → badge login → F10 (validate SAISIE) → Scanning Screen → [b]Shift+F1[/b] or [b]F13[/b] → RAQ\n\n[b]Key Shortcuts:[/b]\n• [b]F3[/b] — Go back (Retour/Sortie)\n• [b]F10[/b] — Confirm/Validate\n• [b]F5[/b] — Refresh counters on scanning screen\n• [b]Shift+F1[/b] or [b]F13[/b] — Open RAQ from scanning screen", "scenarios": [0, 1, 2, 3], "new_in": 0},
-	{"title": "C&C (Click & Collect): What is it?", "tags": ["click", "collect", "c&c", "white", "customer", "last"], "content": "[font_size=28][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nC&C pallets contain items ordered online by customers. They are waiting at the store.\n\n[color=#e74c3c][b]THE RULE:[/b][/color] C&C MUST be loaded [b]LAST[/b] — closest to the truck doors — so they come off first.\n\n[b]On the AS400:[/b] C&C lines appear in [color=#ffffff][b]WHITE text[/b][/color] (all others are cyan/green).\n\n[b]Typical C&C per store:[/b] 1 plastic pallet + 1 magnum + 1 EUR wooden. If more than 3, extras go on magnums or wooden — never a second plastic pallet.", "scenarios": [0, 1, 2, 3], "new_in": 0},
-	{"title": "Loading: The Standard Sequence", "tags": ["load", "sequence", "truck", "order", "standard", "lifo"], "content": "[font_size=28][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe store unloads from the doors inward (LIFO).\n\n[b]Load in this order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] — deepest in truck\n2. [color=#2ecc71][b]Bikes[/b][/color]\n3. [color=#e67e22][b]Bulky[/b][/color]\n4. [color=#3498db][b]Mecha (Blue Boxes)[/b][/color]\n5. [color=#95a5a6][b]Click & Collect[/b][/color] — nearest to doors (ALWAYS LAST)\n\n[b]Why?[/b] The store needs C&C first (customers waiting), then mecha for shelves, then bulky/bikes which take longer.", "scenarios": [0, 1, 2, 3], "new_in": 0},
-	{"title": "What is a UAT?", "tags": ["uat", "label", "number", "pallet", "barcode", "orange"], "content": "[font_size=28][color=#0082c3][b]What is a UAT?[/b][/color][/font_size]\n\nA UAT (Unité d'Aide au Transport) is a scannable pallet unit with an orange label showing:\n\n• [b]Sector:[/b] 84/86 (mecha), 84/89 (bikes), 84/90 (bulky)\n• [b]Pallet type:[/b] PALETTE EUROPE or PLASTIQUE\n• [b]EXP/DEST:[/b] Sender and destination\n• [b]Colis count, weight, volume[/b]\n• [b]Flow code:[/b] MAG (store), MAP (store palletized)\n\n[b]Colis prefix identification:[/b]\n• 8486 = Mecha/Bay B2B\n• 8490 = Bulky\n• 8489 = Bikes\n• 0035 = Service Center (EWM format)", "scenarios": [0, 1, 2, 3], "new_in": 0},
-	{"title": "Reading the RAQ Screen", "tags": ["raq", "screen", "columns", "as400", "pjjidfr", "flx", "uni", "nbc"], "content": "[font_size=28][color=#0082c3][b]Reading the RAQ Screen (PJJIDFR)[/b][/color][/font_size]\n\nThe RAQ shows all parcels/UATs assigned to your truck.\n\n[b]Columns:[/b]\n• [b]N° U.A.T[/b] — UAT number (15 digits)\n• [b]Flx[/b] — Flow: MAG, MAP, @Z/UE@Z (internet)\n• [b]Uni[/b] — Universe (* = mixed)\n• [b]NBC[/b] — Colis count on UAT\n• [b]SE[/b] — Sector: 86=mecha, 89=bikes, 90=bulky\n• [b]EM[/b] — Container: 01=Plastic, 02=Box, 03=Magnum\n\n[b]Colors:[/b]\n• [color=#00ffff]Cyan[/color] = Regular\n• [color=#ffffff]White[/color] = C&C (customer waiting!)\n• [color=#ff0000]Red[/color] = Hazardous materials", "scenarios": [0, 1, 2, 3], "new_in": 0},
-	{"title": "Emballage: Live vs Non-Live", "tags": ["emballage", "returns", "unload", "live", "trailer", "whiteboard"], "content": "[font_size=28][color=#0082c3][b]Emballage: Live vs Non-Live[/b][/color][/font_size]\n\nEmballage = returns/packaging from stores.\n\n[b]Live emballage:[/b]\nDriver arrives with trailer → must unload [b]immediately[/b]. Driver is waiting.\n\n[b]Non-live emballage:[/b]\nTrailer is sitting at dock from previous shift. Flagged on the whiteboard for current shift to handle when activity allows.\n\n[b]Decision process:[/b]\n1. Check whiteboard for non-live emballage dock numbers\n2. If loading schedule allows, unload between store loadings\n3. Live emballage always takes priority over non-live\n4. If you can't get to it, flag it for the next shift", "scenarios": [0, 1, 2, 3], "new_in": 0},
-	{"title": "The CMR Document", "tags": ["cmr", "document", "paper", "transport", "legal", "seal"], "content": "[font_size=28][color=#0082c3][b]The CMR Document[/b][/color][/font_size]\n\nThe CMR is the legal transport document filled AFTER loading.\n\n[b]Key fields:[/b]\n• [b]Box 1:[/b] Sender — Decathlon Netherlands, Kroonstraat 3, 5048 AT TILBURG\n• [b]Box 2:[/b] Destinataire — store name + address\n• [b]Box 3:[/b] IDEM 2 (delivery = destinataire)\n• [b]Box 4:[/b] IDEM 1 (pickup = sender)\n• [b]Box 6-7:[/b] Counts — EUR pallets, Plastic pallets, Magnums, C&C\n• [b]Box 13:[/b] Seal number + Expedition number + Dock number\n• [b]Box 22:[/b] Sender stamp\n• [b]Box 23:[/b] Driver license plate + signature\n\nCounts come from the Loading Sheet, not memory.", "scenarios": [1, 2, 3], "new_in": 1},
-	{"title": "The Loading Sheet", "tags": ["loading", "sheet", "dual", "count", "eur", "plastic", "magnum"], "content": "[font_size=28][color=#0082c3][b]The Loading Sheet[/b][/color][/font_size]\n\nDual-count system:\n\n[b]Left side — by department:[/b]\nTally marks for Bikes, Bulky, Mecha, Transit, C&C.\n\n[b]Right side — by container type:[/b]\nGrids for EUR pallets (1-30), Plastic (1-30), Magnums (1-20).\n\n[b]Same pallets counted both ways.[/b]\n\n[b]C&C exception:[/b] C&C is its own category regardless of container. A C&C on EUR base counts as both 'C&C' on the left AND 'EUR pallet' on the right.", "scenarios": [1, 2, 3], "new_in": 1},
-	{"title": "Dock Lines & Cells", "tags": ["dock", "line", "cell", "mecha", "bulky", "bikes", "lane", "a", "b", "c"], "content": "[font_size=28][color=#0082c3][b]Dock Lines & Cells[/b][/color][/font_size]\n\n[b]Cell A[/b] (Docks 17-29): Bulky area. Sector 90 reception.\n[b]Cell B[/b] (Docks 3-5): Mecha inbound. Sector 86.\n[b]Cell C[/b] (Docks 1C-4C): [color=#e74c3c]Bikes ONLY.[/color] Bay B2B does NOT unload bikes receptions.\n\n[b]At your dock, pallets arrive on 4 lines:[/b]\n• Mecha 1 & 2: Blue boxes from the sorter\n• Bulky: Cardboard on wooden pallets from Cell A\n• Mixed: Bikes/C&C/Service Center from various departments", "scenarios": [1, 2, 3], "new_in": 1},
-	{"title": "Loading Quality Rules", "tags": ["quality", "tall", "height", "damage", "label", "orientation", "overthrow"], "content": "[font_size=28][color=#0082c3][b]Loading Quality Rules[/b][/color][/font_size]\n\n• [b]Heaviest/tallest[/b] at bottom-right to prevent overthrow\n• [b]Never mix tall next to short[/b] — causes toppling\n• [b]Max 6 layers[/b] for bulky Type A parcels\n• [b]Labels face the loading bay door[/b]\n• [b]If you damage goods:[/b] Tell your manager immediately. Never hide it.\n\n[b]Target:[/b] Complete loading within 1 hour.", "scenarios": [1, 2, 3], "new_in": 1},
-	{"title": "Trailer Sizes & Capacity", "tags": ["trailer", "capacity", "8.5", "13.6", "truck", "size", "pallet"], "content": "[font_size=28][color=#0082c3][b]Trailer Sizes & Capacity[/b][/color][/font_size]\n\n[b]8.5m trailer:[/b] ~18 EUR pallets\n[b]13.6m trailer:[/b] ~33-36 EUR pallets\n\n[b]Truck types:[/b]\n• [b]Live loading:[/b] Driver arrives with trailer, must load immediately\n• [b]Non-live:[/b] Empty trailer already at dock\n• [b]CO loading:[/b] Two stores in one trailer\n\n[b]Transport companies:[/b] DHL (primary), SCHOTPOORT, P&M", "scenarios": [1, 2, 3], "new_in": 1},
-	{"title": "Creating a Shipment (F6)", "tags": ["shipment", "expedition", "f6", "create", "seal", "destinataire"], "content": "[font_size=28][color=#0082c3][b]Creating a Shipment[/b][/color][/font_size]\n\nFrom EXPEDITION EN COURS, press [b]F6=Créer[/b].\n\n[b]Fields to fill:[/b]\n• [b]N°expédition:[/b] Auto-generated (8 digits)\n• [b]Expéditeur camion:[/b] 14  390\n• [b]Destinataire:[/b] 7  [store code] (e.g., 7  1570 for Alkmaar)\n• [b]SEAL number 1 & 2:[/b] Physical seal codes\n• [b]Type transport:[/b] 1 (road)\n• [b]Prestataire:[/b] Carrier code\n• [b]Type expédition:[/b] C (Classical) or S (Specific)\n\nPress [b]F10=Valider[/b] to confirm.", "scenarios": [1, 2, 3], "new_in": 1},
-	{"title": "Promise Dates: D, D-, D+", "tags": ["promise", "date", "d+", "d-", "priority", "capacity", "full", "overdue"], "content": "[font_size=28][color=#0082c3][b]Promise Dates & Capacity[/b][/color][/font_size]\n\nWhen you have more pallets than space:\n\n[color=#e74c3c][b]D-[/b] : Overdue.[/color] CRITICAL. Must load.\n[color=#f1c40f][b]D[/b]  : Due today.[/color] High priority. Must load.\n[color=#95a5a6][b]D+[/b] : Due tomorrow.[/color] Low priority.\n\n[b]Rule:[/b] Load ALL D- and D first (standard sequence). Only load D+ if space remains. Never leave D-/D behind while loading D+.", "scenarios": [2, 3], "new_in": 2},
-	{"title": "Co-Loading: Two Stores, One Truck", "tags": ["co", "loading", "two", "stores", "sequence", "divider", "partner"], "content": "[font_size=28][color=#0082c3][b]Co-Loading (CO)[/b][/color][/font_size]\n\nSome stores share a truck. The trailer is visually split.\n\n[b]Sequence 1[/b] = loaded FIRST (deeper in truck)\n[b]Sequence 2[/b] = loaded SECOND (near doors, unloaded first)\n\n[b]Common CO pairs:[/b]\n• Kerkrade 346 / Roermond 2094\n• Coolsingel 1161 / Den Haag 1186\n• Groningen 2224 / Leeuwarden 897\n• Enschede 2092 / Nijmegen 2225\n• Alexandrium 2093 / Amsterdam Noord 2226\n\n[b]Critical:[/b] Never mix pallets between the two stores. Each store's pallets must stay on their side.", "scenarios": [3], "new_in": 3},
-	{"title": "Reading the Loading Plan", "tags": ["loading", "plan", "schedule", "time", "store", "co", "solo"], "content": "[font_size=28][color=#0082c3][b]Reading the Loading Plan[/b][/color][/font_size]\n\nThe Loading Plan tells you WHAT is coming:\n\n• Which stores, what time\n• CO (shared truck) or SOLO\n• Which carrier (DHL, SCHOTPOORT, P&M)\n• Truck size (8.5m or 13.6m)\n• Live or non-live loading\n\n[b]The Loading Plan is NOT the Loading Sheet.[/b]\n• Loading Plan = what's scheduled (before loading)\n• Loading Sheet = what you count (during loading)\n• CMR = what you certify (after loading)", "scenarios": [3], "new_in": 3}
+	{
+		"title": "Your First Shift: Where to Start",
+		"tags": ["start", "first", "beginner", "overview", "what", "do", "how"],
+		"content": "[font_size=28][color=#0082c3][b]Your First Shift: Where to Start[/b][/color][/font_size]\n\nEverything in Bay B2B follows the same loop:\n\n[b]1. Check the RAQ[/b] (AS400 → F13)\nThe RAQ is the digital list of pallets assigned to your truck. Open the AS400, navigate to the scanning screen, then press F13. Compare what you see there to what is physically on your dock floor.\n\n[b]2. Verify C&C pallets[/b]\nWhite rows in the RAQ = Click & Collect. These are customer orders. Count them. If one is missing from the dock, click [b]Call Departments[/b] before you start loading.\n\n[b]3. Check any special items[/b]\nIf a [color=#ff4444]red ADR row[/color] appears, collect it from the yellow lockers before sealing. If a [color=#00ffff]TRANSIT[/color] row appears, check the transit rack before sealing.\n\n[b]4. Load in sequence[/b]\nService Center first, then Bikes, Bulky, Mecha. C&C always last, nearest to doors.\n\n[b]5. Validate in AS400[/b]\nOnce all pallets are loaded, press F13 to open the RAQ, then F10 to confirm. The store needs this digital record.\n\n[b]6. Seal the truck[/b]\nClick Seal Truck. The physical seal locks the doors. CMR paperwork follows.",
+		"scenarios": [0, 1, 2, 3],
+		"new_in": 0
+	},
+	{
+		"title": "AS400: Login & Shortcuts",
+		"tags": ["as400", "login", "password", "f3", "f10", "terminal", "code", "badge", "navigate", "menu"],
+		"content": "[font_size=28][color=#0082c3][b]AS400: Login & Shortcuts[/b][/color][/font_size]\n\nThe AS400 is a real 1980s-era green-screen terminal. No mouse — keyboard only.\n\n[b]Two logins required:[/b]\n\n[b]1. System login (Sign On screen):[/b]\n[b]User:[/b] BAYB2B   [b]Password:[/b] 123456\n\n[b]2. Badge login (after pressing F6 to create a shipment):[/b]\n[b]Badge:[/b] 8600555   [b]Password:[/b] 123456\n\n[b]Navigation path to scanning screen:[/b]\n50 → 01 → 02 → 05 → F6 → badge login → F10 (confirm SAISIE) → [b]SCANNING QUAI[/b]\n\nThe screen layout and all keyboard shortcuts below are identical to the real AS400 terminal at the dock.\n\n[b]Key shortcuts:[/b]\n[b]F3[/b] — Go back one screen\n[b]F10[/b] — Confirm / Validate current screen\n[b]F13[/b] or [b]Shift+F1[/b] — Open RAQ from scanning screen\n[b]F6[/b] — Create new shipment (from EXPEDITION EN COURS)\n[b]F5[/b] — Refresh counters on scanning screen",
+		"scenarios": [0, 1, 2, 3],
+		"new_in": 0
+	},
+	{
+		"title": "Setting the Loading Destination",
+		"tags": ["saisie", "expedition", "destinataire", "store", "code", "destination", "declare", "f10"],
+		"content": "[font_size=28][color=#0082c3][b]SAISIE D'UNE EXPEDITION[/b][/color][/font_size]\n\nSAISIE means declaration. This screen is where you formally tell the AS400 which store this truck is going to.\n\n[b]When you see this screen:[/b]\nYou pressed F6 from EXPEDITION EN COURS and logged in with your badge. The system needs the destination.\n\n[b]What you do:[/b]\n[b]Solo loading:[/b] The seal number is auto-filled. Press [b]F10[/b] to confirm.\n[b]Co-loading:[/b] Type the [b]store destination code[/b] (e.g. 346 for Kerkrade) and press Enter. Then press [b]F10[/b].\n\n[b]Where to find the store code:[/b]\nCheck the [b]Shift Board[/b]. Store codes are listed next to your truck. For co-loading, look for Seq.1 and Seq.2 labels.\n\n[b]Why this matters:[/b]\nThe code you enter determines which store the AS400 assigns your scanned pallets to. Entering the wrong code causes scan errors when you try to scan pallets for the other store.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "C&C (Click & Collect): What is it?",
+		"tags": ["click", "collect", "c&c", "white", "customer", "last", "missing", "call"],
+		"content": "[font_size=28][color=#0082c3][b]Click & Collect (C&C)[/b][/color][/font_size]\n\nC&C pallets contain items ordered online by customers for store pickup. The customer is already waiting. Every C&C that misses the truck means a customer arrives to an empty counter.\n\n[color=#e74c3c][b]THE RULE:[/b][/color] C&C MUST be loaded [b]LAST[/b] — nearest to the truck doors — so they come off first.\n\n[b]On the AS400:[/b] C&C rows appear in [color=#ffffff][b]WHITE text[/b][/color]. All other pallets are cyan.\n\n[b]Missing C&C:[/b]\nSometimes a C&C pallet is not on the dock when your shift starts. The RAQ shows it, but it is not on the floor. If you see a mismatch, click [b]Call Departments (C&C Check)[/b]. This takes about 5 minutes but always finds the pallet. Never seal the truck without checking.\n\n[b]In this simulator:[/b] Expect 2 to 4 C&C UATs per store per session. About half of sessions will have one C&C pallet missing at the start.",
+		"scenarios": [0, 1, 2, 3],
+		"new_in": 0
+	},
+	{
+		"title": "Service Center & Stands",
+		"tags": ["service", "center", "stands", "yellow", "display", "deepest", "first", "fixtures"],
+		"content": "[font_size=28][color=#0082c3][b]Service Center & Stands[/b][/color][/font_size]\n\nService Center pallets (shown in [color=#f1c40f]yellow[/color]) contain store display equipment: stands, mannequins, fixtures, signage, and furniture.\n\n[b]Why they load first (deepest in the truck):[/b]\nStands need to be set up before the store opens. They are large and hard to move once placed. Loading them deepest means store staff unload them last, typically during overnight setup.\n\n[b]They are never overdue:[/b]\nService Center pallets always carry a [b]D[/b] promise. They are not part of D-/D+ priority decisions.\n\n[b]How to spot them:[/b]\nYellow colour in the simulator. Sector 86 in the RAQ. UAT prefix 0035 (EWM format, different from standard 8486 mecha codes).\n\n[b]Important:[/b] Never leave a Service Center pallet behind. It is not a critical fail like C&C, but stores depend on display equipment arriving on schedule.",
+		"scenarios": [0, 1, 2, 3],
+		"new_in": 0
+	},
+	{
+		"title": "Loading: The Standard Sequence",
+		"tags": ["load", "sequence", "truck", "order", "standard", "lifo", "why", "order matters"],
+		"content": "[font_size=28][color=#0082c3][b]The Standard Loading Sequence[/b][/color][/font_size]\n\nThe truck is unloaded from the [b]doors inward[/b]. This is LIFO — Last In, First Out. Whatever you load last comes off the truck first at the store.\n\n[b]Load in this order:[/b]\n1. [color=#f1c40f][b]Service Center (Stands)[/b][/color] — deepest in truck\n2. [color=#2ecc71][b]Bikes[/b][/color]\n3. [color=#e67e22][b]Bulky[/b][/color]\n4. [color=#3498db][b]Mecha[/b][/color] — clothing, small electronics, store replenishment boxes\n5. [color=#ffffff][b]Click & Collect[/b][/color] — ALWAYS LAST, nearest to doors\n\n[b]Why this order?[/b]\nC&C comes off first because customers are waiting. Mecha restocks shelves during opening hours. Bikes and Bulky need specialist teams working on a different schedule. Service Center is handled overnight.\n\n[b]LIFO means mistakes cost time:[/b]\nIf you load Mecha before Bikes, the store must move all the Mecha to reach the Bikes. This is why sequence errors are penalised — they create real work at the other end.",
+		"scenarios": [0, 1, 2, 3],
+		"new_in": 0
+	},
+	{
+		"title": "What is a UAT?",
+		"tags": ["uat", "label", "number", "pallet", "barcode", "orange", "scan", "15 digits"],
+		"content": "[font_size=28][color=#0082c3][b]What is a UAT?[/b][/color][/font_size]\n\nA UAT (Unite d'Aide au Transport) is a transport unit with an orange scannable label. It can be a pallet, roll cage, or any stackable unit.\n\n[b]The orange label shows:[/b]\nSector (84/86 mecha, 84/89 bikes, 84/90 bulky), pallet type (EUR or PLASTIQUE), sender and destination, colis count, weight, volume, and flow code (MAG = direct to store, MAP = palletised).\n\n[b]Colis prefix identification:[/b]\n8486 = Mecha / Bay B2B\n8490 = Bulky\n8489 = Bikes\n0035 = Service Center (EWM format)\n\n[b]In the AS400:[/b] UAT numbers are 15 digits. When you click a pallet on the dock, the simulator scans it. The AS400 links the UAT to the current shipment and counts the colis toward your total.",
+		"scenarios": [0, 1, 2, 3],
+		"new_in": 0
+	},
+	{
+		"title": "Reading the RAQ Screen",
+		"tags": ["raq", "screen", "columns", "as400", "pjjidfr", "flx", "uni", "nbc", "read", "interpret"],
+		"content": "[font_size=28][color=#0082c3][b]Reading the RAQ Screen (PJJIDFR)[/b][/color][/font_size]\n\nThe RAQ is your digital manifest — it lists every UAT assigned to your truck. Check it before loading to know what should be on your dock. Confirm it after loading to close the shipment.\n\n[b]Column guide:[/b]\n[b]N U.A.T[/b] — UAT number (15 digits, matches the orange label)\n[b]Flx[/b] — Flow: MAG (store), MAP (palletised), @Z/UE@Z (e-commerce)\n[b]Uni[/b] — Department code (* = mixed goods)\n[b]NBC[/b] — Number of colis on this UAT\n[b]SE[/b] — Sector: 86=mecha, 89=bikes, 90=bulky\n[b]EM[/b] — Container: 11=Plastic pallet, 01=EUR pallet\n\n[b]Row colours:[/b]\n[color=#00ffff]Cyan[/color] = Regular pallet\n[color=#ffffff]White[/color] = C&C (customer order — must load!)\n[color=#ff4444]Red[/color] = ADR dangerous goods (must retrieve from lockers!)\n[color=#00ffff]TRANSIT label[/color] = Item on transit rack, not yet on dock\n\n[b]Workflow:[/b] F13 from scanning screen opens the RAQ. After loading everything, press F10 to confirm — this creates the digital record for the store.\n\nThis screen is a pixel-accurate replica of the real PJJIDFR screen you will use on the dock.",
+		"scenarios": [0, 1, 2, 3],
+		"new_in": 0
+	},
+	{
+		"title": "Late Arrivals & Wave Deliveries",
+		"tags": ["late", "wave", "phone", "arrival", "call", "extra", "pallet", "notification", "departments"],
+		"content": "[font_size=28][color=#0082c3][b]Late Arrivals & Wave Deliveries[/b][/color][/font_size]\n\nNot all pallets are on the dock when you start. Some arrive mid-session from the sorter or departments.\n\n[b]How you are notified:[/b]\nThe [b]Phone[/b] button flashes orange. Open the Phone panel to see the message — which department, what is coming, roughly when.\n\n[b]What to do:[/b]\nCheck the promise date of the incoming pallet. If it is D- or D: hold space and wait before sealing. If it is D+: you may seal without it if all D and D- pallets are already loaded.\n\nIn real operations you get this call on the dock phone or radio from the department supervisor. The decision — wait or seal — is yours to make.\n\nIf you have already loaded a D+ pallet and the incoming one is D-: you may need to unload (rework) to make room. The simulator forgives this rework — it was the correct call.\n\n[b]Typical wave sources:[/b]\nBIKES ZONE C, BULKY RECEPTION, MECHA LINE, SORTER",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Rework: When to Unload a Pallet",
+		"tags": ["rework", "unload", "remove", "pull", "penalty", "mistake", "undo", "fix"],
+		"content": "[font_size=28][color=#0082c3][b]Rework: When to Unload a Pallet[/b][/color][/font_size]\n\nRework means pulling a pallet back off the truck after loading it. In real operations this costs about 1.1 minutes per pallet. The simulator adds that time to your shift duration.\n\n[b]When rework is penalised:[/b]\nYou loaded a pallet in the wrong sequence (e.g. Mecha before Bikes) and need to fix it. Or you loaded a D+ pallet and then a D- arrived that you need to fit.\n\n[b]When rework is NOT penalised:[/b]\nIf a [color=#e74c3c][b]priority D- wave[/b][/color] arrives after you have already loaded D+ pallets, unloading D+ to make room for D- is the correct call. The simulator recognises this and forgives that specific rework.\n\n[b]To unload in the simulator:[/b]\nClick a pallet inside the truck visualiser (not on the dock). It is removed and returned to the dock.\n\n[b]Prevention:[/b]\nCheck the RAQ and the phone before loading. Know your sequence. If a D- pallet is expected via phone notification, hold space for it before loading D+.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Emballage (Return Packaging)",
+		"tags": ["emballage", "returns", "unload", "live", "trailer", "whiteboard", "packaging", "empty pallets"],
+		"content": "[font_size=28][color=#0082c3][b]Emballage (Return Packaging)[/b][/color][/font_size]\n\nEmballage means empty pallets, roll cages, and packaging materials that stores send back to the warehouse. You unload these from an arriving trailer.\n\n[b]Live emballage:[/b]\nA driver arrives at your dock with a trailer of returns. The driver is waiting — unload immediately.\n\n[b]Non-live emballage:[/b]\nAn empty trailer has been sitting at a dock since the previous shift. The whiteboard flags these. Handle them between store loadings when your schedule allows.\n\n[b]Decision process:[/b]\n1. Check the whiteboard for non-live dock numbers at the start of shift.\n2. Handle between loadings if you have a gap.\n3. Live emballage always takes priority over non-live.\n4. If you cannot reach it, flag for the next shift at handover.\n\n[b]In the simulator:[/b] The Shift Board notes non-live emballage from the night shift.",
+		"scenarios": [0, 1, 2, 3],
+		"new_in": 0
+	},
+	{
+		"title": "The CMR Document",
+		"tags": ["cmr", "document", "paper", "transport", "legal", "seal", "sign", "driver"],
+		"content": "[font_size=28][color=#0082c3][b]The CMR Document[/b][/color][/font_size]\n\nThe CMR (Convention Marchandise Routiere) is the legal transport document. You fill it AFTER loading, before the driver leaves.\n\n[b]Key fields:[/b]\nBox 1: Sender — Decathlon Netherlands, Kroonstraat 3, 5048 AT TILBURG\nBox 2: Destinataire — store name and address\nBox 3: IDEM 2\nBox 4: IDEM 1\nBox 6-7: Counts — EUR pallets, Plastic pallets, Magnums, C&C\nBox 13: Seal number + Expedition number + Dock number\nBox 22: Sender stamp\nBox 23: Driver licence plate + signature\n\n[b]Counts come from the Loading Sheet, not memory.[/b]\n\n[b]The seal:[/b] A physical numbered seal locks the truck door handles. Once sealed, the truck cannot be opened without breaking it. The seal number on the CMR proves the load was not tampered with in transit.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "The Loading Sheet",
+		"tags": ["loading", "sheet", "dual", "count", "eur", "plastic", "magnum", "tally", "paper"],
+		"content": "[font_size=28][color=#0082c3][b]The Loading Sheet[/b][/color][/font_size]\n\nA paper form filled during loading. Its counts go directly onto the CMR.\n\n[b]Left side — by department:[/b]\nTally marks for: Bikes, Bulky, Mecha, Transit, C&C.\n\n[b]Right side — by container type:[/b]\nGrids for EUR pallets (1-30), Plastic pallets (1-30), Magnums (1-20).\n\n[b]Same pallets, counted twice.[/b] If the totals disagree, you miscounted — recount before signing the CMR.\n\n[b]C&C exception:[/b] A C&C pallet on a EUR wooden base counts as both C&C on the left AND EUR pallet on the right. The two columns serve different purposes: one tracks department content, the other tracks container type for the driver's declaration.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Dock Lines & Cells",
+		"tags": ["dock", "line", "cell", "mecha", "bulky", "bikes", "lane", "a", "b", "c", "sector", "bay"],
+		"content": "[font_size=28][color=#0082c3][b]Dock Lines & Cells[/b][/color][/font_size]\n\n[b]Cell A[/b] (Docks 17-29): Bulky reception. Large goods arrive and are processed here before moving to the outbound dock.\n\n[b]Cell B[/b] (Docks 3-5): Mecha inbound. Sector 86 goods from the sorter are palletised here for outbound.\n\n[b]Cell C[/b] (Docks 1C-4C): Bikes INBOUND from suppliers only. A dedicated bikes team handles inbound arrivals. Bay B2B does not unload bikes receptions — Bay B2B only loads bikes [i]outbound[/i] to stores (the bikes arrive pre-palletised at your dock from the bikes zone).\n\n[b]At your dock (Bay B2B), pallets arrive from:[/b]\nMecha lines 1 and 2 (sorter conveyor), Bulky (pushed from Cell A), Bikes (pre-palletised from bikes zone), and Misc (C&C, Service Center, ADR from their respective areas).\n\n[b]Sector codes in the RAQ:[/b] 86=mecha, 89=bikes, 90=bulky.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Loading Quality Rules",
+		"tags": ["quality", "tall", "height", "damage", "label", "orientation", "overthrow", "stack", "fragile"],
+		"content": "[font_size=28][color=#0082c3][b]Loading Quality Rules[/b][/color][/font_size]\n\nHeaviest and tallest pallets at the back-bottom to prevent overthrow during transport.\nNever stack tall next to short — height differences cause pallets to topple at corners.\nMax 6 layers for bulky Type A parcels.\nLabels must face the loading bay door — the driver and store staff need to read them.\nIf you damage goods: Tell your manager immediately. Fill in an incident form. Never hide damage — the store will report it on delivery and it traces back to the dock.\n\n[b]Target:[/b] Complete the physical load within 1 hour of the truck's scheduled departure window.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Trailer Sizes & Capacity",
+		"tags": ["trailer", "capacity", "8.5", "13.6", "truck", "size", "pallet", "full", "space"],
+		"content": "[font_size=28][color=#0082c3][b]Trailer Sizes & Capacity[/b][/color][/font_size]\n\n[b]8.5m trailer:[/b] approximately 18 EUR pallets\n[b]13.6m trailer:[/b] approximately 33 to 36 EUR pallets\n\n[b]Truck types:[/b]\n[b]Live loading:[/b] Driver arrives with the trailer attached and is waiting. Load immediately.\n[b]Non-live:[/b] An empty trailer is already parked at your dock.\n[b]CO loading:[/b] Two stores in one trailer, loaded in two separate sections.\n\n[b]When the truck is full:[/b]\nThe capacity bar turns red. If you have D+ pallets loaded and a D pallet left behind, you have a sequencing problem — unload the D+ first.\n\n[b]Transport companies:[/b] DHL (primary), SCHOTPOORT, P&M",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Creating a Shipment (F6)",
+		"tags": ["shipment", "expedition", "f6", "create", "seal", "destinataire", "saisie"],
+		"content": "[font_size=28][color=#0082c3][b]Creating a Shipment[/b][/color][/font_size]\n\nFrom EXPEDITION EN COURS, press [b]F6=Creer[/b].\n\nA badge login popup appears. Log in with badge [b]8600555[/b] and password [b]123456[/b]. After login you land on the SAISIE screen.\n\n[b]SAISIE fields:[/b]\nN expédition: Auto-generated — do not change.\nExpediteur camion: 14  390 — auto-filled.\nDestinataire: For co-loading, type the store code here.\nSEAL number 1: Auto-filled from the seal booklet.\nSEAL number 2: Always empty for Bay B2B standard operations.\nType transport: 1 (road).\nType expedition: C (Classical) or S (Specific).\n\nPress [b]F10=Valider[/b] to confirm. You land on SCANNING QUAI, ready to scan.\n\nThis sequence — F6, badge login, SAISIE, F10 — is exactly what you do on the real terminal before every loading.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Promise Dates: D, D-, D+",
+		"tags": ["promise", "date", "d+", "d-", "priority", "capacity", "full", "overdue", "sequence"],
+		"content": "[font_size=28][color=#0082c3][b]Promise Dates & Loading Priority[/b][/color][/font_size]\n\nEvery pallet has a promise date telling you when the store expects delivery.\n\n[color=#e74c3c][b]D-[/b][/color] Overdue. Already late. Must load. No exceptions.\n[color=#f1c40f][b]D[/b][/color]  Due today. Must load.\n[color=#95a5a6][b]D+[/b][/color] Due tomorrow. Can wait if the truck is full.\n\n[b]Loading order when dates are mixed:[/b]\nService Center, then D- pallets, then D pallets, then D+ pallets, then C&C always last.\n\nWithin each date group, the standard department sequence (Bikes, Bulky, Mecha) still applies.\n\n[b]Rule:[/b] Never leave a D or D- pallet behind while a D+ is loaded. If space is tight, unload D+ first.\n\n[b]In the simulator:[/b] Promise dates are randomised across Bikes, Bulky, and Mecha pallets. Hover over a pallet on the dock to see its promise date before loading.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Co-Loading: Two Stores, One Truck",
+		"tags": ["co", "loading", "two", "stores", "sequence", "divider", "partner", "tab", "saisie", "destinataire"],
+		"content": "[font_size=28][color=#0082c3][b]Co-Loading (CO)[/b][/color][/font_size]\n\nSome stores share a truck. The trailer is physically divided.\n\n[b]Sequence 1[/b] = loaded FIRST (deeper in truck, unloaded last at Store 1)\n[b]Sequence 2[/b] = loaded SECOND (near doors, unloaded first at Store 2)\n\n[b]Common CO pairs:[/b]\nKerkrade 346 / Roermond 2094\nCoolsingel 1161 / Den Haag 1186\nGroningen 2224 / Leeuwarden 897\nEnschede 2092 / Nijmegen 2225\nAlexandrium 2093 / Amsterdam Noord 2226\n\n[b]AS400 Path A (Two Tabs — Recommended):[/b]\nF6 → badge → SAISIE → type store 1 code → F10 → scan store 1. Then click New Tab and repeat for store 2. Switch tabs freely to see each store's RAQ.\n\n[b]AS400 Path B (Sequential):[/b]\nComplete store 1 fully (scan → F13 → F10 confirm → F3 back). Then F6 again for store 2.\n\n[b]Critical:[/b] Never mix pallets between stores. The AS400 blocks wrong-store scans. Find codes on the [b]Shift Board[/b].",
+		"scenarios": [3],
+		"new_in": 3
+	},
+	{
+		"title": "Reading the Loading Plan",
+		"tags": ["loading", "plan", "schedule", "time", "store", "co", "solo", "carrier", "truck"],
+		"content": "[font_size=28][color=#0082c3][b]Reading the Loading Plan[/b][/color][/font_size]\n\nThe Loading Plan is your shift schedule. It tells you what is coming and when.\n\n[b]It shows:[/b]\nWhich stores, at what time. CO (shared truck) or SOLO. Which carrier (DHL, SCHOTPOORT, P&M). Truck size (8.5m or 13.6m). Live or non-live loading.\n\nYour load is highlighted in yellow. The others give context for pacing your shift.\n\n[b]Three documents, three moments:[/b]\n[b]Loading Plan[/b] — what is scheduled (read before the shift)\n[b]Loading Sheet[/b] — what you physically count (fill during loading)\n[b]CMR[/b] — what you legally certify (sign after loading)",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Transit Rack",
+		"tags": ["transit", "rack", "loose", "collis", "missing", "rack check"],
+		"content": "[font_size=28][color=#0082c3][b]Transit Rack[/b][/color][/font_size]\n\nSome collis or UATs arrive via the transit rack — a staging area away from the main dock floor. They do not appear on your dock automatically.\n\n[b]Two types:[/b]\n[b]Loose collis[/b] — individual boxes with no UAT. They count toward your total colis but cannot be scanned individually.\n[b]UAT on rack[/b] — a full palletised unit sitting on the transit rack, not yet moved to your dock.\n\n[b]How to know if you have transit items:[/b]\nThe RAQ shows a [color=#00ffff]TRANSIT[/color] row. The [color=#f1c40f]Check Transit[/color] button will be active.\n\n[b]What to do:[/b]\nBefore sealing, click [color=#f1c40f][b]Check Transit + 4 min[/b][/color]. UAT items appear on the dock. Loose collis are counted as collected automatically. Include them in your Loading Sheet.\n\n[b]Timing:[/b] Not every session has transit items (about 35% chance). If the button is greyed out, no trip is needed. Missing transit items is a grading penalty.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "ADR / Dangerous Goods",
+		"tags": ["adr", "dangerous", "hazmat", "locker", "red", "lithium", "aerosol", "yellow"],
+		"content": "[font_size=28][color=#0082c3][b]ADR — Accord Dangereux Routier[/b][/color][/font_size]\n\nADR goods are legally regulated items: lithium batteries, aerosols, flammable substances, and other hazardous materials under the European ADR road transport agreement.\n\n[b]Recognition:[/b]\nADR pallets appear [color=#ff4444][b]red[/b][/color] in the RAQ from the moment the session starts. They are stored in the [b]yellow lockers[/b] near the dock for safety reasons — not on the open floor.\n\n[b]What to do:[/b]\n1. When you see a red row marked [color=#ff4444]LOCKER[/color], click [color=#f1c40f][b]Check Yellow Lockers + 2 min[/b][/color].\n2. The ADR pallet appears on the dock. The RAQ row updates to ON DOCK.\n3. Load it in promise-date order like any other pallet.\n\n[b]Critical rule:[/b] ADR goods cannot be left in the locker when a shipment is committed. This is a hard operational error — flagged as a critical failure in the debrief.\n\n[b]Documentation:[/b] The dock supervisor handles the dangerous goods declaration. Your job is to make sure the pallet is on the truck.\n\nThe yellow lockers are a real fixture at the dock. ADR goods are always stored separately until collected — this is a legal requirement under the ADR agreement, not a warehouse preference.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Combining Pallets (Deckstacker)",
+		"tags": ["combine", "deckstacker", "merge", "stack", "space", "capacity", "light", "small", "c&c", "magnum"],
+		"content": "[font_size=28][color=#0082c3][b]Combining Pallets with the Deckstacker[/b][/color][/font_size]\n\nWhen the truck is close to full but you still have small, light pallets to load, combining two pallets into one floor slot can free the space you need.\n\n[b]How it works:[/b]\nUsing a deckstacker, you lift one complete pallet — boxes and all — and place it on top of another closed pallet. Both remain physically intact and clearly separated. The pallet on top sits on the closed lid of the one below. One floor slot. Two UATs. Both scanned into the AS400.\n\n[b]What can be combined:[/b]\nAny small, light pallet where the combined weight stays manageable and the total height stays within the trailer ceiling. C&C Magnum pallets are the most common candidate — a few packages can easily sit on top of a C&C Bulky pallet. Bulky pallets with only a couple of items are also candidates.\n\n[b]Type inheritance:[/b]\nIf either pallet contains C&C, the combined pallet is a C&C pallet and loads last. If either contains ADR goods, the combined pallet is treated as ADR.\n\n[b]Safety rules:[/b]\nIf any individual box weighs more than 20 kg, ask a colleague before moving it — two-person lift required. Never combine if the stack would exceed the trailer's safe loading height (roughly 2.55 m floor to top).\n\n[b]When to combine:[/b]\nOnly combine if the truck is genuinely short on space and combining would let you load an otherwise impossible pallet. If everything fits without combining, skip it — each combine costs about 8 minutes. It is good practice to load the lightest combine-eligible pallets toward the end of your sequence so you have flexibility if a late wave arrives.\n\n[b]C&C still loads last:[/b]\nCombining does not change loading order rules. C&C pallets — combined or not — always load nearest the doors.\n\nThe deckstacker is the actual machine used on the dock floor for this. Combine times in this training reflect realistic deckstacker operation.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	},
+	{
+		"title": "Step-by-Step: Tutorial",
+		"tags": ["tutorial", "guide", "walkthrough", "start", "step", "how", "first", "begin"],
+		"content": "[font_size=28][color=#0082c3][b]Tutorial — Complete Walkthrough[/b][/color][/font_size]\n\nThis is your first shift. Every step is guided on screen. Here is the full sequence so you know what to expect.\n\n[b]Step 1 — Open the AS400[/b]\nClick [b]AS400[/b] in the side panel. You will see the Sign On screen.\n\n[b]Step 2 — Log in to the system[/b]\nType [b]BAYB2B[/b] and press Enter. Then type [b]123456[/b] and press Enter.\n\n[b]Step 3 — Navigate to the scanning screen[/b]\nFollow the prompts: type [b]50[/b], then [b]01[/b], then [b]02[/b], then [b]05[/b]. Press [b]F6[/b] to create a shipment. A badge login appears — type [b]8600555[/b] and press Enter, then [b]123456[/b] and press Enter. Press [b]F10[/b] to confirm the SAISIE screen. You are now on the Scanning screen.\n\n[b]Step 4 — Open Dock View[/b]\nClick [b]Dock View[/b] in the side panel to see the pallets on the dock floor.\n\n[b]Step 5 — Check the RAQ[/b]\nWith the AS400 open, press [b]F13[/b] (or Shift+F1) to open the RAQ — the digital pallet list. Compare the white C&C rows to what is on the dock. One C&C pallet will be missing.\n\n[b]Step 6 — Call departments[/b]\nClick [b]Call Departments (C&C Check)[/b]. The missing pallet will be found and brought to the dock.\n\n[b]Step 7 — Start loading[/b]\nClick [b]Start Loading[/b] to begin. The scanner is now active.\n\n[b]Step 8 — Load one Mecha pallet deliberately out of order[/b]\nClick any blue Mecha pallet. This teaches you what happens when you load out of sequence.\n\n[b]Step 9 — Unload it[/b]\nClick the blue pallet inside the truck view to remove it. This is rework.\n\n[b]Step 10 — Load in correct order[/b]\nNow load in sequence: [color=#f1c40f]Yellow (Service Center)[/color] first, then [color=#2ecc71]Green (Bikes)[/color], then [color=#e67e22]Orange (Bulky)[/color], then [color=#3498db]Blue (Mecha)[/color], then [color=#ffffff]White (C&C)[/color] last.\n\n[b]Step 11 — Check Help & SOPs[/b]\nClick [b]Help & SOPs[/b] in the top right. Time is paused while it is open.\n\n[b]Step 12 — Finish loading[/b]\nLoad all remaining pallets in the correct order.\n\n[b]Step 13 — Validate in the AS400[/b]\nOpen the AS400 and press [b]F10[/b] to confirm the RAQ.\n\n[b]Step 14 — Seal the truck[/b]\nClick [b]Seal Truck & Print Papers[/b]. Your shift summary appears.",
+		"scenarios": [0],
+		"new_in": 0
+	},
+	{
+		"title": "Step-by-Step: Standard Loading",
+		"tags": ["standard", "guide", "walkthrough", "step", "how", "solo", "single", "store"],
+		"content": "[font_size=28][color=#0082c3][b]Standard Loading — Complete Walkthrough[/b][/color][/font_size]\n\nOne store, one truck. The most common loading type.\n\n[b]Before you start[/b]\nCheck the [b]Shift Board[/b] to confirm your store name, store code, and dock number. The store code is the 3–4 digit number next to your store (e.g. 1570 for Alkmaar). You will need it in the AS400.\n\n[b]Step 1 — Open the AS400 and log in[/b]\nType [b]BAYB2B[/b] → Enter → [b]123456[/b] → Enter.\n\n[b]Step 2 — Navigate to the shipment screen[/b]\nType [b]50[/b] → [b]01[/b] → [b]02[/b] → [b]05[/b] → [b]F6[/b]. Enter badge [b]8600555[/b] → Enter → [b]123456[/b] → Enter. The SAISIE screen appears. For solo loading the destination is already set. Press [b]F10[/b] to confirm. You are on the Scanning screen.\n\n[b]Step 3 — Check the RAQ[/b]\nPress [b]F13[/b] to open the RAQ. Check the pallet list:\n• Any [color=#ff4444]red rows[/color] — ADR in the yellow lockers. Click [b]⚠ Check Yellow Lockers[/b] before loading.\n• Any [color=#00ffff]TRANSIT rows[/color] — items on the transit rack. Click [b]Check Transit[/b] before sealing.\n• [color=#ffffff]White rows[/color] — C&C pallets. Count them and compare to the dock.\n\n[b]Step 4 — Call departments if needed[/b]\nIf a C&C pallet is missing from the dock, click [b]Call Departments (C&C Check)[/b] before starting. Do this before clicking Start Loading — it is free time.\n\n[b]Step 5 — Start loading[/b]\nClick [b]Start Loading[/b]. Load in this order:\n1. [color=#f1c40f]Service Center (yellow)[/color]\n2. [color=#2ecc71]Bikes (green)[/color]\n3. [color=#e67e22]Bulky (orange)[/color]\n4. [color=#3498db]Mecha (blue)[/color]\n5. [color=#ffffff]C&C (white)[/color] — always last\n\nIf pallets have mixed promise dates (D-, D, D+), load D- first within each type group, then D, then D+.\n\n[b]Step 6 — Watch the phone[/b]\nIf the Phone button flashes orange, open it. Late pallets may arrive. Check their promise date before deciding to wait or seal.\n\n[b]Step 7 — Check the transit rack[/b]\nIf the RAQ showed a TRANSIT row, click [b]Check Transit · +4 min[/b] before sealing.\n\n[b]Step 8 — Validate the RAQ[/b]\nOnce all pallets are loaded, press [b]F13[/b] to open the RAQ, then [b]F10[/b] to confirm.\n\n[b]Step 9 — Seal the truck[/b]\nClick [b]Seal Truck & Print Papers[/b].",
+		"scenarios": [1],
+		"new_in": 1
+	},
+	{
+		"title": "Step-by-Step: Priority Loading",
+		"tags": ["priority", "guide", "walkthrough", "step", "how", "d-", "overdue", "full", "capacity"],
+		"content": "[font_size=28][color=#0082c3][b]Priority Loading — Complete Walkthrough[/b][/color][/font_size]\n\nThe truck may not have room for everything. D- pallets will arrive late and force a decision.\n\n[b]Before you start[/b]\nCheck the [b]Shift Board[/b] for your store name, code, and dock. Same as standard — one store, one truck.\n\n[b]Step 1 — Log in and navigate[/b]\nAS400 → [b]BAYB2B[/b] → [b]123456[/b] → [b]50[/b] → [b]01[/b] → [b]02[/b] → [b]05[/b] → [b]F6[/b] → badge [b]8600555[/b] → [b]123456[/b] → [b]F10[/b].\n\n[b]Step 2 — Check the RAQ[/b]\nPress [b]F13[/b]. Note what you see. You will have D+ pallets on the dock at the start.\n\n[b]Step 3 — Start loading — but be careful with D+[/b]\nLoad Service Center, Bikes, and Bulky pallets first as normal. For Mecha — these are D+ at the start. Load them if there is clearly enough space. If the truck is getting full, hold back some D+ Mecha pallets.\n\n[b]Step 4 — The phone will ring[/b]\nD- pallets will arrive mid-shift. When the phone flashes, check the message. D- means overdue — they must go on the truck. If you have already loaded D+ pallets and the truck is full, you may need to unload D+ to make room. That is rework, but it is the correct call.\n\n[b]Step 5 — Consider combining[/b]\nIf light pallets (marked with [color=#2ecc71]⊕[/color]) are on the dock and the truck is tight, click [b]⊕ Combine · +8 min[/b] to stack two pallets into one slot. Only worth doing if it lets you load a D- or D pallet you could not otherwise fit.\n\n[b]Step 6 — Load D- pallets first[/b]\nOnce D- pallets arrive on the dock, they load before any D+ pallet. If D+ is already in the truck and there is no room, unload D+ first.\n\n[b]Step 7 — C&C always last[/b]\nRegardless of what else is happening, C&C loads nearest the doors.\n\n[b]Step 8 — Validate and seal[/b]\nF13 → F10 → Seal Truck.",
+		"scenarios": [2],
+		"new_in": 2
+	},
+	{
+		"title": "Step-by-Step: Co-Loading",
+		"tags": ["co", "loading", "guide", "walkthrough", "step", "how", "two", "stores", "sequence", "partner"],
+		"content": "[font_size=28][color=#0082c3][b]Co-Loading — Complete Walkthrough[/b][/color][/font_size]\n\nTwo stores share one truck. You load Store 1 completely first (it goes deeper in the truck), then Store 2 (near the doors).\n\n[b]Before you start[/b]\nOpen the [b]Shift Board[/b]. Find your truck entry. It will show two stores with their codes and (Seq.1) / (Seq.2) labels. Write down both codes — you will need them in the AS400.\n\nExample: [b]KERKRADE 346 (Seq.1)[/b] / [b]ROERMOND 2094 (Seq.2)[/b]\n\n[b]Step 1 — Log in to the AS400[/b]\nType [b]BAYB2B[/b] → Enter → [b]123456[/b] → Enter.\n\n[b]Step 2 — Navigate to EXPEDITION EN COURS[/b]\nType [b]50[/b] → [b]01[/b] → [b]02[/b] → [b]05[/b].\n\n[b]Step 3 — Create shipment for Store 1 (Seq.1)[/b]\nPress [b]F6[/b]. Badge login: [b]8600555[/b] → Enter → [b]123456[/b] → Enter. You are on the SAISIE screen. Type the [b]Seq.1 store code[/b] (e.g. 346) and press Enter. Press [b]F10[/b] to confirm. You are now on the Scanning screen for Store 1.\n\n[b]Step 4 — Check the RAQ for Store 1[/b]\nPress [b]F13[/b]. Verify C&C pallets, any TRANSIT or ADR rows. Handle them before loading.\n\n[b]Step 5 — Load Store 1 completely[/b]\nLoad ALL pallets for Store 1 in sequence:\n1. [color=#f1c40f]Service Center[/color]\n2. [color=#2ecc71]Bikes[/color]\n3. [color=#e67e22]Bulky[/color]\n4. [color=#3498db]Mecha[/color]\n5. [color=#ffffff]C&C[/color] — last for Store 1\n\nPallet color tags show which store each pallet belongs to. Do not load Store 2 pallets yet.\n\n[b]Step 6 — Validate Store 1 in the AS400[/b]\nPress [b]F13[/b] to open Store 1 RAQ. Press [b]F10[/b] to confirm. Press [b]F3[/b] to return to EXPEDITION EN COURS.\n\n[b]Step 7 — Create shipment for Store 2 (Seq.2)[/b]\nPress [b]F6[/b]. Badge login again: [b]8600555[/b] → Enter → [b]123456[/b] → Enter. On SAISIE, type the [b]Seq.2 store code[/b] (e.g. 2094) and press Enter. Press [b]F10[/b]. You are on the Scanning screen for Store 2.\n\n[b]Tip — Path A (two tabs):[/b] Instead of steps 7 onward, you can click [b]▼ New Tab[/b] in the AS400 panel at any time, log in fresh, and set up Store 2 while Store 1 is still running. Switch tabs freely to see each store's RAQ. Either path is valid.\n\n[b]Step 8 — Check the RAQ for Store 2[/b]\nPress [b]F13[/b] on the Store 2 tab. Handle any TRANSIT or ADR rows.\n\n[b]Step 9 — Load Store 2 completely[/b]\nSame sequence: Service Center → Bikes → Bulky → Mecha → C&C last.\n\n[b]Step 10 — Validate Store 2[/b]\nF13 → F10 to confirm Store 2 RAQ.\n\n[b]Step 11 — Seal the truck[/b]\nClick [b]Seal Truck & Print Papers[/b].\n\n[b]Important:[/b] The AS400 will block you from scanning a Store 2 pallet while on the Store 1 tab, and vice versa. If the scanner rejects a pallet, check which tab is active.",
+		"scenarios": [3],
+		"new_in": 3
+	},
+	{
+		"title": "Good Practices: Thinking Like an Operator",
+		"tags": ["good", "practice", "tip", "efficient", "smart", "optimize", "think", "strategy", "combine", "wave", "time", "department"],
+		"content": "[font_size=28][color=#0082c3][b]Good Practices: Thinking Like an Operator[/b][/color][/font_size]\n\nThe difference between loading correctly and loading well is timing and anticipation. These practices are not rules — they are habits that experienced operators develop because they reduce pressure and make better use of the time available.\n\n[b]Read before you load[/b]\nOpen the RAQ before clicking Start Loading. Look at what you have: how many pallets, any ADR, any TRANSIT rows. Check the Shift Board for your store code and any notes. One minute of reading saves five minutes of correcting. You cannot unseal a truck.\n\n[b]Call departments before you start — not after[/b]\nIf a C&C pallet is missing from the dock, click Call Departments before you click Start Loading. Calling before loading costs you nothing — that time is not counted against your loading window. Calling after Start Loading adds five minutes to your shift clock. Same action, very different cost depending on when you do it.\n\n[b]Leave combine-eligible pallets for last[/b]\nWhen you see a small, light pallet on the dock (marked with a green [color=#2ecc71]⊕[/color] border), do not rush to load it in strict sequence order. Load the big, heavy pallets first. Keep the light ones near the back of your loading order. Here is why: if a wave arrives later and the truck is suddenly full, those light pallets become your solution — you can combine two of them into one slot and free up space for the incoming priority pallet. If you had already loaded them early, that option is gone. Combining costs 8 minutes but it is worth it if it gets a D- pallet onto the truck.\n\n[b]Do not combine if the truck is not full[/b]\nCombining always costs time. If everything fits without combining, skip it. The deckstacker is a problem-solving tool, not a routine step. The right time to combine is when you are looking at a full truck and a D- pallet still on the dock — not before.\n\n[b]Watch the phone early, not late[/b]\nWhen the phone flashes, open it immediately. The message tells you what is coming and approximately when. If a D- pallet is on its way, you now have time to hold space for it before the truck fills up. If you ignore the phone until the truck is already full, your options become much harder.\n\n[b]Know the difference between waiting and stalling[/b]\nIf a D- wave is confirmed incoming and the truck still has space, wait — there is no cost to holding off on the last few D+ pallets. But if the truck is full of D and D- pallets and only D+ is left on the dock, seal it. Leaving D+ behind while all D and D- are loaded is correct. Do not chase perfection if the truck is already right.\n\n[b]Validate in the AS400 as soon as loading is done[/b]\nDo not wait until the driver is standing at the dock before confirming the RAQ. Confirm it the moment you finish loading — before you think about paperwork or the seal. The confirmation creates the digital record the store relies on. Sealing the truck without confirming means the store receives a truck with no AS400 record of what is on it.\n\n[b]Check the transit rack before you seal, not before you start[/b]\nTransit rack items are added to your RAQ from the start but are not on the dock yet. You do not need to collect them before loading — you can load everything else first and collect transit items at any point before sealing. The cost is 4 minutes. Do not forget: check the RAQ for TRANSIT rows before you click Seal Truck.\n\n[b]For co-loading: treat each store as its own shift[/b]\nThe cleanest mental model for co-loading is to pretend you are doing two separate loadings back to back. Finish Store 1 completely — load, validate in AS400, confirm — then start Store 2 as if it were a fresh shift. Never mix pallets between stores. The physical divider in the truck and the AS400 both enforce this.",
+		"scenarios": [1, 2, 3],
+		"new_in": 1
+	}
 ]
 
 func _ready() -> void:
@@ -241,8 +435,14 @@ func _ready() -> void:
 		toggle_bar.mouse_entered.connect(_on_sidebar_mouse_entered)
 		toggle_bar.mouse_exited.connect(_on_sidebar_mouse_exited)
 
-	# Hide Trailer Capacity from sidebar (redundant — capacity shown in dock view)
-	if btn_trailer_capacity: btn_trailer_capacity.visible = false
+	# Remove Trailer Capacity from sidebar entirely — capacity is shown in the dock view
+	if btn_trailer_capacity != null:
+		btn_trailer_capacity.queue_free()
+		btn_trailer_capacity = null
+	# Remove Loading Plan button — content merged into Shift Board
+	if btn_loading_plan != null:
+		btn_loading_plan.queue_free()
+		btn_loading_plan = null
 
 	# Style the Panels header label
 	_sidebar_panels_lbl = $Root/FrameVBox/MainHBox/PanelToggleBar/ToggleMargin/ToggleVBox/PanelsLabel
@@ -278,12 +478,11 @@ func _ready() -> void:
 
 	# --- REGISTER BUTTON ICON MAPPINGS ---
 	_sidebar_btn_labels[btn_shift_board] = {"icon": "SB", "label": "Shift Board"}
-	_sidebar_btn_labels[btn_loading_plan] = {"icon": "LP", "label": "Loading Plan"}
 	_sidebar_btn_labels[btn_as400] = {"icon": "AS", "label": "AS400"}
 	_sidebar_btn_labels[btn_phone] = {"icon": "PH", "label": "Phone"}
 	_sidebar_btn_labels[btn_notes] = {"icon": "NT", "label": "Notes"}
 
-	var toggle_buttons: Array = [btn_shift_board, btn_loading_plan, btn_as400, btn_phone, btn_notes]
+	var toggle_buttons: Array = [btn_shift_board, btn_as400, btn_phone, btn_notes]
 	for tb: Button in toggle_buttons:
 		if tb == null: continue
 		tb.focus_mode = Control.FOCUS_NONE
@@ -338,7 +537,7 @@ func _input(event: InputEvent) -> void:
 			# During active session, Escape does nothing (prevents accidental demo kill)
 		elif event.keycode == KEY_F3:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
-				if as400_state == 9: as400_state = 8
+				if as400_state == 9: as400_state = 22
 				elif as400_state == 8: as400_state = 18
 				elif as400_state == 15: as400_state = 2
 				elif as400_state == 16: as400_state = 5
@@ -349,11 +548,19 @@ func _input(event: InputEvent) -> void:
 				elif as400_state == 21: as400_state = 20
 				elif as400_state == 22: as400_state = 5
 				elif as400_state > 2: as400_state -= 1
+				_save_tab_state()
 				_render_as400_screen()
 		elif event.keycode == KEY_F10:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
 				if as400_state == 19:
+					# Co-loading: require destinataire entered first
+					var tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
+					if current_dest2_name != "" and tab_code == "":
+						if lbl_hover_info:
+							lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire requis![/b] Type the store code first, then press Enter, then F10.[/color][/font_size]"
+						return
 					as400_state = 18
+					_save_tab_state()
 					_render_as400_screen()
 					WOTSAudio.play_as400_key(self)
 					if tutorial_active and tutorial_step == 2:
@@ -366,14 +573,17 @@ func _input(event: InputEvent) -> void:
 				if as400_state == 22:
 					_badge_target = 19
 					as400_state = 6
+					_save_tab_state()
 					_render_as400_screen()
 					WOTSAudio.play_as400_key(self)
 		elif event.keycode == KEY_F13:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
 				if as400_state == 18:
 					as400_state = 8
+					_save_tab_state()
 					_render_as400_screen()
 					WOTSAudio.play_as400_key(self)
+					_on_raq_opened()
 					if tutorial_active and tutorial_step == 4:
 						tutorial_step = 5
 						_update_tutorial_ui()
@@ -381,8 +591,10 @@ func _input(event: InputEvent) -> void:
 			if pnl_as400_stage != null and pnl_as400_stage.visible:
 				if as400_state == 18:
 					as400_state = 8
+					_save_tab_state()
 					_render_as400_screen()
 					WOTSAudio.play_as400_key(self)
+					_on_raq_opened()
 					if tutorial_active and tutorial_step == 4:
 						tutorial_step = 5
 						_update_tutorial_ui()
@@ -480,22 +692,22 @@ func _update_tutorial_ui() -> void:
 			t += "Welcome to the dock! Your very first step is checking the RAQ list. Open the [color=#f1c40f][b]AS400[/b][/color] from the right panel menu."
 			_set_tutorial_focus(btn_as400, "top", true)
 		1: 
-			t += "Great. Now log in to the terminal. Type [color=#f1c40f]BAYB2B[/color] and press Enter, then type the password [color=#f1c40f]123456[/color] and press Enter. This logs you into the AS400 system."
+			t += "Great. Now log in. Type [color=#f1c40f]BAYB2B[/color] and press Enter, then type [color=#f1c40f]123456[/color] and press Enter. Each screen shows a prompt telling you what to type next — follow those as you go."
 			_set_tutorial_focus(as400_terminal_input, "top", true)
 		2: 
-			t += "You are in! Navigate to the scanning screen: type [color=#f1c40f]50[/color] -> [color=#f1c40f]01[/color] -> [color=#f1c40f]02[/color] -> [color=#f1c40f]05[/color] -> then press [color=#f1c40f]F6[/color] to create a shipment. Enter badge [color=#f1c40f]8600555[/color] and password [color=#f1c40f]123456[/color], then press [color=#f1c40f]F10[/color] to validate."
+			t += "You're in the main menu. Each screen will tell you what to type. Navigate to the scanning screen: the placeholder text at the bottom guides you. Keep going until you see [color=#f1c40f]SCANNING QUAI[/color] — that's your main work screen."
 			_set_tutorial_focus(as400_terminal_input, "top", true)
 		3: 
-			t += "This is the scanning screen — your main work screen. The scanner only works here! Now open the [color=#f1c40f][b]Dock View[/b][/color] panel to see what pallets are on the dock floor."
+			t += "You're on the Scanning screen — this is where you work. Now open [color=#f1c40f][b]Dock View[/b][/color] from the panel menu. Dock View shows you the physical pallets sitting on your dock floor."
 			_set_tutorial_focus(btn_dock_view, "top", true)
 		4: 
-			t += "This is the dock floor. You can see pallets sorted by type. Now open the [color=#f1c40f][b]AS400[/b][/color] and press [color=#f1c40f][b]F13[/b][/color] (or [color=#f1c40f]Shift+F1[/color]) to view the RAQ — the digital pallet list. Compare the [color=#bdc3c7]White C&C[/color] pallets in the RAQ to the dock."
+			t += "These are your pallets. Now check the [color=#f1c40f][b]AS400[/b][/color] and press [color=#f1c40f][b]F13[/b][/color] (or [color=#f1c40f]Shift+F1[/color]) to open the RAQ — the digital pallet list. Compare what the system shows to what's on the dock floor."
 			_set_tutorial_focus(btn_as400, "top", true)
 		5: 
-			t += "Notice the [color=#bdc3c7]White text[/color] at the bottom of the RAQ — these are Click & Collect (C&C) pallets. One is missing from the dock! Click [color=#f1c40f][b]Call Departments (C&C Check)[/b][/color] to find it."
+			t += "See the [color=#bdc3c7]White rows[/color] at the bottom of the RAQ? Those are Click & Collect pallets — customer orders. Compare the count in the RAQ to the dock. One C&C pallet isn't on the dock yet — it's somewhere in the warehouse. Click [color=#f1c40f][b]Call Departments (C&C Check)[/b][/color] to have it found and brought over."
 			_set_tutorial_focus(btn_call, "bottom", true)
 		6: 
-			t += "Good! The missing pallet was found and brought to the dock. Now, click [color=#f1c40f][b]Start Loading[/b][/color] to begin the physical loading process."
+			t += "Good — the missing pallet is on its way. That call takes about [color=#f1c40f]5 minutes[/color] of shift time. Now click [color=#f1c40f][b]Start Loading[/b][/color] to begin the physical loading process."
 			_set_tutorial_focus(btn_start_load, "bottom", true)
 		7: 
 			t += "Time to load! Remember: the scanner only works on the [color=#f1c40f]Scanning screen[/color], not the RAQ. Make sure your AS400 shows [color=#f1c40f]SCANNING QUAI[/color] (press [color=#f1c40f]F3[/color] if needed). Then click any [color=#3498db]Blue Mecha[/color] pallet to intentionally load it out of order."
@@ -578,13 +790,50 @@ func _build_sop_modal() -> void:
 	header_hbox.add_child(title_margin)
 	
 	var title = Label.new()
-	title.text = "SOP Knowledge Base"
+	title.text = "Help & SOPs"
 	title.add_theme_font_size_override("font_size", 24)
 	title_margin.add_child(title)
-	
-	var spacer = Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header_hbox.add_child(spacer)
+
+	# Tab buttons
+	var tab_spacer_l := Control.new()
+	tab_spacer_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_hbox.add_child(tab_spacer_l)
+
+	var tab_hbox := HBoxContainer.new()
+	tab_hbox.add_theme_constant_override("separation", 4)
+	tab_hbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	header_hbox.add_child(tab_hbox)
+
+	var tab_labels: Array[String] = ["Doing the Job", "Understanding the Job"]
+	sop_tab_btns.clear()
+	for ti: int in range(2):
+		var tab_num: int = ti + 1
+		var tb := Button.new()
+		tb.text = tab_labels[ti]
+		tb.custom_minimum_size = Vector2(180, 36)
+		tb.focus_mode = Control.FOCUS_NONE
+		var tb_active := StyleBoxFlat.new()
+		tb_active.bg_color = Color(0.0, 0.51, 0.76)
+		tb_active.set_corner_radius_all(4)
+		var tb_inactive := StyleBoxFlat.new()
+		tb_inactive.bg_color = Color(0.15, 0.2, 0.28)
+		tb_inactive.set_corner_radius_all(4)
+		tb.add_theme_stylebox_override("normal", tb_active if tab_num == 1 else tb_inactive)
+		tb.add_theme_stylebox_override("hover", tb_active)
+		tb.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		tb.add_theme_color_override("font_color", Color.WHITE)
+		tb.pressed.connect(func() -> void:
+			sop_active_tab = tab_num
+			_refresh_sop_tab_styles()
+			_on_sop_search_changed(sop_search_input.text)
+			sop_content_label.text = "[color=#95a5a6]Select an article from the left.[/color]"
+		)
+		tab_hbox.add_child(tb)
+		sop_tab_btns.append(tb)
+
+	var tab_spacer_r := Control.new()
+	tab_spacer_r.custom_minimum_size = Vector2(20, 0)
+	header_hbox.add_child(tab_spacer_r)
 	
 	var btn_close = Button.new()
 	btn_close.text = " Resume Shift "
@@ -660,13 +909,24 @@ func _build_sop_modal() -> void:
 	sop_content_label.text = "[color=#95a5a6]Select an article from the left to read the standard operating procedure.[/color]"
 	right_margin.add_child(sop_content_label)
 
+func _refresh_sop_tab_styles() -> void:
+	for i: int in range(sop_tab_btns.size()):
+		var tb: Button = sop_tab_btns[i]
+		var is_active: bool = (i + 1 == sop_active_tab)
+		var tb_sb := StyleBoxFlat.new()
+		tb_sb.bg_color = Color(0.0, 0.51, 0.76) if is_active else Color(0.15, 0.2, 0.28)
+		tb_sb.set_corner_radius_all(4)
+		tb.add_theme_stylebox_override("normal", tb_sb)
+
 func _open_sop_modal() -> void:
 	if _session != null: _session.call("set_pause_state", true)
+	sop_active_tab = 1
+	_refresh_sop_tab_styles()
 	sop_search_input.text = ""
-	sop_content_label.text = "[color=#95a5a6]Select an article from the left to read the standard operating procedure.[/color]"
-	_on_sop_search_changed("") 
+	sop_content_label.text = "[color=#95a5a6]Select an article from the left.[/color]"
+	_on_sop_search_changed("")
 	sop_overlay.visible = true
-	
+
 	if tutorial_active and tutorial_step == 11:
 		tutorial_step = 12
 		_update_tutorial_ui()
@@ -678,29 +938,53 @@ func _close_sop_modal() -> void:
 func _on_sop_search_changed(query: String) -> void:
 	for child in sop_results_vbox.get_children():
 		child.queue_free()
-		
-	var q = query.to_lower()
-	var new_arts = []
-	var old_arts = []
-	
-	for article in sop_database:
+
+	# Tab 1 = simulator procedural articles, Tab 2 = real warehouse knowledge
+	var tab1_titles: Array[String] = [
+		"Your First Shift: Where to Start",
+		"AS400: Login & Shortcuts",
+		"Setting the Loading Destination",
+		"Reading the RAQ Screen",
+		"Creating a Shipment (F6)",
+		"Late Arrivals & Wave Deliveries",
+		"Rework: When to Unload a Pallet",
+		"Transit Rack",
+		"ADR / Dangerous Goods",
+		"Combining Pallets (Deckstacker)",
+		"Step-by-Step: Tutorial",
+		"Step-by-Step: Standard Loading",
+		"Step-by-Step: Priority Loading",
+		"Step-by-Step: Co-Loading",
+		"Good Practices: Thinking Like an Operator",
+	]
+
+	var q: String = query.to_lower()
+	var new_arts: Array = []
+	var old_arts: Array = []
+
+	for article: Dictionary in sop_database:
 		if not article.scenarios.has(_current_scenario_index):
-			continue 
-			
-		var match_found = false
+			continue
+
+		var in_tab1: bool = article.title in tab1_titles
+		var article_tab: int = 1 if in_tab1 else 2
+		if article_tab != sop_active_tab:
+			continue
+
+		var match_found: bool = false
 		if q == "": match_found = true
 		elif q in article.title.to_lower(): match_found = true
 		else:
-			for tag in article.tags:
+			for tag: String in article.tags:
 				if q in tag.to_lower(): match_found = true
-				
+
 		if match_found:
 			if article.get("new_in", -1) == _current_scenario_index:
 				new_arts.append(article)
 			else:
 				old_arts.append(article)
 				
-	var create_btn = func(art, is_new):
+	var create_btn: Callable = func(art: Dictionary, is_new: bool) -> void:
 		var btn = Button.new()
 		var prefix = "✨ NEW: " if is_new else ""
 		btn.text = prefix + art.title
@@ -733,8 +1017,8 @@ func _on_sop_search_changed(query: String) -> void:
 		)
 		sop_results_vbox.add_child(btn)
 		
-	for a in new_arts: create_btn.call(a, true)
-	for a in old_arts: create_btn.call(a, false)
+	for a: Dictionary in new_arts: create_btn.call(a, true)
+	for a: Dictionary in old_arts: create_btn.call(a, false)
 
 # ==========================================
 # START PORTAL
@@ -901,6 +1185,25 @@ func _build_start_portal() -> void:
 	btn_start.pressed.connect(_on_portal_start_pressed)
 	vbox.add_child(btn_start)
 
+	# Dev bypass — unlocks all scenarios for testing
+	var btn_dev := Button.new()
+	btn_dev.text = "🔧 Dev: Unlock All Scenarios"
+	btn_dev.custom_minimum_size = Vector2(0, 32)
+	btn_dev.focus_mode = Control.FOCUS_NONE
+	var dev_sb := StyleBoxFlat.new()
+	dev_sb.bg_color = Color(0.1, 0.1, 0.1, 0.0)
+	btn_dev.add_theme_stylebox_override("normal", dev_sb)
+	btn_dev.add_theme_stylebox_override("hover", dev_sb)
+	btn_dev.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn_dev.add_theme_color_override("font_color", Color(0.35, 0.37, 0.4))
+	btn_dev.add_theme_color_override("font_hover_color", Color(0.55, 0.57, 0.6))
+	btn_dev.add_theme_font_size_override("font_size", 11)
+	btn_dev.pressed.connect(func() -> void:
+		highest_unlocked_scenario = 3
+		_populate_scenarios()
+	)
+	vbox.add_child(btn_dev)
+
 # ==========================================
 # DEBRIEF MODAL
 # ==========================================
@@ -1019,8 +1322,40 @@ func _build_operational_layout() -> void:
 	btn_seal = make_action_btn.call(" Seal Truck & Print Papers ", false)
 	btn_seal.pressed.connect(func() -> void: _on_decision_pressed("Seal Truck"))
 	top_actions_hbox.add_child(btn_seal)
-	
-	var top_spacer = Control.new()
+
+	btn_transit = make_action_btn.call(" Check Transit · +4 min ", false)
+	btn_transit.pressed.connect(func() -> void: _on_decision_pressed("Check Transit"))
+	btn_transit.visible = false
+	btn_transit.disabled = true
+	top_actions_hbox.add_child(btn_transit)
+
+	btn_adr = make_action_btn.call(" ⚠ Check Yellow Lockers · +2 min ", true)
+	btn_adr.pressed.connect(func() -> void: _on_decision_pressed("Check Yellow Lockers"))
+	btn_adr.visible = false
+	btn_adr.disabled = true
+	var adr_sb := StyleBoxFlat.new()
+	adr_sb.bg_color = Color(0.18, 0.08, 0.04)
+	adr_sb.border_color = Color(0.9, 0.4, 0.0)
+	adr_sb.set_border_width_all(2)
+	adr_sb.set_corner_radius_all(4)
+	btn_adr.add_theme_stylebox_override("normal", adr_sb)
+	btn_adr.add_theme_color_override("font_color", Color(1.0, 0.65, 0.2))
+	top_actions_hbox.add_child(btn_adr)
+
+	btn_combine = make_action_btn.call(" ⊕ Combine · +8 min ", false)
+	btn_combine.pressed.connect(func() -> void: _on_decision_pressed("Combine Pallets"))
+	btn_combine.visible = false
+	btn_combine.disabled = true
+	var combine_sb := StyleBoxFlat.new()
+	combine_sb.bg_color = Color(0.05, 0.18, 0.08)
+	combine_sb.border_color = Color(0.18, 0.8, 0.44)
+	combine_sb.set_border_width_all(2)
+	combine_sb.set_corner_radius_all(4)
+	btn_combine.add_theme_stylebox_override("normal", combine_sb)
+	btn_combine.add_theme_color_override("font_color", Color(0.18, 0.9, 0.5))
+	top_actions_hbox.add_child(btn_combine)
+
+	var top_spacer := Control.new()
 	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top_actions_hbox.add_child(top_spacer)
 	
@@ -1487,6 +1822,17 @@ func _build_as400_stage() -> void:
 	var as400_vbox = VBoxContainer.new()
 	pnl_as400_stage.add_child(as400_vbox)
 
+	# --- Tab bar (browser-style tabs, shown for all sessions) ---
+	as400_tab_bar = HBoxContainer.new()
+	as400_tab_bar.add_theme_constant_override("separation", 2)
+	as400_tab_bar.custom_minimum_size = Vector2(0, 30)
+	var tab_bar_bg := StyleBoxFlat.new()
+	tab_bar_bg.bg_color = Color(0.02, 0.06, 0.02)
+	tab_bar_bg.border_width_bottom = 1
+	tab_bar_bg.border_color = Color(0.0, 0.4, 0.0)
+	as400_tab_bar.add_theme_stylebox_override("panel", tab_bar_bg)
+	as400_vbox.add_child(as400_tab_bar)
+
 	var scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
@@ -1602,8 +1948,114 @@ func _confirm_as400_raq() -> void:
 		_session.call("manual_decision", "Confirm AS400")
 	if as400_state == 8 or as400_state == 18:
 		as400_state = 9
+		_save_tab_state()
 		_render_as400_screen()
 		WOTSAudio.play_seal_confirm(self)
+
+# ==========================================
+# AS400 TAB SYSTEM
+# ==========================================
+func _init_as400_tabs() -> void:
+	_as400_tabs.clear()
+	_active_tab_idx = 0
+	_as400_tabs.append({"state": 0, "badge_target": 18, "dest_code": "", "dest_name": ""})
+	_rebuild_as400_tab_bar()
+
+func _save_tab_state() -> void:
+	if _as400_tabs.is_empty(): return
+	_as400_tabs[_active_tab_idx]["state"] = as400_state
+	_as400_tabs[_active_tab_idx]["badge_target"] = _badge_target
+
+func _load_tab_state() -> void:
+	if _as400_tabs.is_empty(): return
+	as400_state = _as400_tabs[_active_tab_idx].get("state", 0)
+	_badge_target = _as400_tabs[_active_tab_idx].get("badge_target", 18)
+
+func _switch_as400_tab(idx: int) -> void:
+	if idx < 0 or idx >= _as400_tabs.size(): return
+	if idx == _active_tab_idx: return
+	_save_tab_state()
+	_active_tab_idx = idx
+	_load_tab_state()
+	_rebuild_as400_tab_bar()
+	_render_as400_screen()
+	WOTSAudio.play_as400_key(self)
+
+func _add_as400_tab() -> void:
+	if _as400_tabs.size() >= 2: return
+	if current_dest2_name == "": return
+	_save_tab_state()
+	_as400_tabs.append({"state": 0, "badge_target": 18, "dest_code": "", "dest_name": ""})
+	_active_tab_idx = _as400_tabs.size() - 1
+	_load_tab_state()
+	_rebuild_as400_tab_bar()
+	_render_as400_screen()
+	WOTSAudio.play_as400_key(self)
+
+func _rebuild_as400_tab_bar() -> void:
+	if as400_tab_bar == null: return
+	for child in as400_tab_bar.get_children():
+		child.queue_free()
+
+	for i: int in range(_as400_tabs.size()):
+		var tab_dict: Dictionary = _as400_tabs[i]
+		var tab_btn := Button.new()
+		var dest_code_str: String = tab_dict.get("dest_code", "")
+		var tab_label: String
+		if dest_code_str != "":
+			var dname: String = tab_dict.get("dest_name", dest_code_str)
+			tab_label = " %s %s " % [dname, dest_code_str]
+		else:
+			tab_label = " Tab %d " % (i + 1)
+		tab_btn.text = tab_label
+		tab_btn.focus_mode = Control.FOCUS_NONE
+		var is_active: bool = (i == _active_tab_idx)
+		var tab_sb := StyleBoxFlat.new()
+		tab_sb.bg_color = Color(0.05, 0.25, 0.05) if is_active else Color(0.02, 0.08, 0.02)
+		tab_sb.border_width_bottom = 0 if is_active else 1
+		tab_sb.border_color = Color(0.0, 0.55, 0.0)
+		tab_sb.corner_radius_top_left = 4
+		tab_sb.corner_radius_top_right = 4
+		tab_btn.add_theme_stylebox_override("normal", tab_sb)
+		tab_btn.add_theme_stylebox_override("hover", tab_sb)
+		tab_btn.add_theme_stylebox_override("pressed", tab_sb)
+		tab_btn.add_theme_color_override("font_color", Color(0.0, 1.0, 0.0) if is_active else Color(0.0, 0.65, 0.0))
+		tab_btn.add_theme_font_size_override("font_size", 13)
+		var cap_i: int = i
+		tab_btn.pressed.connect(func() -> void: _switch_as400_tab(cap_i))
+		as400_tab_bar.add_child(tab_btn)
+
+	# Spacer to push "New Tab" button to right
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	as400_tab_bar.add_child(spacer)
+
+	# "New Tab" arrow button — only for co-loading with room for a second tab
+	if current_dest2_name != "" and _as400_tabs.size() < 2:
+		var plus_btn := Button.new()
+		plus_btn.text = " ▼ New Tab "
+		plus_btn.focus_mode = Control.FOCUS_NONE
+		plus_btn.tooltip_text = "Open a second tab for %s %s" % [current_dest2_name, current_dest2_code]
+		var plus_sb := StyleBoxFlat.new()
+		plus_sb.bg_color = Color(0.03, 0.1, 0.03)
+		plus_sb.border_width_bottom = 1
+		plus_sb.border_color = Color(0.0, 0.4, 0.0)
+		plus_btn.add_theme_stylebox_override("normal", plus_sb)
+		plus_btn.add_theme_stylebox_override("hover", plus_sb)
+		plus_btn.add_theme_stylebox_override("pressed", plus_sb)
+		plus_btn.add_theme_color_override("font_color", Color(0.0, 0.85, 0.0))
+		plus_btn.add_theme_font_size_override("font_size", 13)
+		plus_btn.pressed.connect(_add_as400_tab)
+		as400_tab_bar.add_child(plus_btn)
+
+func _get_tab_dest_seq(tab_idx: int) -> int:
+	# Returns 1 or 2 (which sequence this tab is scanning for), or 0 if undetermined
+	if tab_idx >= _as400_tabs.size(): return 0
+	var code: String = _as400_tabs[tab_idx].get("dest_code", "")
+	if code == "": return 0
+	if code == current_dest_code: return 1
+	if current_dest2_code != "" and code == current_dest2_code: return 2
+	return 0
 
 func _build_deca_art(art_rows: Array, fg_color: String) -> String:
 	var bg_c := "[color=#000000]"
@@ -1827,13 +2279,21 @@ func _render_as400_screen() -> void:
 		as400_terminal_input.placeholder_text = "N° Colis ou UAT — F10 to confirm, F3=Back to Scanning"
 		t += "%s%s%s   %s***%s    %s[u]DSPF COLIS RAQ/RAC[/u]%s     %s***%s  %sQUAI390%s    %sNLDKL01%s\n" % [H, d, E, H, E, C, E, H, E, H, E, H, E]
 		t += "%s19:32:25%s                                    %sAFFICH.%s  %sPJJIDFR%s\n\n" % [H, E, Y, E, H, E]
+		# Filter RAQ to active tab's destination sequence (0 = no filter for single-store)
+		var raq_seq_filter: int = _get_tab_dest_seq(_active_tab_idx)
 		var total_colis: int = 0
-		for p in last_avail_cache:
+		for p: Dictionary in last_avail_cache:
+			if raq_seq_filter > 0 and p.get("dest", 1) != raq_seq_filter: continue
 			if p.is_uat: total_colis += p.collis
 		t += "%sExp{diteur   :   14    390   CAR TILBURG EXPE%s       %sTotal colis :   %d%s\n" % [H, E, H, total_colis, E]
 		if current_dest2_name != "":
-			t += "%sDestinataire :    7  %5s   %s%s\n" % [H, current_dest_code, current_dest_name, E]
-			t += "%s             +   7  %5s   %s%s  %s(CO LOADING)%s\n\n" % [H, current_dest2_code, current_dest2_name, E, Y, E]
+			var raq_tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
+			var raq_tab_name: String = _as400_tabs[_active_tab_idx].get("dest_name", "") if not _as400_tabs.is_empty() else ""
+			if raq_tab_code != "":
+				var raq_seq: int = _get_tab_dest_seq(_active_tab_idx)
+				t += "%sDestinataire :    7  %5s   %s  %s(Seq.%d — CO LOADING)%s\n\n" % [H, raq_tab_code, raq_tab_name, Y, raq_seq, E]
+			else:
+				t += "%sDestinataire :    7  %s[NON DEFINI]%s  %s(CO LOADING)%s\n\n" % [H, R, E, Y, E]
 		else:
 			t += "%sDestinataire :    7  %5s   %s%s\n\n" % [H, current_dest_code, current_dest_name, E]
 		t += "%s5=D{tail Colis/UAT   7=Validation UAT transit vocal%s\n\n" % [C, E]
@@ -1841,7 +2301,8 @@ func _render_as400_screen() -> void:
 		t += "%s                              CFP     CD                       Dt Exp Adresse%s\n" % [H, E]
 		var regular_uats: Array = []
 		var cc_uats: Array = []
-		for p in last_avail_cache:
+		for p: Dictionary in last_avail_cache:
+			if raq_seq_filter > 0 and p.get("dest", 1) != raq_seq_filter: continue
 			if p.is_uat:
 				if p.type == "C&C": cc_uats.append(p)
 				else: regular_uats.append(p)
@@ -1856,11 +2317,51 @@ func _render_as400_screen() -> void:
 			var em: String = em_map.get(p.type, "11")
 			var hr: int = 11 + rng_dt.randi_range(0, 3)
 			var mn: int = rng_dt.randi_range(10, 59)
-			t += "%s  %-20s  MAG %s   0 %s %s %-20s 170326 %d:%02d:%02d%s\n" % [C, p.id, uni, se, em, p.get("colis_id", "N/A"), hr, mn, rng_dt.randi_range(0,59), E]
+			var ddate: String = p.get("delivery_date", "")
+			var date_col: String = ddate if ddate != "" else "250326"
+			t += "%s  %-20s  MAG %s   0 %s %s %-20s %s %d:%02d:%02d%s\n" % [C, p.id, uni, se, em, p.get("colis_id", "N/A"), date_col, hr, mn, rng_dt.randi_range(0,59), E]
 		for p in cc_uats:
 			var hr: int = 13 + rng_dt.randi_range(0, 2)
 			var mn: int = rng_dt.randi_range(10, 59)
 			t += "%s  %-20s  MAP 10    0 86 11 %-20s 170326 %d:%02d:%02d%s\n" % [W, p.id, p.get("colis_id", "N/A"), hr, mn, rng_dt.randi_range(0,59), E]
+		# Transit loose collis rows (no UAT, not yet collected)
+		if _session != null and not _session.transit_collected:
+			var t_loose: int = _session.transit_loose_collis
+			var t_loose2: int = _session.transit_loose_dest2_collis
+			if current_dest2_name != "":
+				var t_seq: int = _get_tab_dest_seq(_active_tab_idx)
+				if t_seq == 2:
+					t_loose = t_loose2
+				else:
+					t_loose2 = 0
+			if t_loose > 0:
+				t += "%s  TRANSIT RACK            MAG ---   -- -- -- %-20s TRANSIT%s\n" % [C, "(" + str(t_loose) + " loose collis — no UAT)", E]
+		# Transit UATs not yet collected
+		if _session != null and not _session.transit_collected:
+			for p_tr: Dictionary in _session.transit_items:
+				var p_tr_dest: int = p_tr.get("dest", 1)
+				if current_dest2_name != "":
+					var tr_seq: int = _get_tab_dest_seq(_active_tab_idx)
+					if tr_seq > 0 and p_tr_dest != tr_seq:
+						continue
+				t += "%s  %-20s  MAP ---   0 86 -- %-20s TRANSIT%s\n" % [C, p_tr.id, p_tr.get("colis_id", ""), E]
+		# ADR rows — always red, visible from session start; in locker until collected, then on dock
+		if _session != null and _session.has_adr:
+			for p_adr: Dictionary in _session.adr_items:
+				var p_adr_dest: int = p_adr.get("dest", 1)
+				if current_dest2_name != "":
+					var adr_seq: int = _get_tab_dest_seq(_active_tab_idx)
+					if adr_seq > 0 and p_adr_dest != adr_seq:
+						continue
+				t += "%s  %-20s  MAP ADR  %2d 86 11 %-20s LOCKER%s\n" % [R, p_adr.id, p_adr.collis, p_adr.get("colis_id", ""), E]
+			for p_adr: Dictionary in _session.inventory_available:
+				if p_adr.get("type", "") == "ADR":
+					var p_adr_dest: int = p_adr.get("dest", 1)
+					if current_dest2_name != "":
+						var adr_seq: int = _get_tab_dest_seq(_active_tab_idx)
+						if adr_seq > 0 and p_adr_dest != adr_seq:
+							continue
+					t += "%s  %-20s  MAP ADR  %2d 86 11 %-20s ON DOCK%s\n" % [R, p_adr.id, p_adr.collis, p_adr.get("colis_id", ""), E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
 		t += "%sF3=Sortie  F5=Ttes UAT  F7=UAT non Adress{es  F8=UAT Adress{es  F9=CCC/ADR%s\n" % [C, E]
 		t += "%sF10=NBC/CFP   F11=EM/CD   F15=Tri F&R%s\n" % [C, E]
@@ -1872,8 +2373,13 @@ func _render_as400_screen() -> void:
 		t += "%s09:01:00%s                                    %sAFFICH.%s  %sPJJIDFR%s\n\n" % [H, E, Y, E, H, E]
 		t += "%sExpéditeur   :   14    390   CAR TILBURG EXPE%s\n" % [H, E]
 		if current_dest2_name != "":
-			t += "%sDestinataire :    7  %5s   %s%s\n" % [H, current_dest_code, current_dest_name, E]
-			t += "%s             +   7  %5s   %s%s  %s(CO LOADING)%s\n\n" % [H, current_dest2_code, current_dest2_name, E, Y, E]
+			var s9_tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
+			var s9_tab_name: String = _as400_tabs[_active_tab_idx].get("dest_name", "") if not _as400_tabs.is_empty() else ""
+			if s9_tab_code != "":
+				var s9_seq: int = _get_tab_dest_seq(_active_tab_idx)
+				t += "%sDestinataire :    7  %5s   %s  %s(Seq.%d — CO LOADING)%s\n\n" % [H, s9_tab_code, s9_tab_name, Y, s9_seq, E]
+			else:
+				t += "%sDestinataire :    7  %s[NON DEFINI]%s  %s(CO LOADING)%s\n\n" % [H, R, E, Y, E]
 		else:
 			t += "%sDestinataire :    7  %5s   %s%s\n\n" % [H, current_dest_code, current_dest_name, E]
 		t += "%s╔══════════════════════════════════════════════════╗%s\n" % [Y, E]
@@ -1927,15 +2433,28 @@ func _render_as400_screen() -> void:
 		as400_terminal_input.placeholder_text = "N° Colis ou UAT — Shift+F1 or F13=RAQ"
 		t += "%s%s%s   %s***%s      %s[u]SCANNING QUAI[/u]%s          %s***%s  %sQUAI390%s    %sNLDKL01%s\n" % [H, d, E, H, E, C, E, H, E, H, E, H, E]
 		t += "%s19:32:02%s                                    %sENTRER%s   %sPII1PVR%s\n\n" % [H, E, H, E, H, E]
+		# Co-loading: show which store this tab is for
+		if current_dest2_name != "" and not _as400_tabs.is_empty():
+			var tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "")
+			var tab_name: String = _as400_tabs[_active_tab_idx].get("dest_name", "")
+			if tab_code != "":
+				var tab_seq: int = _get_tab_dest_seq(_active_tab_idx)
+				var seq_color: String = Y if tab_seq == 1 else "[color=#e67e22]"
+				t += "  %sDESTINATAIRE ACTIF:%s %s%s %s (Seq.%d)%s\n\n" % [H, E, seq_color, tab_name, tab_code, tab_seq, E]
+			else:
+				t += "  %sDESTINATAIRE ACTIF:%s %s[NON DEFINI — Allez sur SAISIE d'abord]%s\n\n" % [H, E, R, E]
 		var colis_remaining: int = 0
 		var uat_remaining: int = 0
 		var colis_loaded: int = 0
 		var uat_loaded: int = 0
-		for p in last_avail_cache:
+		var scan_seq_filter: int = _get_tab_dest_seq(_active_tab_idx)
+		for p: Dictionary in last_avail_cache:
+			if scan_seq_filter > 0 and p.get("dest", 1) != scan_seq_filter: continue
 			if p.is_uat and not p.missing:
 				uat_remaining += 1
 				colis_remaining += p.collis
-		for p in last_loaded_cache:
+		for p: Dictionary in last_loaded_cache:
+			if scan_seq_filter > 0 and p.get("dest", 1) != scan_seq_filter: continue
 			if p.is_uat:
 				uat_loaded += 1
 				colis_loaded += p.collis
@@ -1969,26 +2488,43 @@ func _render_as400_screen() -> void:
 		t += "%sF3=Sortie F5=R@J F13=RAQ (or Shift+F1)  F10=Valider F14=UAT/Colis Charg{s%s\n" % [C, E]
 		t += "%sF6=Toisage F7=EXPE colis sans flux F8=UAT normal/vrac F9=Modif support UAT%s\n" % [C, E]
 
-	# === SAISIE D'UNE EXPEDITION (state 19) — autofilled with scenario data ===
+	# === SAISIE D'UNE EXPEDITION (state 19) — destinataire typed by user for co-loading ===
 	elif as400_state == 19:
-		as400_terminal_input.placeholder_text = "F10=Valider (proceed to scanning) — F3=Sortie"
+		var tab_dest_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
+		var tab_dest_name: String = _as400_tabs[_active_tab_idx].get("dest_name", "") if not _as400_tabs.is_empty() else ""
+		var dest_filled: bool = tab_dest_code != ""
+		# For non-co-loading, auto-fill from scenario as before
+		if current_dest2_name == "" and not dest_filled:
+			tab_dest_code = current_dest_code
+			tab_dest_name = current_dest_name
+			dest_filled = true
+		if dest_filled:
+			as400_terminal_input.placeholder_text = "F10=Valider (proceed to scanning) — F3=Sortie"
+		else:
+			as400_terminal_input.placeholder_text = "Enter store destination code, then press Enter"
 		t += "%s%s%s   %s***%s    %s[u]SAISIE D'UNE EXPEDITION[/u]%s  %s***%s  %sQUAI390%s    %sNLDKL01%s\n" % [H, d, E, H, E, C, E, H, E, H, E, H, E]
 		t += "%s19:30:24%s                                    %sAJOUTER%s  %sPID2E1R%s\n\n" % [H, E, R, E, H, E]
 		t += "%sN{exp{dition    :%s  %s06948174%s              %sExp{diteur camion:%s %s[u]14    390[/u]%s\n\n" % [H, E, Y, E, H, E, Y, E]
 		t += "%sExpediteur       :   14    390%s %sCAR TILBURG EXPE%s\n\n" % [H, E, H, E]
-		# Autofill destination from scenario
-		var dest_c: String = current_dest_code if current_dest_code != "" else "1570"
-		var dest_n: String = current_dest_name if current_dest_name != "" else "ALKMAAR"
-		t += "%sDestinataire     :%s  %s 7  %s%s   %s%s%s\n\n" % [H, E, Y, dest_c, E, H, dest_n, E]
-		# Random but realistic seal numbers
-		var seal1: String = str(8600000 + (hash(current_dest_name) % 9999))
+		if dest_filled:
+			t += "%sDestinataire     :%s  %s 7  %s%s   %s%s%s\n\n" % [H, E, Y, tab_dest_code, E, H, tab_dest_name, E]
+		else:
+			t += "%sDestinataire     :%s  %s 7  ________%s   %s← Type store code above%s\n\n" % [H, E, Y, E, R, E]
+		# Seal number 1: co-loading tabs get different numbers from same booklet
+		var seal1_base: int = 8600000 + (hash(current_dest_name) % 9999)
+		var seal1: String
+		if current_dest2_name != "" and _get_tab_dest_seq(_active_tab_idx) == 2:
+			var seal_offset: int = 1 + (hash(current_dest_name + current_dest2_name) % 10)
+			seal1 = str(seal1_base + seal_offset)
+		else:
+			seal1 = str(seal1_base)
 		t += "%sSEAL number 1    :%s  %s[u]%s[/u]%s\n" % [H, E, Y, seal1, E]
 		t += "%sSEAL number 2    :%s  %s________%s\n\n" % [H, E, Y, E]
 		t += "%sType transport :%s %s1%s\n" % [H, E, Y, E]
 		t += "%sPrestataire    :%s %sDHL%s\n" % [H, E, Y, E]
 		t += "%sType exp{dition :%s %s[u]C[/u]%s %s(C=Classical / S=Specific)%s\n\n\n" % [H, E, Y, E, H, E]
 		var operators: Array = ["Benancio", "Lydia", "Lorena", "Zuzanna", "Georgios", "Damian"]
-		var op_name: String = operators[hash(current_dest_name) % operators.size()]
+		var op_name: String = operators[hash(tab_dest_name if dest_filled else "default") % operators.size()]
 		t += "%sOp{rateur        :%s                  %s%s%s\n" % [H, E, R, op_name.to_upper(), E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
 		t += "%sF3=Sortie    F4=Invite    F10=Valider%s                            %sAIDE%s\n" % [C, E, C, E]
@@ -2055,9 +2591,9 @@ func _render_as400_screen() -> void:
 	as400_terminal_display.text = t
 
 func _on_as400_input_submitted(text: String) -> void:
-	var input = text.strip_edges().to_upper()
+	var input: String = text.strip_edges().to_upper()
 	as400_terminal_input.text = ""
-	
+
 	if as400_state == 0 and input == "BAYB2B": as400_state = 1
 	elif as400_state == 1 and input == "123456": as400_state = 2
 	elif as400_state == 2:
@@ -2069,24 +2605,46 @@ func _on_as400_input_submitted(text: String) -> void:
 	elif as400_state == 4:
 		if input == "02": as400_state = 5
 	elif as400_state == 5:
-		if input == "05": as400_state = 22  # Create shipment → EXPEDITION EN COURS
-		elif input == "06": as400_state = 22  # Manage shipping → EXPEDITION EN COURS
+		if input == "05": as400_state = 22
+		elif input == "06": as400_state = 22
 	elif as400_state == 22:
 		if input == "F6":
-			_badge_target = 19  # F6 from Expedition → badge → SAISIE
+			_badge_target = 19
 			as400_state = 6
 	elif as400_state == 6 and input == "8600555": as400_state = 7
 	elif as400_state == 7 and input == "123456": as400_state = _badge_target
 	elif as400_state == 19:
-		if input == "F10": as400_state = 18  # Validate SAISIE → scanning
-		elif input == "F3": as400_state = 22  # Back to EXPEDITION
+		if input == "F10":
+			# For co-loading: require destinataire to be entered first
+			var tab_code: String = _as400_tabs[_active_tab_idx].get("dest_code", "") if not _as400_tabs.is_empty() else ""
+			if current_dest2_name != "" and tab_code == "":
+				# Reject — show error on screen (re-render with error hint)
+				_as400_tabs[_active_tab_idx]["dest_code"] = "__ERROR__"
+				_render_as400_screen()
+				_as400_tabs[_active_tab_idx]["dest_code"] = ""
+				if lbl_hover_info:
+					lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire requis![/b] Type the store code first, then press Enter, then F10.[/color][/font_size]"
+				_save_tab_state()
+				return
+			as400_state = 18
+		elif input == "F3":
+			as400_state = 22
+		else:
+			# User is typing the destinataire store code
+			_handle_saisie_dest_input(input)
+			_save_tab_state()
+			_render_as400_screen()
+			WOTSAudio.play_as400_key(self)
+			return
 	elif as400_state == 18:
 		if input == "F3": as400_state = 5
-		elif input == "F13" or input == "SHIFT+F1": as400_state = 8
+		elif input == "F13" or input == "SHIFT+F1":
+			as400_state = 8
+			_on_raq_opened()
 	elif as400_state == 8:
 		if input == "F3": as400_state = 18
 		elif input == "F13": as400_state = 18
-	elif as400_state == 9 and input == "F3": as400_state = 8
+	elif as400_state == 9 and input == "F3": as400_state = 22
 	elif as400_state == 15 and input == "F3": as400_state = 2
 	elif as400_state == 16 and input == "F3": as400_state = 5
 	elif as400_state == 17 and input == "F3": as400_state = 5
@@ -2095,10 +2653,11 @@ func _on_as400_input_submitted(text: String) -> void:
 		if input == "1": as400_state = 21
 		elif input == "F3": as400_state = 2
 	elif as400_state == 21 and input == "F3": as400_state = 20
-	
+
+	_save_tab_state()
 	_render_as400_screen()
 	WOTSAudio.play_as400_key(self)
-	
+
 	if tutorial_active:
 		if tutorial_step == 1 and as400_state == 2:
 			tutorial_step = 2
@@ -2109,6 +2668,37 @@ func _on_as400_input_submitted(text: String) -> void:
 		elif tutorial_step == 4 and as400_state == 8:
 			tutorial_step = 5
 			_update_tutorial_ui()
+
+func _handle_saisie_dest_input(input: String) -> void:
+	if _as400_tabs.is_empty(): return
+	# Find store by code
+	var matched_store: Dictionary = {}
+	for s: Dictionary in store_destinations:
+		if s.code == input:
+			matched_store = s
+			break
+	if matched_store.is_empty():
+		if lbl_hover_info:
+			lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire inconnu:[/b] Code '%s' not found. Try again.[/color][/font_size]" % input
+		return
+	# For co-loading: must be one of the two assigned stores
+	if current_dest2_name != "":
+		if input != current_dest_code and input != current_dest2_code:
+			if lbl_hover_info:
+				lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Destinataire incorrect:[/b] Code '%s' is not assigned to this truck. Check the Shift Board for the correct store codes.[/color][/font_size]" % input
+			return
+		# Check if other tab already claimed this store
+		for i: int in range(_as400_tabs.size()):
+			if i == _active_tab_idx: continue
+			if _as400_tabs[i].get("dest_code", "") == input:
+				if lbl_hover_info:
+					lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Already open:[/b] Store %s is already open in the other tab.[/color][/font_size]" % input
+				return
+	_as400_tabs[_active_tab_idx]["dest_code"] = matched_store.code
+	_as400_tabs[_active_tab_idx]["dest_name"] = matched_store.name
+	_rebuild_as400_tab_bar()
+	if lbl_hover_info:
+		lbl_hover_info.text = "[font_size=15][color=#2ecc71][b]Destinataire OK:[/b] %s %s — press F10 to validate.[/color][/font_size]" % [matched_store.name, matched_store.code]
 
 # ==========================================
 # FLOW LOGIC & DATA UPDATES
@@ -2149,7 +2739,7 @@ func _on_portal_start_pressed() -> void:
 	# Rebuild dock lanes for current scenario type
 	_rebuild_dock_lanes(_current_scenario_index == 3)
 	phone_messages.clear()
-	phone_flash_active = false
+	_clear_phone_flash()
 	_load_cooldown = false
 	
 	portal_overlay.visible = false
@@ -2160,6 +2750,8 @@ func _on_portal_start_pressed() -> void:
 	_close_all_panels(true)
 	
 	as400_state = 0
+	_as400_wrong_store_scans = 0
+	_init_as400_tabs()
 	_render_as400_screen()
 	
 	if _current_scenario_index == 0:
@@ -2180,12 +2772,27 @@ func _on_portal_start_pressed() -> void:
 		lbl_standby.visible = true
 	
 	_session.call("start_session_with_scenario", _current_scenario_name)
+	# Transit: visible for Standard onwards, enabled once player opens the RAQ
+	if btn_transit != null:
+		btn_transit.visible = (_current_scenario_index >= 1)
+		btn_transit.disabled = true
+	# ADR: visible only if session has ADR, enabled once player opens the RAQ
+	if btn_adr != null:
+		btn_adr.visible = (_current_scenario_index >= 1 and _session.has_adr)
+		btn_adr.disabled = true
+	# Combine: visible for Standard onwards, enabled only after Start Loading
+	if btn_combine != null:
+		btn_combine.visible = (_current_scenario_index >= 1)
+		btn_combine.disabled = true
 	_populate_overlay_panels()
 
 func _on_session_ended(debrief_payload: Dictionary) -> void:
 	_is_active = false
 	_debrief_what_happened = str(debrief_payload.get("what_happened", ""))
 	_debrief_why_it_mattered = str(debrief_payload.get("why_it_mattered", ""))
+	_debrief_total_weight_kg = float(debrief_payload.get("total_weight_kg", 0.0))
+	_debrief_total_dm3 = int(debrief_payload.get("total_dm3", 0))
+	_debrief_combine_count = int(debrief_payload.get("combine_count", 0))
 	
 	var passed = debrief_payload.get("passed", false)
 	if passed:
@@ -2202,17 +2809,54 @@ func _on_debrief_closed() -> void:
 	top_actions_hbox.visible = false
 	stage_hbox.visible = false
 	_close_all_panels(true)
+	if btn_transit != null: btn_transit.visible = false
+	if btn_adr != null: btn_adr.visible = false
+	if btn_combine != null: btn_combine.visible = false
 	portal_overlay.visible = true
+
+func _refresh_combine_btn() -> void:
+	if btn_combine == null or _session == null: return
+	if not btn_combine.visible: return
+	var has_pair: bool = _session.call("has_combine_pair")
+	btn_combine.disabled = not has_pair
+
+func _on_raq_opened() -> void:
+	# RAQ has been viewed — enable pre-loading action buttons
+	# Determine which dest sequence this tab represents
+	var dest_seq: int = _get_tab_dest_seq(_active_tab_idx)
+	if _session != null:
+		_session.call("mark_raq_viewed", dest_seq)
+	# Enable transit and call buttons (ADR always visible from session start if applicable)
+	if btn_transit != null and btn_transit.visible:
+		btn_transit.disabled = false
+	if btn_adr != null and btn_adr.visible:
+		btn_adr.disabled = false
+	# btn_call is always enabled — no gate needed
 
 func _render_debrief() -> void:
 	var bb := "[center][font_size=28][color=#0082c3][b]Story of the Shift[/b][/color][/font_size][/center]\n\n"
+	# Truck load summary line
+	bb += "[center][font_size=16][color=#7f8fa6]Truck load: [b]%.0f kg[/b]  ·  [b]%d dm³[/b]" % [_debrief_total_weight_kg, _debrief_total_dm3]
+	if _debrief_combine_count > 0:
+		bb += "  ·  [color=#2ecc71][b]%d deckstacker combine(s)[/b][/color]" % _debrief_combine_count
+	bb += "[/color][/font_size][/center]\n\n"
 	bb += "[font_size=24][b]Operational Timeline & Decisions[/b][/font_size]\n"
 	bb += _debrief_what_happened + "\n"
-	
+
+	if _as400_wrong_store_scans > 0:
+		bb += "\n[font_size=18][color=#f1c40f]• AS400 soft error:[/color][/font_size] [font_size=16]The scanner blocked %d attempt(s) to scan a pallet belonging to the wrong store. AS400 prevented incorrect scanning — this is the system working correctly, but it signals the wrong tab was active.[/font_size]\n" % _as400_wrong_store_scans
+
+	if _session != null:
+		var had_transit: bool = (_session.transit_items.size() > 0 or _session.transit_loose_collis > 0 or _session.transit_loose_dest2_collis > 0 or _session.transit_collected)
+		if had_transit and not _session.transit_collected:
+			bb += "\n[font_size=18][color=#f1c40f]• Transit rack not checked:[/color][/font_size] [font_size=16]Collis or UATs were waiting on the transit rack but were never collected before sealing.[/font_size]\n"
+		if _session.has_adr and not _session.adr_collected:
+			bb += "\n[font_size=18][color=#e74c3c]• ADR pallet not collected:[/color][/font_size] [font_size=16]The ADR pallet was in the yellow lockers but was never retrieved. Dangerous goods cannot be left unsecured when committed to a shipment.[/font_size]\n"
+
 	if _debrief_why_it_mattered.strip_edges() != "":
 		bb += "\n[font_size=24][b]Managerial Review[/b][/font_size]\n"
 		bb += _debrief_why_it_mattered + "\n"
-		
+
 	if lbl_debrief_text != null: lbl_debrief_text.text = bb
 	if debrief_overlay != null: debrief_overlay.visible = true
 
@@ -2227,6 +2871,7 @@ func set_session(session) -> void:
 		if _session.has_signal("responsibility_boundary_updated"): _session.connect("responsibility_boundary_updated", Callable(self, "_on_boundary_updated"))
 		if _session.has_signal("inventory_updated"): _session.connect("inventory_updated", Callable(self, "_on_inventory_updated"))
 		if _session.has_signal("phone_notification"): _session.connect("phone_notification", Callable(self, "_on_phone_notification"))
+		if _session.has_signal("phone_pallets_delivered"): _session.connect("phone_pallets_delivered", Callable(self, "_on_phone_pallets_delivered"))
 
 func _populate_scenarios() -> void:
 	if portal_scenario_dropdown == null: return
@@ -2296,18 +2941,33 @@ func _on_decision_pressed(action: String) -> void:
 		WOTSAudio.play_scan_beep(self)
 	elif action == "Start Loading":
 		WOTSAudio.play_panel_click(self)
+		# Combine is the only button gated behind Start Loading
+		if btn_combine != null and btn_combine.visible:
+			btn_combine.disabled = false
+	elif action == "Check Transit":
+		if btn_transit != null:
+			btn_transit.disabled = true
+	elif action == "Check Yellow Lockers":
+		if btn_adr != null:
+			btn_adr.disabled = true
+	elif action == "Combine Pallets":
+		WOTSAudio.play_scan_beep(self)
+		_refresh_combine_btn()
 
 func _on_time_updated(total_time: float, _loading_time: float) -> void:
 	_update_top_time(total_time)
 
 func _update_top_time(total_time: float) -> void:
 	if top_time_label == null: return
-	# Show as realistic warehouse clock starting at 09:00
-	var base_hour = 9
-	var total_secs = int(total_time)
-	var hours = base_hour + (total_secs / 3600)
-	var mins = (total_secs % 3600) / 60
-	var secs = total_secs % 60
+	# Clock starts at 09:00 and only advances once loading has started
+	var base_hour: int = 9
+	if _session != null and not _session.loading_started:
+		top_time_label.text = "09:00:00"
+		return
+	var total_secs: int = int(total_time)
+	var hours: int = base_hour + (total_secs / 3600)
+	var mins: int = (total_secs % 3600) / 60
+	var secs: int = total_secs % 60
 	top_time_label.text = "%02d:%02d:%02d" % [hours, mins, secs]
 
 func _on_role_updated(_role_id: int) -> void:
@@ -2327,6 +2987,7 @@ func _update_strip_text() -> void:
 func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max: float) -> void:
 	last_avail_cache = avail.duplicate(true)
 	last_loaded_cache = loaded.duplicate(true)
+	_refresh_combine_btn()
 	
 	if as400_state == 8 or as400_state == 18:
 		_render_as400_screen() 
@@ -2465,60 +3126,93 @@ func _on_inventory_updated(avail: Array, loaded: Array, cap_used: float, cap_max
 # ==========================================
 # PHONE NOTIFICATION SYSTEM
 # ==========================================
+func _clear_phone_flash() -> void:
+	phone_flash_active = false
+	if _phone_flash_timer != null:
+		_phone_flash_timer.stop()
+		_phone_flash_timer.queue_free()
+		_phone_flash_timer = null
+	if btn_phone != null:
+		btn_phone.text = " Phone " if _sidebar_expanded else "PH"
+		btn_phone.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
+
+func _on_phone_pallets_delivered() -> void:
+	_update_phone_content()
+	if lbl_hover_info:
+		lbl_hover_info.text = "[font_size=15][color=#2ecc71][b]Pallets arrived on the dock.[/b][/color][/font_size]"
+
 func _on_phone_notification(message: String, _pallets_added: int) -> void:
 	phone_messages.append(message)
 	phone_flash_active = true
 	WOTSAudio.play_error_buzz(self)
-	
+
 	# Update phone panel content live
 	_update_phone_content()
-	
-	# Flash the phone button
+
+	# Kill any existing flash timer before starting a new one
+	if _phone_flash_timer != null:
+		_phone_flash_timer.stop()
+		_phone_flash_timer.queue_free()
+		_phone_flash_timer = null
+
 	if btn_phone != null:
 		var orig_color: Color = btn_phone.get_theme_color("font_color")
-		var state := {"count": 0}
+		var flash_state := {"count": 0}
 		var timer := Timer.new()
 		timer.wait_time = 0.4
 		timer.one_shot = false
 		add_child(timer)
+		_phone_flash_timer = timer
 		timer.timeout.connect(func() -> void:
-			state.count += 1
+			if not phone_flash_active:
+				timer.stop()
+				timer.queue_free()
+				if _phone_flash_timer == timer:
+					_phone_flash_timer = null
+				return
+			flash_state.count += 1
 			var lbl_full: String = " Phone (!) " if _sidebar_expanded else "!!"
 			var lbl_norm: String = " Phone " if _sidebar_expanded else "PH"
-			if state.count % 2 == 0:
+			if flash_state.count % 2 == 0:
 				btn_phone.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
 				btn_phone.text = lbl_full
 			else:
 				btn_phone.add_theme_color_override("font_color", orig_color)
 				btn_phone.text = lbl_norm
-			if state.count >= 10:
+			if flash_state.count >= 10:
 				timer.stop()
 				timer.queue_free()
-				btn_phone.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
-				btn_phone.text = lbl_full
+				if _phone_flash_timer == timer:
+					_phone_flash_timer = null
+				if phone_flash_active and btn_phone != null:
+					btn_phone.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
+					btn_phone.text = lbl_full
 		)
 		timer.start()
-	
+
 	# Auto-open phone panel if not in tutorial
 	if not tutorial_active:
 		_set_panel_visible("Phone", true, false)
 
 func _update_phone_content() -> void:
-	var ph_body = _find_panel_body(pnl_phone)
+	var ph_body: RichTextLabel = _find_panel_body(pnl_phone)
 	if ph_body == null: return
-	var t = "[font_size=14]"
+	var t: String = "[font_size=14]"
 	t += "[color=#0082c3][b]PHONE[/b][/color]\n"
 	t += "[color=#5a6a7a]────────────────────────────────────────[/color]\n\n"
+	# Show delivery-in-progress banner if pallets are on their way
+	if _session != null and _session.get("_phone_deliver_timer") > 0.0:
+		t += "[color=#f1c40f][b]⏳ Pallets on the way — arriving in ~30 seconds.[/b][/color]\n\n"
+		t += "[color=#5a6a7a]────────────────────────────────────────[/color]\n\n"
 	if phone_messages.size() > 0:
-		for i in range(phone_messages.size() - 1, -1, -1):
+		for i: int in range(phone_messages.size() - 1, -1, -1):
 			t += phone_messages[i] + "\n\n"
 			if i > 0:
 				t += "[color=#5a6a7a]────────────────────────────────────────[/color]\n\n"
 	else:
 		t += "[color=#95a5a6]No incoming calls.\n\n"
-		t += "In future scenarios, departments may call\n"
-		t += "you about missing pallets, delays, or\n"
-		t += "urgent priority changes.\n\n"
+		t += "Departments will call about late pallets\n"
+		t += "and priority changes during loading.\n\n"
 		t += "[b]Quick dial:[/b]\n"
 		t += "  DOUBLON: 1003\n"
 		t += "  DUTY: 1002\n"
@@ -2527,11 +3221,12 @@ func _update_phone_content() -> void:
 	ph_body.text = t
 
 func _get_type_color(p_type: String) -> Color:
-	if p_type == "C&C": return Color(1.0, 1.0, 1.0) 
+	if p_type == "C&C": return Color(1.0, 1.0, 1.0)
 	if p_type == "Bikes": return Color(0.2, 0.7, 0.3)
 	if p_type == "Bulky": return Color(0.9, 0.5, 0.1)
 	if p_type == "Mecha": return Color(0.0, 0.51, 0.76)
 	if p_type == "ServiceCenter": return Color(0.8, 0.8, 0.1)
+	if p_type == "ADR": return Color(0.9, 0.15, 0.15)
 	return Color(0.5, 0.5, 0.5)
 
 # ==========================================
@@ -2548,7 +3243,7 @@ func _build_pallet_graphic(color: Color, is_truck: bool, p_type: String = "") ->
 	btn.add_theme_stylebox_override("hover", empty_sb)
 	btn.add_theme_stylebox_override("focus", empty_sb)
 
-	var is_plastic = (p_type == "Mecha" or p_type == "C&C")
+	var is_plastic: bool = (p_type == "Mecha" or p_type == "C&C" or p_type == "ADR")
 	var base_bg = ColorRect.new()
 	base_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	base_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2714,11 +3409,11 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 				return
 			_load_cooldown = true
 			btn.modulate = Color(1.5, 0.5, 0.5)
-			var ul_timer := get_tree().create_timer(0.35)
+			var ul_timer := get_tree().create_timer(0.23)
 			ul_timer.timeout.connect(func() -> void:
 				if _session != null: _session.call("unload_pallet_by_id", p.id)
 				WOTSAudio.play_unload_warning(self)
-				var cd_timer := get_tree().create_timer(0.35)
+				var cd_timer := get_tree().create_timer(0.23)
 				cd_timer.timeout.connect(func() -> void:
 					_load_cooldown = false
 				)
@@ -2729,8 +3424,31 @@ func _update_truck_visualizer(loaded_pallets: Array) -> void:
 func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	var btn = _build_pallet_graphic(_get_type_color(p_data.type), false, p_data.type)
 
+	# Combine-eligible indicator: green dashed border overlay
+	var is_combine_src: bool = false
+	if _session != null:
+		is_combine_src = _session.call("_is_combine_source", p_data)
+	if is_combine_src:
+		var border := ReferenceRect.new()
+		border.set_anchors_preset(Control.PRESET_FULL_RECT)
+		border.border_color = Color(0.18, 0.9, 0.5, 0.9)
+		border.border_width = 2.5
+		border.editor_only = false
+		border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(border)
+		var lbl_c := Label.new()
+		lbl_c.text = "⊕"
+		lbl_c.add_theme_font_size_override("font_size", 11)
+		lbl_c.add_theme_color_override("font_color", Color(0.18, 0.9, 0.5))
+		lbl_c.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		lbl_c.offset_left = 2
+		lbl_c.offset_bottom = 0
+		lbl_c.offset_top = -14
+		lbl_c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(lbl_c)
+
 	# Co-loading destination indicator (small colored corner tag)
-	var dest_id = p_data.get("dest", 1)
+	var dest_id: int = p_data.get("dest", 1)
 	if current_dest2_name != "":
 		var tag = ColorRect.new()
 		tag.custom_minimum_size = Vector2(12, 12)
@@ -2755,11 +3473,27 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 	if p_data.has("code"): code_str = " | Code: " + p_data.code
 	var colis_str = p_data.get("colis_id", "N/A")
 	
-	var base_label = "Plastic" if (p_data.type == "Mecha" or p_data.type == "C&C") else "EUR Wood"
+	var base_label: String = "Plastic" if (p_data.type == "Mecha" or p_data.type == "C&C") else "EUR Wood"
+	if p_data.type == "ADR": base_label = "Plastic ⚠ ADR"
 	var hover_text = "[font_size=15][color=#0082c3][b]▶ SCAN DATA[/b][/color]  "
 	hover_text += "[color=#c0c8d0]Type:[/color] [b][color=#ffffff]%s[/color][/b] [color=#8a9aaa](%s)[/color]%s\n" % [p_data.type, base_label, code_str]
 	hover_text += "[color=#c0c8d0]U.A.T:[/color] [b][color=#ffffff]%s[/color][/b]   [color=#c0c8d0]Colis:[/color] [b][color=#ffffff]%s[/color][/b]\n" % [p_data.id, colis_str]
 	hover_text += "[color=#c0c8d0]Promise:[/color] [b][color=#ffffff]%s[/color][/b]   [color=#c0c8d0]Qty:[/color] [color=#ffffff]%d[/color]   [color=#c0c8d0]Cap:[/color] [color=#ffffff]%0.1f[/color]" % [p_data.promise, p_data.collis, p_data.cap]
+	var ddate: String = p_data.get("delivery_date", "")
+	if ddate != "":
+		hover_text += "\n[color=#c0c8d0]Store delivery date:[/color] [color=#f1c40f][b]%s[/b][/color]" % ddate
+	else:
+		hover_text += ""
+	var w_kg: float = p_data.get("weight_kg", 0.0)
+	var v_dm3: int = p_data.get("dm3", 0)
+	if w_kg > 0.0:
+		hover_text += "\n[color=#c0c8d0]Weight:[/color] [color=#ffffff]%.0f kg[/color]   [color=#c0c8d0]Volume:[/color] [color=#ffffff]%d dm³[/color]" % [w_kg, v_dm3]
+	var sub: String = p_data.get("subtype", "")
+	if sub != "":
+		hover_text += "   [color=#c0c8d0]Type:[/color] [color=#ffffff]%s[/color]" % sub
+	var combined: Array = p_data.get("combined_uats", [])
+	if not combined.is_empty():
+		hover_text += "\n[color=#2ecc71][b]⊕ Combined — carries %d UATs[/b][/color]" % (1 + combined.size())
 	# Show destination for co-loading (reuse dest_id from above)
 	if current_dest2_name != "":
 		var dest_str = "%s %s" % [current_dest_name, current_dest_code] if dest_id == 1 else "%s %s" % [current_dest2_name, current_dest2_code]
@@ -2802,6 +3536,18 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 			elif lbl_hover_info:
 				lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Scanner inactive on RAQ screen![/b] Press F3 to return to the Scanning screen first.[/color][/font_size]"
 			return
+
+		# Co-loading: wrong-store tab check (scanner blocks wrong-store pallets)
+		if current_dest2_name != "" and as400_state == 18:
+			var tab_seq: int = _get_tab_dest_seq(_active_tab_idx)
+			if tab_seq != 0 and p_data.get("dest", 1) != tab_seq:
+				WOTSAudio.play_error_buzz(self)
+				var wrong_store_name: String = current_dest_name if p_data.get("dest", 1) == 1 else current_dest2_name
+				var wrong_store_code: String = current_dest_code if p_data.get("dest", 1) == 1 else current_dest2_code
+				if lbl_hover_info:
+					lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]AS400 ERROR — Wrong Store:[/b] This pallet belongs to %s %s. Switch to the correct tab first.[/color][/font_size]" % [wrong_store_name, wrong_store_code]
+				_as400_wrong_store_scans += 1
+				return
 		
 		# Start cooldown
 		_load_cooldown = true
@@ -2812,12 +3558,12 @@ func _draw_pallet(p_data: Dictionary, parent: Control) -> void:
 		WOTSAudio.play_scan_beep(self)
 		
 		# Delay the actual load for smooth feel
-		var load_timer := get_tree().create_timer(0.35)
+		var load_timer := get_tree().create_timer(0.23)
 		load_timer.timeout.connect(func() -> void:
 			if _session != null: _session.call("load_pallet_by_id", p_data.id)
 			WOTSAudio.play_load_confirm(self)
 			# Release cooldown after a short extra pause
-			var cd_timer := get_tree().create_timer(0.35)
+			var cd_timer := get_tree().create_timer(0.23)
 			cd_timer.timeout.connect(func() -> void:
 				_load_cooldown = false
 			)
@@ -2831,14 +3577,12 @@ func _init_panel_nodes_and_buttons(btn_dock_view: Button) -> void:
 	_panel_nodes["AS400"] = pnl_as400_stage
 	
 	_panel_nodes["Shift Board"] = pnl_shift_board
-	_panel_nodes["Loading Plan"] = pnl_loading_plan
 	_panel_nodes["Trailer Capacity"] = pnl_trailer_capacity
 	_panel_nodes["Phone"] = pnl_phone
 	_panel_nodes["Notes"] = pnl_notes
 	
 	if btn_dock_view != null: btn_dock_view.pressed.connect(func() -> void: _toggle_panel("Dock View"))
 	if btn_shift_board != null: btn_shift_board.pressed.connect(func() -> void: _toggle_panel("Shift Board"))
-	if btn_loading_plan != null: btn_loading_plan.pressed.connect(func() -> void: _toggle_panel("Loading Plan"))
 	if btn_as400 != null: btn_as400.pressed.connect(func() -> void: _toggle_panel("AS400"))
 	if btn_trailer_capacity != null: btn_trailer_capacity.pressed.connect(func() -> void: _toggle_panel("Trailer Capacity"))
 	if btn_phone != null: btn_phone.pressed.connect(func() -> void: _toggle_panel("Phone"))
@@ -2986,12 +3730,19 @@ func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) ->
 	if panel_name == "AS400" and make_visible and as400_terminal_input != null:
 		as400_terminal_input.call_deferred("grab_focus")
 	
-	# Clear phone flash when Phone panel is opened
-	if panel_name == "Phone" and make_visible and phone_flash_active:
-		phone_flash_active = false
-		if btn_phone != null:
-			btn_phone.text = "Phone" if _sidebar_expanded else "PH"
-			btn_phone.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
+	# Clear phone flash when Phone panel is opened, and always refresh content
+	if panel_name == "Phone":
+		if make_visible:
+			_clear_phone_flash()
+			_update_phone_content()
+			# Tell SessionManager the phone was opened — starts the 30s pallet delivery timer
+			if _session != null:
+				_session.call("manual_decision", "Phone Opened")
+		else:
+			# On close, ensure button is in clean state
+			if btn_phone != null and not phone_flash_active:
+				btn_phone.text = " Phone " if _sidebar_expanded else "PH"
+				btn_phone.add_theme_color_override("font_color", Color(0.75, 0.78, 0.82))
 		
 	if tutorial_active:
 		if tutorial_step == 0 and panel_name == "AS400" and make_visible:
@@ -3005,7 +3756,7 @@ func _set_panel_visible(panel_name: String, make_visible: bool, silent: bool) ->
 # OVERLAY PANEL STYLING & CONTENT
 # ==========================================
 func _style_overlay_panels() -> void:
-	var overlay_panels = [pnl_shift_board, pnl_loading_plan, pnl_phone, pnl_notes]
+	var overlay_panels = [pnl_shift_board, pnl_phone, pnl_notes]
 	for p in overlay_panels:
 		if p == null: continue
 		var sb = StyleBoxFlat.new()
@@ -3029,30 +3780,46 @@ func _style_overlay_panels() -> void:
 			body.add_theme_color_override("default_color", Color(0.7, 0.73, 0.77))
 
 func _populate_overlay_panels() -> void:
-	# --- SHIFT BOARD ---
-	var sb_body = _find_panel_body(pnl_shift_board)
+	# --- SHIFT BOARD (merged with Loading Plan) ---
+	# Hide the now-unused loading plan panel
+	if pnl_loading_plan != null: pnl_loading_plan.visible = false
+
+	var sb_body: RichTextLabel = _find_panel_body(pnl_shift_board)
 	if sb_body:
-		var operators = ["Benancio", "Lydia", "Lorena", "Zuzanna", "Georgios", "Damian", "Juan", "Jakub", "Camilo", "Vasco"]
+		var operators: Array = ["Benancio", "Lydia", "Lorena", "Zuzanna", "Georgios", "Damian", "Juan", "Jakub", "Camilo", "Vasco"]
 		operators.shuffle()
-		var team_str = ""
-		for i in range(mini(operators.size(), 6)):
+		var team_str: String = ""
+		for i: int in range(mini(operators.size(), 6)):
 			team_str += "  %d. %s\n" % [i + 1, operators[i]]
-		
-		var t = "[font_size=14]"
+
+		var t: String = "[font_size=14]"
 		t += "[color=#0082c3][b]SHIFT BOARD — Bay B2B[/b][/color]\n"
 		t += "[color=#5a6a7a]────────────────────────────────────────[/color]\n\n"
 		t += "[color=#f1c40f][b]DATE:[/b][/color] 25/03/2026   [color=#f1c40f][b]SHIFT:[/b][/color] AM\n\n"
+
 		t += "[b]TEAM TODAY:[/b]\n"
 		t += team_str + "\n"
-		t += "[b]LOADING SCHEDULE:[/b]\n"
+
+		# Loading schedule — full day plan
+		t += "[b]LOADING PLAN — 25/03/2026[/b]\n"
+		t += "[color=#5a6a7a]TIME    STORE                     TYPE   CARRIER    SIZE[/color]\n"
+		t += "[color=#5a6a7a]──────────────────────────────────────────────────────[/color]\n"
 		if current_dest2_name != "":
-			t += "  [color=#f1c40f]09:00  %s %s / %s %s (CO) — %s[/color]\n" % [current_dest_name, current_dest_code, current_dest2_name, current_dest2_code, operators[0]]
+			t += "[color=#f1c40f]09:00   %s %s (Seq.1) /  CO     DHL        13.6m  ← YOUR LOAD[/color]\n" % [current_dest_name, current_dest_code]
+			t += "[color=#f1c40f]        %s %s (Seq.2)[/color]\n" % [current_dest2_name, current_dest2_code]
 		else:
-			t += "  [color=#f1c40f]09:00  %s %s — %s[/color]\n" % [current_dest_name, current_dest_code, operators[0]]
-		t += "  10:30  DEN BOSCH 3619 — %s\n" % operators[1]
-		t += "  11:00  ARENA 256 — %s\n" % operators[2]
-		t += "  12:00  BREDA 1088 — %s\n" % operators[3]
-		t += "  13:30  EINDHOVEN 1185 — %s\n\n" % operators[4]
+			t += "[color=#f1c40f]09:00   %-14s %-5s  SOLO   DHL        13.6m  ← YOUR LOAD[/color]\n" % [current_dest_name, current_dest_code]
+		t += "10:30   DEN BOSCH 3619             SOLO   DHL        13.6m\n"
+		t += "11:00   ARENA 256                  SOLO   DHL        13.6m\n"
+		t += "11:30   KERKRADE 346 /             CO     SCHOTPOORT 13.6m\n"
+		t += "        ROERMOND 2094\n"
+		t += "12:00   BREDA 1088                 SOLO   DHL        8.5m\n"
+		t += "13:00   COOLSINGEL 1161 /          CO     P&M        13.6m\n"
+		t += "        DEN HAAG 1186\n"
+		t += "13:30   EINDHOVEN 1185             SOLO   DHL        13.6m\n"
+		t += "14:30   TILBURG 2013               SOLO   DHL        8.5m\n"
+		t += "[color=#5a6a7a]Live: ARENA 256, BREDA 1088  ·  Non-live: all others[/color]\n\n"
+
 		t += "[b]EMBALLAGE:[/b]\n"
 		t += "  Dock 12 — non-live (from night shift)\n\n"
 		t += "[b]EMERGENCY CONTACTS:[/b]\n"
@@ -3061,36 +3828,8 @@ func _populate_overlay_panels() -> void:
 		t += "  WELCOME DESK: 1001\n\n"
 		t += "[b]NOTES:[/b]\n"
 		t += "  Sorter maintenance 14:00-15:00\n"
-		t += "  New agency: Stan (first day, assign buddy)\n"
 		t += "[/font_size]"
 		sb_body.text = t
-
-	# --- LOADING PLAN ---
-	var lp_body = _find_panel_body(pnl_loading_plan)
-	if lp_body:
-		var t = "[font_size=14]"
-		t += "[color=#0082c3][b]LOADING PLAN — 25/03/2026[/b][/color]\n"
-		t += "[color=#5a6a7a]────────────────────────────────────────[/color]\n\n"
-		t += "[b]TIME    STORE                  TYPE    CARRIER   SIZE[/b]\n"
-		t += "[color=#5a6a7a]─────────────────────────────────────────────────────[/color]\n"
-		if current_dest2_name != "":
-			t += "[color=#f1c40f]09:00   %s %s /[/color]    [color=#f1c40f]CO      DHL       13.6m[/color]\n" % [current_dest_name, current_dest_code]
-			t += "[color=#f1c40f]        %s %s[/color]    [color=#f1c40f]← YOUR LOAD[/color]\n" % [current_dest2_name, current_dest2_code]
-		else:
-			t += "[color=#f1c40f]09:00   %-14s %-5s  SOLO    DHL       13.6m  ← YOUR LOAD[/color]\n" % [current_dest_name, current_dest_code]
-		t += "10:30   DEN BOSCH 3619          SOLO    DHL       13.6m\n"
-		t += "11:00   ARENA 256               SOLO    DHL       13.6m\n"
-		t += "11:30   KERKRADE 346 /          CO      SCHOTPOORT 13.6m\n"
-		t += "        ROERMOND 2094\n"
-		t += "12:00   BREDA 1088              SOLO    DHL       8.5m\n"
-		t += "13:00   COOLSINGEL 1161 /       CO      P&M       13.6m\n"
-		t += "        DEN HAAG 1186\n"
-		t += "13:30   EINDHOVEN 1185          SOLO    DHL       13.6m\n"
-		t += "14:30   TILBURG 2013            SOLO    DHL       8.5m\n\n"
-		t += "[color=#5a6a7a]Live loading: ARENA 256, BREDA 1088[/color]\n"
-		t += "[color=#5a6a7a]Non-live: all others (trailers at dock)[/color]\n"
-		t += "[/font_size]"
-		lp_body.text = t
 
 	# --- PHONE ---
 	_update_phone_content()
