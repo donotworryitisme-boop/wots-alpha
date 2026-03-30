@@ -7,7 +7,7 @@ signal role_updated(role_id)
 signal responsibility_boundary_updated(role_id, assignment_text, window_active)
 signal inventory_updated(available, loaded, cap_used, cap_max)
 signal phone_notification(message: String, pallets_added: int)
-signal phone_pallets_delivered  # Fires when 30s timer completes and pallets appear
+signal phone_pallets_delivered  # Fires when 10s timer completes and pallets appear
 
 var scenario_loader = null
 var current_scenario = ""
@@ -33,10 +33,10 @@ var _wave_batches: Array = []  # Each element: Array of pallet Dicts for that wa
 var _waves_delivered: int = 0
 var _required_rework_ids: Array = []  # Pallet IDs that required rework (no penalty)
 
-# Phone-hold wave system: pallets wait until phone is opened, then 30s delay
+# Phone-hold wave system: pallets wait until phone is opened, then 10s delay
 var _phone_held_waves: Array = []    # Each: {pallets:[], msg:String, caller:String}
 var _phone_deliver_timer: float = -1.0  # -1 = not running; >=0 = countdown
-var _phone_delivering_wave: Dictionary = {}  # Wave being delivered after 30s
+var _phone_delivering_wave: Dictionary = {}  # Wave being delivered after 10s
 var _phone_was_opened: bool = false  # Whether phone was opened for current held wave
 
 # Co-loading support
@@ -58,6 +58,7 @@ var adr_collected: bool = false
 var combine_count: int = 0
 var _combine_source_ids: Array = []  # IDs of combine-eligible pallets at session start
 var _reworked_pallet_ids: Array = [] # IDs of pallets that were unloaded and reloaded
+var _wave_pallet_ids: Array = []     # IDs of pallets delivered via phone waves (exempt from seq check)
 
 func _ready() -> void:
 	pass
@@ -72,7 +73,7 @@ func _process(delta: float) -> void:
 			if _waves_delivered < _wave_times.size():
 				if loading_elapsed >= _wave_times[_waves_delivered]:
 					_deliver_pending_wave()
-			# Handle 30s phone delivery countdown
+			# Handle 10s phone delivery countdown
 			if _phone_deliver_timer >= 0.0:
 				_phone_deliver_timer -= delta
 				if _phone_deliver_timer <= 0.0:
@@ -80,9 +81,11 @@ func _process(delta: float) -> void:
 					_phone_deliver_timer = -1.0
 					_phone_delivering_wave = {}
 					_phone_was_opened = false
-					# Check if more waves are held
+					# Chain next wave automatically — phone was already attended
 					if not _phone_held_waves.is_empty():
 						var next_wave: Dictionary = _phone_held_waves.pop_front()
+						_phone_delivering_wave = next_wave
+						_phone_deliver_timer = 10.0
 						emit_signal("phone_notification", next_wave.msg, next_wave.pallets.size())
 		else:
 			# Before loading starts: emit time signal so clock shows pre-load time
@@ -111,6 +114,7 @@ func start_session_with_scenario(scenario_name: String) -> void:
 	_waves_delivered = 0
 	_required_rework_ids.clear()
 	_reworked_pallet_ids.clear()
+	_wave_pallet_ids.clear()
 	unload_count = 0
 	loading_started = false
 	loading_start_time = 0.0
@@ -209,12 +213,18 @@ func manual_decision(action: String) -> void:
 				best_tgt_w = tw
 				best_tgt = tgt
 		if best_tgt.is_empty(): return
-		# Determine result type (ADR > C&C > original)
+		# Determine result type (C&C > original; ADR flagged separately)
 		var result_type: String = best_tgt.type
-		if best_src.type == "ADR" or best_tgt.type == "ADR":
-			result_type = "ADR"
-		elif best_src.type == "C&C" or best_tgt.type == "C&C":
+		var result_has_adr: bool = best_src.get("has_adr", false) or best_tgt.get("has_adr", false) or best_src.type == "ADR" or best_tgt.type == "ADR"
+		if best_src.type == "C&C" or best_tgt.type == "C&C":
 			result_type = "C&C"
+		elif best_src.type != "ADR" and best_tgt.type != "ADR":
+			pass  # Keep target type
+		# If one is ADR standalone, keep the other's type
+		elif best_src.type == "ADR":
+			result_type = best_tgt.type
+		else:
+			result_type = best_src.type
 		# Merge into target
 		var tgt_idx: int = inventory_available.find(best_tgt)
 		var src_idx: int = inventory_available.find(best_src)
@@ -222,6 +232,8 @@ func manual_decision(action: String) -> void:
 		var merged_uats: Array = inventory_available[tgt_idx].get("combined_uats", []).duplicate()
 		merged_uats.append(best_src.id)
 		inventory_available[tgt_idx]["type"] = result_type
+		if result_has_adr:
+			inventory_available[tgt_idx]["has_adr"] = true
 		inventory_available[tgt_idx]["weight_kg"] = best_tgt.get("weight_kg", 0.0) + best_src.get("weight_kg", 0.0)
 		inventory_available[tgt_idx]["dm3"] = best_tgt.get("dm3", 0) + best_src.get("dm3", 0)
 		inventory_available[tgt_idx]["collis"] = best_tgt.collis + best_src.collis
@@ -237,10 +249,10 @@ func manual_decision(action: String) -> void:
 		_emit_inventory()
 
 	elif action == "Phone Opened":
-		# Player opened the phone — start the 30s delivery countdown for the waiting wave
+		# Player opened the phone — start the 10s delivery countdown for the waiting wave
 		if not _phone_held_waves.is_empty() and _phone_deliver_timer < 0.0:
 			_phone_delivering_wave = _phone_held_waves.pop_front()
-			_phone_deliver_timer = 30.0
+			_phone_deliver_timer = 10.0
 			_phone_was_opened = true
 
 	elif action == "Seal Truck":
@@ -308,37 +320,31 @@ func _generate_inventory(scenario_name: String) -> void:
 
 	elif scenario_name == "1. Standard Loading":
 		for _i: int in range(2):
-			inventory_available.append(_make_pallet(rng, "Bikes", "MAG", _random_promise(rng), 5, 1.3, 1))
+			inventory_available.append(_make_pallet(rng, "Bikes", "MAG", "D", 5, 1.3, 1))
 		for _i: int in range(10):
-			inventory_available.append(_make_pallet(rng, "Bulky", "MAP", _random_promise(rng), 20, 1.0, 1))
+			inventory_available.append(_make_pallet(rng, "Bulky", "MAP", "D", 20, 1.0, 1))
 		for _i: int in range(12):
-			inventory_available.append(_make_pallet(rng, "Mecha", "MAP", _random_promise(rng), 28, 1.0, 1))
+			inventory_available.append(_make_pallet(rng, "Mecha", "MAP", "D", 28, 1.0, 1))
 		var pending_std: Array = []
-		# Varied wave types: Mecha, Bulky, or Bikes, 1-3 per wave
+		# Varied wave types: Mecha, Bulky, or Bikes, 1-2 per wave, max 3 waves
 		var std_wave_pool: Array[String] = ["Mecha", "Mecha", "Bulky", "Bikes"]
-		var n_std: int = rng.randi_range(2, 4)
+		var n_std: int = rng.randi_range(2, 3)
 		for _i: int in range(n_std):
 			var wt: String = std_wave_pool[rng.randi_range(0, std_wave_pool.size() - 1)]
 			var wc: int = 28 if wt == "Mecha" else (5 if wt == "Bikes" else 20)
 			var wcp: float = 1.0 if wt == "Mecha" or wt == "Bulky" else 1.3
-			pending_std.append(_make_pallet(rng, wt, "MAP" if wt != "Bikes" else "MAG", _random_promise(rng), wc, wcp, 1))
+			pending_std.append(_make_pallet(rng, wt, "MAP" if wt != "Bikes" else "MAG", "D", wc, wcp, 1))
 		_make_wave_batches(pending_std, rng.randi_range(1, 2), [400.0, 700.0, 1000.0])
 
 	elif scenario_name == "2. Priority Loading":
-		# Priority: all initial pallets get delivery_date shown instead of D/D+/D-
+		# Priority: mixed D/D+/D- promises (delivery_date auto-set by _make_pallet)
 		for _i: int in range(2):
-			var p := _make_pallet(rng, "Bikes", "MAG", _random_promise(rng), 5, 1.3, 1)
-			p["delivery_date"] = _promise_to_date(p["promise"], rng)
-			inventory_available.append(p)
+			inventory_available.append(_make_pallet(rng, "Bikes", "MAG", _random_promise(rng), 5, 1.3, 1))
 		for _i: int in range(15):
-			var p := _make_pallet(rng, "Bulky", "MAP", _random_promise(rng), 20, 1.0, 1)
-			p["delivery_date"] = _promise_to_date(p["promise"], rng)
-			inventory_available.append(p)
+			inventory_available.append(_make_pallet(rng, "Bulky", "MAP", _random_promise(rng), 20, 1.0, 1))
 		for _i: int in range(20):
-			var p := _make_pallet(rng, "Mecha", "MAP", "D+", 28, 1.0, 1)
-			p["delivery_date"] = _promise_to_date("D+", rng)
-			inventory_available.append(p)
-		# Wave pallets: mixed types, D- (overdue), shown with date
+			inventory_available.append(_make_pallet(rng, "Mecha", "MAP", _random_promise(rng), 28, 1.0, 1))
+		# Wave pallets: mixed types, D- (overdue)
 		var pending_pri: Array = []
 		var wave_types: Array[String] = ["Mecha", "Mecha", "Bikes", "Bulky", "Mecha"]
 		for i: int in range(5):
@@ -346,7 +352,6 @@ func _generate_inventory(scenario_name: String) -> void:
 			var wc: int = 28 if wt == "Mecha" else (5 if wt == "Bikes" else 20)
 			var wcp: float = 1.0 if wt == "Mecha" or wt == "Bulky" else 1.3
 			var p := _make_pallet(rng, wt, "MAP" if wt != "Bikes" else "MAG", "D-", wc, wcp, 1)
-			p["delivery_date"] = _promise_to_date("D-", rng)
 			pending_pri.append(p)
 		_make_wave_batches(pending_pri, 2, [550.0, 850.0, 1100.0])
 
@@ -411,7 +416,9 @@ func _generate_inventory(scenario_name: String) -> void:
 						rng.randi_range(1, 2), 0.5, dest_v))
 			if rng.randf() < 0.40:
 				for p: Dictionary in transit_items:
-					inventory_available.append(p)
+					var placed: bool = _auto_combine_onto_dock(p)
+					if not placed:
+						inventory_available.append(p)
 				transit_items.clear()
 				transit_collected = true
 
@@ -457,9 +464,9 @@ func _deliver_pending_wave() -> void:
 	msg += "[color=#f1c40f]%d pallet(s) on their way to the dock:[/color]\n" % wave_pallets.size()
 	for t: String in type_counts:
 		msg += "  • %d × %s\n" % [type_counts[t], t]
-	msg += "\n[color=#95a5a6]Open this panel to confirm receipt. Pallets arrive within 30 seconds.[/color]"
+	msg += "\n[color=#95a5a6]Open this panel to confirm receipt. Pallets arrive within 10 seconds.[/color]"
 
-	# Hold pallets — they only appear after phone is opened + 30s delay
+	# Hold pallets — they only appear after phone is opened + 10s delay
 	_phone_held_waves.append({"pallets": wave_pallets, "msg": msg, "caller": caller})
 
 	# If no delivery currently in progress, emit notification now
@@ -471,6 +478,7 @@ func _complete_wave_delivery(wave: Dictionary) -> void:
 	var wave_pallets: Array = wave.get("pallets", [])
 	for p: Dictionary in wave_pallets:
 		inventory_available.append(p)
+		_wave_pallet_ids.append(p.id)
 		if p.promise == "D-" or p.promise == "D":
 			_required_rework_ids.append(p.id)
 	emit_signal("phone_pallets_delivered")
@@ -537,28 +545,29 @@ func _emit_inventory() -> void:
 
 # ==========================================
 # LOAD RANK HELPER
-# Promise-aware loading order:
-#   0  = ServiceCenter (always deepest)
-#   1–33 = D- pallets by type (Bikes=1, Bulky=2, Mecha=3)
-#   11–13 = D pallets by type
-#   21–23 = D+ pallets by type
-#   99 = C&C (always last, doors)
+# Loading order (first in = deepest in truck):
+#   0     = ServiceCenter (always deepest)
+#   1–4   = D/D- tier by type (must go — loaded first to guarantee on truck)
+#           Bikes=1, Bulky=2, Mecha=3, ADR=4
+#   11–14 = D+ tier by type (tomorrow's stock — loaded after all must-go)
+#   99    = C&C (always last in = near doors = unloaded first for customers)
+#
+# D and D- are the SAME priority: they must be on this truck, no question.
+# D+ is tomorrow — load after all D/D-, can be left behind if space runs out.
 # ==========================================
 func _get_load_rank(p: Dictionary) -> int:
 	if p.type == "ServiceCenter": return 0
 	if p.type == "C&C": return 99
-	var promise_rank: int = 1
-	match p.promise:
-		"D-": promise_rank = 0
-		"D":  promise_rank = 1
-		"D+": promise_rank = 2
+	var promise_tier: int = 0  # D and D- = must-go tier
+	if p.promise == "D+":
+		promise_tier = 1       # D+ = tomorrow tier
 	var type_rank: int = 3
 	match p.type:
 		"Bikes": type_rank = 1
 		"Bulky": type_rank = 2
 		"Mecha": type_rank = 3
-		"ADR":   type_rank = 4  # After Mecha, before C&C
-	return promise_rank * 10 + type_rank
+		"ADR":   type_rank = 4
+	return promise_tier * 10 + type_rank
 
 # ==========================================
 # PALLET FACTORY & COMBINE HELPERS
@@ -637,37 +646,44 @@ func _make_pallet(rng: RandomNumberGenerator, ptype: String, code: String,
 		"dm3": _pallet_dm3(ptype, subtype, rng),
 		"combined_uats": [],
 		"combined_collis": 0,
-		"delivery_date": "",
+		"delivery_date": _promise_to_date(promise, rng),
 		"scan_time": ""
 	}
 
 # Auto-places incoming boxes (ADR, transit) onto an existing dock pallet.
-# Finds the lightest non-Mecha pallet with matching dest that can absorb the weight/volume.
+# Finds the lightest pallet with matching dest that can absorb the weight/volume.
+# ADR can merge onto any type (including Mecha). Transit only onto Bikes (bars).
 # Returns true if placed, false if nothing suitable exists.
 func _auto_combine_onto_dock(incoming: Dictionary) -> bool:
 	var best_idx: int = -1
 	var best_w: float = 999999.0
+	var is_adr_incoming: bool = (incoming.type == "ADR")
+	# Pass 1: prefer Bikes (bars fit best on long bike pallets)
 	for i: int in range(inventory_available.size()):
 		var tgt: Dictionary = inventory_available[i]
-		if tgt.type == "Mecha": continue
+		if not is_adr_incoming and tgt.type != "Bikes": continue
 		if tgt.get("dest", 1) != incoming.get("dest", 1): continue
-		var cw: float = tgt.get("weight_kg", 0.0) + incoming.get("weight_kg", 0.0)
-		var cv: int = tgt.get("dm3", 0) + incoming.get("dm3", 0)
-		if cw > 700.0 or cv > 2500: continue
 		var tw: float = tgt.get("weight_kg", 999999.0)
 		if tw < best_w:
 			best_w = tw
 			best_idx = i
+	# Pass 2: Bulky fallback if no Bikes found (ADR already accepts any type)
+	if best_idx < 0 and not is_adr_incoming:
+		best_w = 999999.0
+		for i: int in range(inventory_available.size()):
+			var tgt: Dictionary = inventory_available[i]
+			if tgt.type != "Bulky": continue
+			if tgt.get("dest", 1) != incoming.get("dest", 1): continue
+			var tw: float = tgt.get("weight_kg", 999999.0)
+			if tw < best_w:
+				best_w = tw
+				best_idx = i
 	if best_idx < 0: return false
-	# Merge onto target
-	var result_type: String = inventory_available[best_idx].type
-	if incoming.type == "ADR" or inventory_available[best_idx].type == "ADR":
-		result_type = "ADR"
-	elif incoming.type == "C&C" or inventory_available[best_idx].type == "C&C":
-		result_type = "C&C"
+	# Merge onto target — keep original type, flag ADR presence
+	if is_adr_incoming:
+		inventory_available[best_idx]["has_adr"] = true
 	var merged: Array = inventory_available[best_idx].get("combined_uats", []).duplicate()
 	merged.append(incoming.id)
-	inventory_available[best_idx]["type"] = result_type
 	inventory_available[best_idx]["weight_kg"] = inventory_available[best_idx].get("weight_kg", 0.0) + incoming.get("weight_kg", 0.0)
 	inventory_available[best_idx]["dm3"] = inventory_available[best_idx].get("dm3", 0) + incoming.get("dm3", 0)
 	inventory_available[best_idx]["collis"] = inventory_available[best_idx].collis + incoming.collis
@@ -717,7 +733,7 @@ func end_session() -> void:
 				if inventory_loaded[i].id not in _reworked_pallet_ids:
 					co_interleave_errors += 1
 					seq_errors += 1  # Store 1 pallet loaded after store 2 started
-		# Within each store: promise-aware type sequence
+		# Within each store: type-first, promise-second sequence
 		for dest_id: int in [1, 2]:
 			var highest_rank: int = -1
 			var co_seq_exempt_used: int = 0
@@ -726,7 +742,10 @@ func end_session() -> void:
 					continue
 				var rank: int = _get_load_rank(p)
 				if rank < highest_rank:
-					if p.id in _combine_source_ids and co_seq_exempt_used < 4 and p.type != "C&C":
+					# Wave pallets arrived late — they couldn't be in sequence
+					if p.id in _wave_pallet_ids:
+						pass
+					elif p.id in _combine_source_ids and co_seq_exempt_used < 4 and p.type != "C&C":
 						co_seq_exempt_used += 1
 					else:
 						seq_errors += 1
@@ -738,7 +757,10 @@ func end_session() -> void:
 		for p: Dictionary in inventory_loaded:
 			var rank: int = _get_load_rank(p)
 			if rank < highest_rank:
-				if p.id in _combine_source_ids and seq_exempt_used < 4 and p.type != "C&C":
+				# Wave pallets arrived late — they couldn't be in sequence
+				if p.id in _wave_pallet_ids:
+					pass
+				elif p.id in _combine_source_ids and seq_exempt_used < 4 and p.type != "C&C":
 					seq_exempt_used += 1
 				else:
 					seq_errors += 1
@@ -773,7 +795,9 @@ func end_session() -> void:
 	var type_seq_errors: int = seq_errors - co_interleave_errors
 	if type_seq_errors > 0:
 		score -= (type_seq_errors * 10)
-		if type_seq_errors <= 2:
+		if current_scenario == "2. Priority Loading":
+			feedback.append("[color=#e74c3c]• Sequence:[/color] " + str(type_seq_errors) + " pallet(s) loaded out of priority sequence. In Priority Loading, the order is: Service Center deepest, then all D/D- pallets by type (Bikes → Bulky → Mecha), then all D+ pallets by type (Bikes → Bulky → Mecha), then C&C at the doors.\n\nD and D- pallets must go on this truck — no question. They go in first so they are guaranteed a spot. D+ is tomorrow's stock and goes after. If a pallet arrives late via phone call, load it where it fits — no need to rework what is already on the truck.")
+		elif type_seq_errors <= 2:
 			feedback.append("[color=#e74c3c]• Sequence:[/color] " + str(type_seq_errors) + " pallet(s) loaded out of the standard sequence. The truck unloads from the doors inward — last in, first out. Every pallet in the wrong position means the store team has to move it aside to reach what they need. That's extra handling time at the store that delays their opening routine.")
 		else:
 			feedback.append("[color=#e74c3c]• Sequence:[/color] " + str(type_seq_errors) + " pallet(s) loaded out of the standard sequence. The truck unloads from the doors inward — last in, first out. The store team works in a fixed order: C&C off first for waiting customers, then Mecha for shelf restocking, then Bulky and Bikes for specialist teams, and Service Center last.\n\nEvery pallet in the wrong position has to be moved aside to reach what they need. At " + str(type_seq_errors) + " sequence errors, the store team could spend 30-60 minutes rearranging pallets on the dock floor — people who should be helping customers on the shop floor.")
@@ -830,7 +854,7 @@ func end_session() -> void:
 
 	if left_behind_priority > 0 and current_scenario == "2. Priority Loading":
 		score -= (left_behind_priority * 15)
-		feedback.append("[color=#e74c3c]• Priority Pallets Left Behind:[/color] " + str(left_behind_priority) + " pallet(s) with a D or D- promise date left on the dock while D+ pallets were loaded. D- means the delivery is already overdue — the store expected it yesterday or earlier. D means due today. D+ means tomorrow.\n\nLoading D+ instead of D- means a customer whose order is already late waits another day, while tomorrow's stock arrives early and sits in the store's backroom taking up space. The store team lead has to explain to their manager why overdue deliveries keep slipping while future stock arrives on time. The information was right there in the RAQ.")
+		feedback.append("[color=#e74c3c]• Priority Pallets Left Behind:[/color] " + str(left_behind_priority) + " pallet(s) with a D or D- delivery date left on the dock. D and D- pallets must be on this truck — D means due today, D- means already overdue. D+ (tomorrow's stock) is secondary and can be left behind if needed.\n\nLeaving D/D- on the dock while D+ was loaded means the store misses deliveries that were already expected. The information was visible in the RAQ delivery dates.")
 
 	# Transit rack — soft penalty
 	var had_transit_items: bool = (transit_loose_entries.size() > 0 or transit_items.size() > 0)

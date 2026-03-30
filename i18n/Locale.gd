@@ -42,6 +42,37 @@ static func get_sop_database() -> Array:
 # UI STRINGS — indexed by Lang enum: [EN, NL, FR, PT, ES, IT, HR, PL]
 # ==========================================================================
 static var _ui: Dictionary = {
+	# --- START SCREEN ---
+	"start.subtitle": [
+		"Warehouse Operational Training Simulator",
+		"Operationele Trainingssimulator voor Magazijnen",
+		"Simulateur de formation opérationnel entrepôt",
+		"Simulador de Treino Operacional de Armazém",
+		"Simulador de Entrenamiento Operativo de Almacén",
+		"Simulatore di Addestramento Operativo Magazzino",
+		"Operativni simulator obuke za skladište",
+		"Symulator szkolenia operacyjnego magazynu",
+	],
+	"start.module": [
+		"Bay B2B · NLDKL01 Tilburg",
+		"Bay B2B · NLDKL01 Tilburg",
+		"Bay B2B · NLDKL01 Tilburg",
+		"Bay B2B · NLDKL01 Tilburg",
+		"Bay B2B · NLDKL01 Tilburg",
+		"Bay B2B · NLDKL01 Tilburg",
+		"Bay B2B · NLDKL01 Tilburg",
+		"Bay B2B · NLDKL01 Tilburg",
+	],
+	"start.begin": [
+		"Begin",
+		"Beginnen",
+		"Commencer",
+		"Iniciar",
+		"Comenzar",
+		"Iniziare",
+		"Započni",
+		"Rozpocznij",
+	],
 	# --- PORTAL ---
 	"portal.subtitle": [
 		"Operational Training Simulator",
@@ -274,6 +305,98 @@ static var _ui: Dictionary = {
 		" ▼ Nuova Scheda ",
 		" ▼ Nova kartica ",
 		" ▼ Nowa karta ",
+	],
+
+	# --- SIDEBAR & PANELS ---
+	"btn.panels": [
+		"Panels",
+		"Panelen",
+		"Panneaux",
+		"Painéis",
+		"Paneles",
+		"Pannelli",
+		"Paneli",
+		"Panele",
+	],
+	"btn.abandon_shift": [
+		"End Shift",
+		"Dienst Stoppen",
+		"Fin de Poste",
+		"Terminar Turno",
+		"Finalizar Turno",
+		"Fine Turno",
+		"Završi Smjenu",
+		"Zakończ Zmianę",
+	],
+	"btn.abandon_confirm": [
+		"Are you sure you want to end this shift early? Progress will not be saved.",
+		"Weet je zeker dat je deze dienst vroegtijdig wilt beëindigen? Voortgang wordt niet opgeslagen.",
+		"Êtes-vous sûr de vouloir terminer ce poste ? La progression ne sera pas sauvegardée.",
+		"Tem certeza de que deseja terminar este turno? O progresso não será salvo.",
+		"¿Seguro que quieres finalizar este turno? El progreso no se guardará.",
+		"Sei sicuro di voler terminare questo turno? I progressi non verranno salvati.",
+		"Jeste li sigurni da želite završiti ovu smjenu? Napredak neće biti spremljen.",
+		"Czy na pewno chcesz zakończyć tę zmianę? Postęp nie zostanie zapisany.",
+	],
+	"btn.abandon_yes": [
+		"Yes, end shift",
+		"Ja, stop dienst",
+		"Oui, terminer",
+		"Sim, terminar",
+		"Sí, finalizar",
+		"Sì, termina",
+		"Da, završi",
+		"Tak, zakończ",
+	],
+	"btn.abandon_no": [
+		"Continue working",
+		"Doorgaan",
+		"Continuer",
+		"Continuar",
+		"Continuar",
+		"Continua",
+		"Nastavi",
+		"Kontynuuj",
+	],
+	"btn.close_app": [
+		"Close",
+		"Sluiten",
+		"Fermer",
+		"Fechar",
+		"Cerrar",
+		"Chiudi",
+		"Zatvori",
+		"Zamknij",
+	],
+	"btn.shift_board": [
+		"Shift Board",
+		"Werklijst",
+		"Tableau de Bord",
+		"Quadro de Turno",
+		"Tablero de Turno",
+		"Scheda Turno",
+		"Radna Ploča",
+		"Tablica Zmian",
+	],
+	"btn.phone": [
+		"Phone",
+		"Telefoon",
+		"Téléphone",
+		"Telefone",
+		"Teléfono",
+		"Telefono",
+		"Telefon",
+		"Telefon",
+	],
+	"btn.notes": [
+		"Notes",
+		"Notities",
+		"Notes",
+		"Notas",
+		"Notas",
+		"Note",
+		"Bilješke",
+		"Notatki",
 	],
 
 	# --- SOP MODAL ---
@@ -1086,7 +1209,7 @@ static var _sop_en: Array = [
 		"content": "[font_size=28][color=#0082c3][b]AS400: Login & Shortcuts[/b][/color][/font_size]\n\nThe AS400 is a real 1980s-era green-screen terminal. No mouse — keyboard only.\n\n[b]Two logins required:[/b]\n\n[b]1. System login (Sign On screen):[/b]\n[b]User:[/b] BAYB2B   [b]Password:[/b] 123456\n\n[b]2. Badge login (after pressing F6 to create a shipment):[/b]\n[b]Badge:[/b] 8600555   [b]Password:[/b] 123456\n\n[b]Navigation path to scanning screen:[/b]\n50 → 01 → 02 → 05 → F6 → badge login → F10 (confirm SAISIE) → [b]SCANNING QUAI[/b]\n\nThe screen layout and all keyboard shortcuts below are identical to the real AS400 terminal at the dock.\n\n[b]Key shortcuts:[/b]\n[b]F3[/b] — Go back one screen\n[b]F10[/b] — Confirm / Validate current screen\n[b]F13[/b] or [b]Shift+F1[/b] — Open RAQ from scanning screen\n[b]F6[/b] — Create new shipment (from EXPEDITION EN COURS)\n[b]F5[/b] — Refresh counters on scanning screen",
 		"scenarios": [0, 1, 2, 3],
 		"new_in": 0
-	},
+	}
 ]
 
 

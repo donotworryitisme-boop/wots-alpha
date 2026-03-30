@@ -2,15 +2,24 @@ extends Control
 
 # --- CONSTANTS ---
 const DEBUG_OVERLAY_SCENE: PackedScene = preload("res://debug/DebugOverlay.tscn")
+const START_SCREEN_SCENE: PackedScene = preload("res://ui/StartScreen.tscn")
 const TRUST_CONTRACT_SCENE: PackedScene = preload("res://ui/TrustContract.tscn")
 const BAY_UI_SCENE: PackedScene = preload("res://ui/BayUI.tscn")
-# We load the script directly instead of a scene
 const SessionManagerScript = preload("res://core/session/SessionManager.gd")
 
+const FADE_IN_SLOW: float = 1.33
+const FADE_OUT: float = 0.855
+const FADE_IN: float = 0.855
+
 # --- VARIABLES ---
-var _session = null
+var _session: Node = null
 var _ui: CanvasLayer = null
-var _trust_contract = null
+var _start_screen: CanvasLayer = null
+var _trust_contract: CanvasLayer = null
+var _fade_layer: CanvasLayer = null
+var _fade_rect: ColorRect = null
+var _fade_tween: Tween = null
+
 
 func _ready() -> void:
 	# 1. Boot in Fullscreen
@@ -21,7 +30,11 @@ func _ready() -> void:
 		var overlay := DEBUG_OVERLAY_SCENE.instantiate()
 		add_child(overlay)
 
-	# 3. Setup the Session (as a Node) and UI
+	# 3. Build the fade overlay (sits on top of everything)
+	_build_fade_overlay()
+	_fade_rect.color.a = 1.0
+
+	# 4. Setup the Session and UI (hidden behind black overlay)
 	_session = SessionManagerScript.new()
 	_session.name = "SessionManager"
 	add_child(_session)
@@ -30,28 +43,84 @@ func _ready() -> void:
 	_ui.name = "BayUI"
 	add_child(_ui)
 	_ui.set_session(_session)
-	
-	# Connect the UI's request signal
-	_ui.connect("trust_contract_requested", _on_trust_contract_requested)
+	_ui.set_enabled(false)
 
-	# 4. STARTUP: Force the Trust Contract to show immediately
-	_ui.set_enabled(false) 
-	_on_trust_contract_requested()
+	# 5. Show Start Screen, then fade from black
+	_start_screen = START_SCREEN_SCENE.instantiate()
+	add_child(_start_screen)
+	if _start_screen.has_signal("begin_pressed"):
+		_start_screen.connect("begin_pressed", _on_start_begin)
 
-func _on_trust_contract_requested() -> void:
-	if _trust_contract != null: return 
+	# Small delay before the first fade-in so the scene tree is ready
+	await get_tree().create_timer(0.15).timeout
+	_fade_to(0.0, FADE_IN_SLOW, Callable())
 
+
+func _build_fade_overlay() -> void:
+	_fade_layer = CanvasLayer.new()
+	_fade_layer.layer = 20
+	_fade_layer.name = "FadeOverlay"
+	add_child(_fade_layer)
+
+	_fade_rect = ColorRect.new()
+	_fade_rect.color = Color(0.0, 0.0, 0.0, 1.0)
+	_fade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fade_layer.add_child(_fade_rect)
+
+
+func _fade_to(target_alpha: float, duration: float, on_complete: Callable) -> void:
+	if _fade_tween != null and _fade_tween.is_valid():
+		_fade_tween.kill()
+	_fade_rect.mouse_filter = Control.MOUSE_FILTER_STOP if target_alpha > 0.5 else Control.MOUSE_FILTER_IGNORE
+	_fade_tween = create_tween()
+	_fade_tween.tween_property(_fade_rect, "color:a", target_alpha, duration).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	if on_complete.is_valid():
+		_fade_tween.tween_callback(on_complete)
+
+
+func _on_start_begin() -> void:
+	# Fade to black, then swap to trust contract
+	_fade_to(1.0, FADE_OUT, _swap_to_trust_contract)
+
+
+func _swap_to_trust_contract() -> void:
+	# Remove start screen
+	if _start_screen != null:
+		_start_screen.queue_free()
+		_start_screen = null
+
+	# Add trust contract
 	_trust_contract = TRUST_CONTRACT_SCENE.instantiate()
 	add_child(_trust_contract)
-	
 	if _trust_contract.has_signal("accepted"):
-		_trust_contract.connect("accepted", _on_trust_contract_confirmed)
+		_trust_contract.connect("accepted", _on_trust_accepted)
 
-func _on_trust_contract_confirmed() -> void:
+	# Fade from black
+	_fade_to(0.0, FADE_IN, Callable())
+
+
+func _on_trust_accepted() -> void:
+	# Fade to black, then swap to portal
+	_fade_to(1.0, FADE_OUT, _swap_to_portal)
+
+
+func _swap_to_portal() -> void:
+	# Remove trust contract
 	if _trust_contract != null:
 		_trust_contract.queue_free()
 		_trust_contract = null
-	
+
 	# Enable the UI
 	if _ui != null:
 		_ui.set_enabled(true)
+
+	# Fade from black, then remove the overlay
+	_fade_to(0.0, FADE_IN, _cleanup_fade_overlay)
+
+
+func _cleanup_fade_overlay() -> void:
+	if _fade_layer != null:
+		_fade_layer.queue_free()
+		_fade_layer = null
+		_fade_rect = null

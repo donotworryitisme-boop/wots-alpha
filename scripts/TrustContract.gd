@@ -87,9 +87,10 @@ Press [b]I Understand[/b] to start."""
 
 func _on_accept_pressed() -> void:
 	print("[TrustContract] Accepted")
+	if accept_button != null:
+		accept_button.disabled = true
 	_write_trust_file()
 	accepted.emit()
-	queue_free()
 
 func _write_trust_file() -> void:
 	var f := FileAccess.open(TRUST_FILE_PATH, FileAccess.WRITE)
