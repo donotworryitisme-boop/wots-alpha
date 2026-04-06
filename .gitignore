@@ -1,0 +1,27 @@
+# Godot 4.x
+.import/
+.export/
+.export_presets.cfg
+
+# Godot local data
+.godot/
+
+# Mono / C# (if ever enabled later)
+.mono/
+data_*/
+*.csproj
+*.sln
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs / crash
+*.log
+
+# Build outputs (if used later)
+build/
+dist/
