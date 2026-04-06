@@ -25,6 +25,7 @@ const PANEL_NAMES: Array[String] = [
 var _enabled: bool = false
 var _session: SessionManager = null
 var _is_active: bool = false
+var replay_mode: bool = false
 var _strip_assignment: String = "Unassigned"
 var _strip_window_active: bool = false
 var _panel_state: Dictionary = {}
@@ -252,6 +253,9 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if replay_mode:
+		_replay.tick(delta)
+		return
 	_interruptions.tick(delta)
 	_phone.tick_toast(delta)
 	_drills.tick(delta)
@@ -287,6 +291,10 @@ func _process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if replay_mode:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			_replay.stop_replay()
+		return
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_ESCAPE:
 			# Interruption overlay cannot be dismissed
@@ -294,8 +302,6 @@ func _input(event: InputEvent) -> void:
 				return
 			if _abandon_overlay != null and _abandon_overlay.visible:
 				_abandon_overlay.visible = false
-			elif _replay.is_active():
-				_replay.stop_replay()
 			elif _drills._sel_overlay != null and _drills._sel_overlay.visible:
 				_drills._sel_overlay.visible = false
 			elif _drills._res_overlay != null and _drills._res_overlay.visible:
@@ -371,7 +377,6 @@ func _can_use_shortcuts() -> bool:
 	if _quiz.overlay != null and _quiz.overlay.visible: return false
 	if _drills._sel_overlay != null and _drills._sel_overlay.visible: return false
 	if _drills._res_overlay != null and _drills._res_overlay.visible: return false
-	if _replay.is_active(): return false
 	return true
 
 
@@ -405,6 +410,12 @@ func _connect_portal_signals() -> void:
 func rebuild_portal() -> void:
 	_portal.rebuild()
 	_connect_portal_signals()
+	_flow.populate_scenarios()
+
+
+func _on_login_success() -> void:
+	_portal._apply_login_visibility()
+	_portal.refresh_history()
 	_flow.populate_scenarios()
 
 

@@ -19,11 +19,6 @@ var ls_input_dock: LineEdit = null
 var ls_input_expedition: LineEdit = null
 var ls_auto_label: RichTextLabel = null
 var ls_auto_label_bottom: RichTextLabel = null
-var ls_input_uats: LineEdit = null
-var ls_input_collis: LineEdit = null
-var ls_input_eur: LineEdit = null
-var ls_input_plastic: LineEdit = null
-var ls_input_magnum: LineEdit = null
 
 # --- Pallet grid UI ---
 var _pallet_grid_container: VBoxContainer = null
@@ -64,11 +59,6 @@ func clear_fields() -> void:
 	if ls_input_seal != null: ls_input_seal.text = ""
 	if ls_input_dock != null: ls_input_dock.text = ""
 	if ls_input_expedition != null: ls_input_expedition.text = ""
-	if ls_input_uats != null: ls_input_uats.text = ""
-	if ls_input_collis != null: ls_input_collis.text = ""
-	if ls_input_eur != null: ls_input_eur.text = ""
-	if ls_input_plastic != null: ls_input_plastic.text = ""
-	if ls_input_magnum != null: ls_input_magnum.text = ""
 	_reset_pallet_grids()
 	active_dest = 1
 	if _dest_sub_tabs != null: _dest_sub_tabs.visible = false
@@ -145,6 +135,11 @@ func _write_field(field: String, value: String) -> void:
 			"eur": sm.typed_eur_count_2 = value
 			"plastic": sm.typed_plastic_count_2 = value
 			"magnum": sm.typed_magnum_count_2 = value
+	# Log for ghost replay
+	sm.log_action("ls_field", field + ":" + value)
+	# Reset tutorial hint timer on any field interaction
+	if _ui.tutorial_active:
+		_ui._tut.reset_hint_timer()
 
 
 func _restore_inputs(sm: SessionManager, dest: int) -> void:
@@ -153,11 +148,6 @@ func _restore_inputs(sm: SessionManager, dest: int) -> void:
 	if ls_input_seal != null: ls_input_seal.text = sm.typed_seal if d1 else sm.typed_seal_2
 	if ls_input_dock != null: ls_input_dock.text = sm.typed_dock if d1 else sm.typed_dock_2
 	if ls_input_expedition != null: ls_input_expedition.text = sm.typed_expedition_ls if d1 else sm.typed_expedition_ls_2
-	if ls_input_uats != null: ls_input_uats.text = sm.typed_uat_count if d1 else sm.typed_uat_count_2
-	if ls_input_collis != null: ls_input_collis.text = sm.typed_collis_count if d1 else sm.typed_collis_count_2
-	if ls_input_eur != null: ls_input_eur.text = sm.typed_eur_count if d1 else sm.typed_eur_count_2
-	if ls_input_plastic != null: ls_input_plastic.text = sm.typed_plastic_count if d1 else sm.typed_plastic_count_2
-	if ls_input_magnum != null: ls_input_magnum.text = sm.typed_magnum_count if d1 else sm.typed_magnum_count_2
 
 
 # ==========================================
@@ -212,11 +202,6 @@ func _build_ls_form() -> void:
 		ls_input_seal.text = ""
 		ls_input_dock.text = ""
 		ls_input_expedition.text = ""
-		ls_input_uats.text = ""
-		ls_input_collis.text = ""
-		ls_input_eur.text = ""
-		ls_input_plastic.text = ""
-		ls_input_magnum.text = ""
 		_reset_pallet_grids()
 		form_built = true
 		return
@@ -279,6 +264,33 @@ func _build_ls_form() -> void:
 		if ls_input_seal != null: ls_input_seal.grab_focus()
 	)
 
+	# Auto-content section TOP (date, carrier, checks)
+	ls_auto_label = RichTextLabel.new()
+	ls_auto_label.bbcode_enabled = true
+	ls_auto_label.fit_content = true
+	ls_auto_label.scroll_active = false
+	ls_auto_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	form_vbox.add_child(ls_auto_label)
+
+	# --- LIVE PALLET GRID (fills as pallets are loaded) ---
+	_build_pallet_grids(form_vbox)
+
+	# Auto-content section BOTTOM (service center, RAQ, departments)
+	ls_auto_label_bottom = RichTextLabel.new()
+	ls_auto_label_bottom.bbcode_enabled = true
+	ls_auto_label_bottom.fit_content = true
+	ls_auto_label_bottom.scroll_active = false
+	ls_auto_label_bottom.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	form_vbox.add_child(ls_auto_label_bottom)
+
+	# --- SEAL / DOCK / EXPEDITION (bottom section) ---
+	var bottom_sep: RichTextLabel = RichTextLabel.new()
+	bottom_sep.bbcode_enabled = true
+	bottom_sep.fit_content = true
+	bottom_sep.scroll_active = false
+	bottom_sep.text = "[font_size=13]" + UITokens.BB_DIM + "────────────────────────────────────" + UITokens.BB_END + "[/font_size]"
+	form_vbox.add_child(bottom_sep)
+
 	# Seal row
 	var row_seal: HBoxContainer = _make_form_row("SEAL:", "e.g. 1234700", 120.0)
 	(row_seal.get_child(0) as Label).add_theme_color_override("font_color", UITokens.CLR_SEAL)
@@ -313,68 +325,6 @@ func _build_ls_form() -> void:
 	ls_input_expedition = row_exp.get_child(1) as LineEdit
 	ls_input_expedition.text_changed.connect(func(new_text: String) -> void:
 		_write_field("expedition", new_text)
-	)
-
-	# Auto-content section TOP (date, carrier, checks)
-	ls_auto_label = RichTextLabel.new()
-	ls_auto_label.bbcode_enabled = true
-	ls_auto_label.fit_content = true
-	ls_auto_label.scroll_active = false
-	ls_auto_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	form_vbox.add_child(ls_auto_label)
-
-	# --- LIVE PALLET GRID (fills as pallets are loaded) ---
-	_build_pallet_grids(form_vbox)
-
-	# Auto-content section BOTTOM (service center, RAQ, departments)
-	ls_auto_label_bottom = RichTextLabel.new()
-	ls_auto_label_bottom.bbcode_enabled = true
-	ls_auto_label_bottom.fit_content = true
-	ls_auto_label_bottom.scroll_active = false
-	ls_auto_label_bottom.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	form_vbox.add_child(ls_auto_label_bottom)
-
-	# --- FINAL COUNTS (typed by user before sealing) ---
-	var counts_header: RichTextLabel = RichTextLabel.new()
-	counts_header.bbcode_enabled = true
-	counts_header.fit_content = true
-	counts_header.scroll_active = false
-	counts_header.text = "[font_size=13]" + UITokens.BB_DIM + "────────────────────────────────────" + UITokens.BB_END + "\n" + UITokens.BB_ACCENT + "[b]FINAL COUNTS — fill before sealing[/b]" + UITokens.BB_END + "[/font_size]"
-	form_vbox.add_child(counts_header)
-
-	var row_uats: HBoxContainer = _make_form_row("UATs:", "total loaded", 80.0)
-	form_vbox.add_child(row_uats)
-	ls_input_uats = row_uats.get_child(1) as LineEdit
-	ls_input_uats.text_changed.connect(func(new_text: String) -> void:
-		_write_field("uats", new_text)
-	)
-
-	var row_collis: HBoxContainer = _make_form_row("COLLIS:", "total loaded", 80.0)
-	form_vbox.add_child(row_collis)
-	ls_input_collis = row_collis.get_child(1) as LineEdit
-	ls_input_collis.text_changed.connect(func(new_text: String) -> void:
-		_write_field("collis", new_text)
-	)
-
-	var row_eur: HBoxContainer = _make_form_row("EUR:", "euro pallets", 80.0)
-	form_vbox.add_child(row_eur)
-	ls_input_eur = row_eur.get_child(1) as LineEdit
-	ls_input_eur.text_changed.connect(func(new_text: String) -> void:
-		_write_field("eur", new_text)
-	)
-
-	var row_plastic: HBoxContainer = _make_form_row("PLASTIC:", "plastic pallets", 80.0)
-	form_vbox.add_child(row_plastic)
-	ls_input_plastic = row_plastic.get_child(1) as LineEdit
-	ls_input_plastic.text_changed.connect(func(new_text: String) -> void:
-		_write_field("plastic", new_text)
-	)
-
-	var row_magnum: HBoxContainer = _make_form_row("MAGNUMS:", "magnum pallets", 80.0)
-	form_vbox.add_child(row_magnum)
-	ls_input_magnum = row_magnum.get_child(1) as LineEdit
-	ls_input_magnum.text_changed.connect(func(new_text: String) -> void:
-		_write_field("magnum", new_text)
 	)
 
 	form_built = true

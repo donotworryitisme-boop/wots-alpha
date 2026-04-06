@@ -15,6 +15,7 @@ var _type: int = Type.AS400_NAV
 var _elapsed: float = 0.0
 var _completed: bool = false
 var _raq_connected: bool = false
+var _paper_phase: int = 0  # 0=pre-load, 1=post-load
 
 # --- Selection overlay ---
 var _sel_overlay: ColorRect = null
@@ -164,6 +165,7 @@ func _begin(drill_type: int) -> void:
 	_elapsed = 0.0
 	_completed = false
 	_raq_connected = false
+	_paper_phase = 0
 
 	# Always use Standard Loading as the base scenario — force dropdown
 	# so execute_session_start() reads the correct index (not whatever the
@@ -208,8 +210,7 @@ func _apply_overrides() -> void:
 			guide += UITokens.BB_DIM + "F13 = check RAQ · Check Transit rack · Check yellow lockers (ADR)" + UITokens.BB_END
 			_setup_sequencing()
 		Type.PAPERWORK:
-			guide = UITokens.BB_WARNING + "[b]SKILL DRILL — Paperwork[/b]" + UITokens.BB_END
-			guide += "  Fill in all Loading Sheet and CMR fields. Check emballage counts, seal, expedition, weight, and volume."
+			guide = _paper_guide_phase1()
 			_setup_paperwork()
 	if guide != "":
 		_ui._tut.show_drill_guide("🎯 " + guide)
@@ -433,35 +434,55 @@ func _setup_paperwork() -> void:
 	if _ui._session == null:
 		return
 
-	# Pre-stage AS400 to SCANNING state
-	if _ui._as400 != null:
-		_ui._as400.state = AS400Terminal.S.SCANNING
-		_ui._as400._render_as400_screen()
+	# --- Phase 1: Pre-load paperwork in PREP phase ---
+	_paper_phase = 0
 
-	# Pre-call departments so session data is complete
-	_ui._session.manual_decision("Call departments (C&C check)")
+	# Pre-collect desk items so we skip straight to paperwork
+	var office: OfficeManager = _ui._office
+	office.desk_items_collected = {"cmr": true, "seal": true, "loading_sheet": true}
+	office.desk_collected_count = 3
+	for key: String in office.desk_checkmarks:
+		if office.desk_checkmarks[key] != null:
+			office.desk_checkmarks[key].visible = true
+	for key: String in office.desk_item_btns:
+		if office.desk_item_btns[key] != null:
+			office.desk_item_btns[key].disabled = true
 
-	# Load all pallets in correct order so the session has full data
-	var sorted: Array = _ui._session.inventory_available.duplicate(true)
-	sorted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return GradingEngine.get_load_rank(a) < GradingEngine.get_load_rank(b)
-	)
-	for p: Dictionary in sorted:
-		_ui._session.load_pallet_by_id(str(p.get("id", "")))
-
-	# Reset time after the bulk load
-	_ui._session.total_time = 0.0
-
-	# Switch to office with paperwork visible
+	# Switch to office at PREP phase (not WRAPUP)
 	_ui._ws.switch_workspace("OFFICE")
-	_ui._office.set_office_phase_wrapup()
-	_ui._office.switch_paperwork_tab("ls")
+	office.office_phase = "PREP"
 
-	# Show submit bar
-	if _submit_bar != null: _submit_bar.visible = true
+	# Show docs row (paperwork), hide desk view
+	if office.desk_view_container != null:
+		office.desk_view_container.visible = false
+	if office.docs_row != null:
+		office.docs_row.visible = true
 
-	# Hide dock workspace
-	if _ui._dock_workspace != null: _ui._dock_workspace.visible = false
+	# Show LS tab, CMR tab visible but LS active
+	office.cmr_revealed = true
+	office.active_paperwork_tab = "LS"
+	if office.paperwork_tab_bar != null:
+		office.paperwork_tab_bar.visible = true
+	office.style_paperwork_tabs()
+	if _ui.pnl_notes != null:
+		_ui.pnl_notes.visible = true
+	if _ui.pnl_loading_plan != null:
+		_ui.pnl_loading_plan.visible = false
+	_ui._paper.update_loading_sheet()
+	_ui._paper.update_cmr()
+
+	# Hide wrapup container — not part of this drill
+	if office.wrapup_container != null:
+		office.wrapup_container.visible = false
+
+	# Hide dock workspace (office only for this drill)
+	if _ui._dock_workspace != null:
+		_ui._dock_workspace.visible = false
+
+	# Show submit bar with "Continue →" text
+	_set_submit_text(Locale.t("drill.paper_continue"))
+	if _submit_bar != null:
+		_submit_bar.visible = true
 
 	_elapsed = 0.0
 
@@ -476,6 +497,74 @@ func _hide_dock_actions() -> void:
 	if _ui.btn_open_dock != null: _ui.btn_open_dock.visible = false
 	if _ui.btn_close_dock != null: _ui.btn_close_dock.visible = false
 	if _ui._dock_action_bar != null: _ui._dock_action_bar.visible = false
+
+
+func _advance_to_post_load() -> void:
+	## Phase transition: pre-load → post-load.
+	## Auto-loads all pallets, advances AS400, shows CMR post-load fields.
+	_paper_phase = 1
+	if _ui._session == null:
+		return
+
+	WOTSAudio.play_scan_beep(_ui)
+
+	# Pre-stage AS400 to VALIDATION (F10 done — weight/dm3 available)
+	if _ui._as400 != null:
+		_ui._as400.state = AS400Terminal.S.VALIDATION
+		_ui._as400._render_as400_screen()
+	_ui._as400_confirmed = true
+
+	# Pre-call departments so session data is complete
+	_ui._session.manual_decision("Call departments (C&C check)")
+
+	# Load all pallets in correct order
+	var sorted: Array = _ui._session.inventory_available.duplicate(true)
+	sorted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return GradingEngine.get_load_rank(a) < GradingEngine.get_load_rank(b)
+	)
+	for p: Dictionary in sorted:
+		_ui._session.load_pallet_by_id(str(p.get("id", "")))
+
+	# Switch to CMR tab for post-load fields
+	_ui._office.active_paperwork_tab = "CMR"
+	_ui._office.style_paperwork_tabs()
+	if _ui.pnl_notes != null:
+		_ui.pnl_notes.visible = false
+	if _ui.pnl_loading_plan != null:
+		_ui.pnl_loading_plan.visible = true
+	_ui._paper.update_cmr()
+	_ui._paper.update_loading_sheet()
+
+	# Update banner to post-load instructions
+	_ui._tut.show_drill_guide("🎯 " + _paper_guide_phase2())
+
+	# Update submit button text
+	_set_submit_text(Locale.t("drill.submit"))
+
+
+func _paper_guide_phase1() -> String:
+	var g: String = UITokens.BB_WARNING + "[b]SKILL DRILL — Paperwork[/b]" + UITokens.BB_END
+	g += "  [b]Pre-load:[/b] Fill the Loading Sheet (store, seal, dock). "
+	g += "Then fill the CMR pre-load (stamp & sign, Franco, seal, dock). "
+	g += "Click [b]Continue[/b] when done."
+	return g
+
+
+func _paper_guide_phase2() -> String:
+	var g: String = UITokens.BB_WARNING + "[b]SKILL DRILL — Paperwork[/b]" + UITokens.BB_END
+	g += "  [b]Post-load:[/b] Fill the CMR pallet counts (UATs, collis, EUR, plastic, magnum, C&C). "
+	g += "Enter expedition, weight, and volume (dm³). "
+	g += "Click [b]Submit[/b] when done."
+	return g
+
+
+func _set_submit_text(text: String) -> void:
+	if _submit_bar == null:
+		return
+	for child: Node in _submit_bar.get_children():
+		if child is Button:
+			(child as Button).text = text
+			break
 
 
 # ==========================================
@@ -495,7 +584,11 @@ func _check_seq_complete() -> void:
 
 
 func on_submit_paperwork() -> void:
-	if is_active and _type == Type.PAPERWORK and not _completed:
+	if not is_active or _type != Type.PAPERWORK or _completed:
+		return
+	if _paper_phase == 0:
+		_advance_to_post_load()
+	else:
 		_finish()
 
 
@@ -654,6 +747,7 @@ func _return_to_portal() -> void:
 	is_active = false
 	_completed = false
 	_elapsed = 0.0
+	_paper_phase = 0
 	_ui._tut.hide_drill_guide()
 
 	if _res_overlay != null: _res_overlay.visible = false

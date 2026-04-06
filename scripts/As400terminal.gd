@@ -489,6 +489,8 @@ func _handle_saisie_dest_input(input: String) -> void:
 			return
 	_tabs[_active_tab]["dest_code"] = matched_store.code
 	_tabs[_active_tab]["dest_name"] = matched_store.name
+	if _ui._session != null:
+		_ui._session.log_action("as400_dest", "%d:%s:%s" % [_active_tab, matched_store.code, matched_store.name])
 	_rebuild__tab_bar()
 	if _ui._dock.lbl_hover_info:
 		# Always show "enter seal" hint — seal is never auto-filled
@@ -507,6 +509,8 @@ func _handle_saisie_seal_input(input: String) -> void:
 		expected_seal = _ui.seal_number_1
 	if input == expected_seal:
 		_tabs[_active_tab]["seal_entered"] = input
+		if _ui._session != null:
+			_ui._session.log_action("as400_seal", "%d:%s" % [_active_tab, input])
 		if _ui._dock.lbl_hover_info:
 			_ui._dock.lbl_hover_info.text = "[font_size=15][color=#2ecc71][b]Seal OK:[/b] %s — " % input + Locale.t("as400.seal_ok") + "[/color][/font_size]"
 	else:

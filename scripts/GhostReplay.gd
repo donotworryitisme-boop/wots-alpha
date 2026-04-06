@@ -2,55 +2,39 @@ class_name GhostReplay
 extends RefCounted
 
 # ==========================================
-# GHOST REPLAY — Item 33
-# Plays back a recorded session action log visually.
-# Shows a simplified truck cross-section with pallets accumulating
-# and a scrolling action timeline with playback controls.
+# GHOST REPLAY — Step-Through Replay Driver
+# Replays a recorded session on the real BayUI.
+# No auto-play. User steps forward/backward through
+# each logged action. All state changes are instant
+# (no crossfade animations) so each step shows its
+# result immediately.
 # ==========================================
 
 var _ui: BayUI
 
 # --- Replay data ---
 var _action_log: Array = []
-var _pallet_lookup: Dictionary = {}  # id → pallet dict (from regenerated inventory)
-var _loaded_ids: Array[String] = []  # current loaded pallet IDs in order
 var _scenario_name: String = ""
 var _total_session_time: float = 0.0
 var _record_score: int = 0
 var _record_passed: bool = false
-
-# --- Screen state tracking (for replay context) ---
-var _current_workspace: String = "DOCK"
-var _dock_open: bool = false
-var _decisions_made: Array[String] = []
-var _as400_state: int = -1
-var _current_snap: Dictionary = {}
+var _record_seed: int = 0
 
 # --- Playback state ---
-var _is_playing: bool = false
-var _elapsed: float = 0.0
 var _action_index: int = 0
-var _speed: float = 1.0
 var _active: bool = false
 
-# --- Speed presets ---
-const SPEEDS: Array[float] = [1.0, 2.0, 4.0, 8.0]
-const SPEED_LABELS: Array[String] = ["1×", "2×", "4×", "8×"]
-var _speed_idx: int = 0
-
 # --- UI nodes ---
-var overlay: ColorRect
-var _rtl_truck: RichTextLabel
-var _rtl_log: RichTextLabel
-var _lbl_time: Label
-var _lbl_status: Label
+var _input_blocker: ColorRect
+var _controls_bar: PanelContainer
 var _bar_progress: ColorRect
-var _bar_bg: ColorRect
-var _btn_play: Button
-var _btn_speed: Button
-var _btn_step: Button
+var _btn_prev: Button
+var _btn_next: Button
 var _btn_back: Button
-var _scroll_log: ScrollContainer
+var _lbl_timer: Label
+var _lbl_status: Label
+var _lbl_action: Label
+var _lbl_count: Label
 
 
 func _init(ui: BayUI) -> void:
@@ -58,81 +42,66 @@ func _init(ui: BayUI) -> void:
 
 
 func _build(root: Node) -> void:
-	overlay = ColorRect.new()
-	overlay.color = UITokens.CLR_OVERLAY_DARK
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.visible = false
-	root.add_child(overlay)
+	# Input blocker — transparent layer that prevents all mouse
+	# interaction with the game UI underneath.
+	_input_blocker = ColorRect.new()
+	_input_blocker.color = Color(0.0, 0.0, 0.0, 0.0)
+	_input_blocker.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_input_blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	_input_blocker.visible = false
+	root.add_child(_input_blocker)
 
-	var main_margin := MarginContainer.new()
-	main_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	main_margin.add_theme_constant_override("margin_left", 40)
-	main_margin.add_theme_constant_override("margin_top", 24)
-	main_margin.add_theme_constant_override("margin_right", 40)
-	main_margin.add_theme_constant_override("margin_bottom", 24)
-	overlay.add_child(main_margin)
+	_build_controls_bar(root)
+
+
+func is_active() -> bool:
+	return _active
+
+
+# Unused — replay has no auto-play tick
+func tick(_delta: float) -> void:
+	pass
+
+
+# ==========================================
+# CONTROLS BAR — anchored to screen bottom
+# ==========================================
+
+func _build_controls_bar(root: Node) -> void:
+	_controls_bar = PanelContainer.new()
+	_controls_bar.visible = false
+	_controls_bar.anchor_left = 0.0
+	_controls_bar.anchor_right = 1.0
+	_controls_bar.anchor_top = 1.0
+	_controls_bar.anchor_bottom = 1.0
+	_controls_bar.offset_top = -56.0
+	_controls_bar.offset_bottom = 0.0
+	_controls_bar.offset_left = 0.0
+	_controls_bar.offset_right = 0.0
+	UIStyles.apply_panel(_controls_bar, UIStyles.flat(
+			Color(0.05, 0.06, 0.08, 0.96), 0, 1, UITokens.CLR_PANEL_BORDER))
+	root.add_child(_controls_bar)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	_controls_bar.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 12)
-	main_margin.add_child(vbox)
-
-	# --- Header row ---
-	_build_header(vbox)
+	vbox.add_theme_constant_override("separation", 4)
+	margin.add_child(vbox)
 
 	# --- Progress bar ---
-	_build_progress_bar(vbox)
-
-	# --- Control bar ---
-	_build_controls(vbox)
-
-	# --- Divider ---
-	var div := ColorRect.new()
-	div.custom_minimum_size = Vector2(0, 1)
-	div.color = UITokens.CLR_PANEL_BORDER
-	vbox.add_child(div)
-
-	# --- Main content: truck left, action log right ---
-	_build_content_area(vbox)
-
-
-func _build_header(parent: VBoxContainer) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
-	parent.add_child(row)
-
-	_btn_back = Button.new()
-	_btn_back.text = Locale.t("replay.back")
-	_btn_back.custom_minimum_size = Vector2(100, 34)
-	_btn_back.add_theme_font_size_override("font_size", UITokens.fs(13))
-	UIStyles.apply_btn_auto(_btn_back, UITokens.CLR_BG_DARK,
-			UITokens.CLR_TEXT_SECONDARY, UITokens.CLR_WHITE, 4, 1, UITokens.CLR_SURFACE_MID)
-	_btn_back.pressed.connect(_on_back_pressed)
-	row.add_child(_btn_back)
-
-	_lbl_status = Label.new()
-	_lbl_status.text = ""
-	_lbl_status.add_theme_font_size_override("font_size", UITokens.fs(16))
-	_lbl_status.add_theme_color_override("font_color", UITokens.COLOR_ACCENT_BLUE)
-	_lbl_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(_lbl_status)
-
-	_lbl_time = Label.new()
-	_lbl_time.text = "00:00 / 00:00"
-	_lbl_time.add_theme_font_size_override("font_size", UITokens.fs(14))
-	_lbl_time.add_theme_color_override("font_color", UITokens.hc_text(UITokens.CLR_TEXT_SECONDARY))
-	_lbl_time.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(_lbl_time)
-
-
-func _build_progress_bar(parent: VBoxContainer) -> void:
 	var bar_container := Control.new()
-	bar_container.custom_minimum_size = Vector2(0, 8)
-	parent.add_child(bar_container)
+	bar_container.custom_minimum_size = Vector2(0, 4)
+	vbox.add_child(bar_container)
 
-	_bar_bg = ColorRect.new()
-	_bar_bg.color = UITokens.CLR_SURFACE_DIM
-	_bar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bar_container.add_child(_bar_bg)
+	var bar_bg := ColorRect.new()
+	bar_bg.color = UITokens.CLR_SURFACE_DIM
+	bar_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bar_container.add_child(bar_bg)
 
 	_bar_progress = ColorRect.new()
 	_bar_progress.color = UITokens.COLOR_ACCENT_BLUE
@@ -146,470 +115,600 @@ func _build_progress_bar(parent: VBoxContainer) -> void:
 	_bar_progress.offset_bottom = 0.0
 	bar_container.add_child(_bar_progress)
 
-
-func _build_controls(parent: VBoxContainer) -> void:
+	# --- Main row ---
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	parent.add_child(row)
+	vbox.add_child(row)
 
-	_btn_play = Button.new()
-	_btn_play.text = Locale.t("replay.play")
-	_btn_play.custom_minimum_size = Vector2(90, 34)
-	_btn_play.add_theme_font_size_override("font_size", UITokens.fs(13))
-	UIStyles.apply_btn_primary(_btn_play, 4)
-	_btn_play.pressed.connect(_on_play_pressed)
-	row.add_child(_btn_play)
+	_btn_back = _make_btn(Locale.t("replay.back"), 90)
+	_btn_back.pressed.connect(_on_back_pressed)
+	row.add_child(_btn_back)
 
-	_btn_step = Button.new()
-	_btn_step.text = Locale.t("replay.step")
-	_btn_step.custom_minimum_size = Vector2(80, 34)
-	_btn_step.add_theme_font_size_override("font_size", UITokens.fs(13))
-	UIStyles.apply_btn_auto(_btn_step, UITokens.CLR_BG_DARK,
-			UITokens.CLR_TEXT_SECONDARY, UITokens.CLR_WHITE, 4, 1, UITokens.CLR_SURFACE_MID)
-	_btn_step.pressed.connect(_on_step_pressed)
-	row.add_child(_btn_step)
+	_lbl_status = Label.new()
+	_lbl_status.add_theme_font_size_override("font_size", UITokens.fs(12))
+	_lbl_status.add_theme_color_override("font_color", UITokens.COLOR_ACCENT_BLUE)
+	row.add_child(_lbl_status)
 
-	_btn_speed = Button.new()
-	_btn_speed.text = "1×"
-	_btn_speed.custom_minimum_size = Vector2(60, 34)
-	_btn_speed.add_theme_font_size_override("font_size", UITokens.fs(13))
-	UIStyles.apply_btn_auto(_btn_speed, UITokens.CLR_BG_DARK,
-			UITokens.CLR_TEXT_SECONDARY, UITokens.CLR_WHITE, 4, 1, UITokens.CLR_SURFACE_MID)
-	_btn_speed.pressed.connect(_on_speed_pressed)
-	row.add_child(_btn_speed)
+	_add_separator(row)
+
+	_btn_prev = _make_btn(Locale.t("replay.prev"), 80)
+	_btn_prev.pressed.connect(_on_prev_pressed)
+	row.add_child(_btn_prev)
+
+	_btn_next = Button.new()
+	_btn_next.text = Locale.t("replay.next")
+	_btn_next.custom_minimum_size = Vector2(80, 28)
+	_btn_next.add_theme_font_size_override("font_size", UITokens.fs(12))
+	UIStyles.apply_btn_primary(_btn_next, 4)
+	_btn_next.pressed.connect(_on_next_pressed)
+	row.add_child(_btn_next)
+
+	_lbl_count = Label.new()
+	_lbl_count.add_theme_font_size_override("font_size", UITokens.fs(12))
+	_lbl_count.add_theme_color_override("font_color",
+			UITokens.hc_text(UITokens.CLR_TEXT_SECONDARY))
+	row.add_child(_lbl_count)
+
+	_add_separator(row)
+
+	_lbl_action = Label.new()
+	_lbl_action.text = ""
+	_lbl_action.add_theme_font_size_override("font_size", UITokens.fs(12))
+	_lbl_action.add_theme_color_override("font_color", UITokens.CLR_WHITE)
+	_lbl_action.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_lbl_action.clip_text = true
+	row.add_child(_lbl_action)
+
+	_lbl_timer = Label.new()
+	_lbl_timer.text = "0:00 / 0:00"
+	_lbl_timer.add_theme_font_size_override("font_size", UITokens.fs(12))
+	_lbl_timer.add_theme_color_override("font_color",
+			UITokens.hc_text(UITokens.CLR_TEXT_SECONDARY))
+	row.add_child(_lbl_timer)
 
 
-func _build_content_area(parent: VBoxContainer) -> void:
-	var hsplit := HBoxContainer.new()
-	hsplit.add_theme_constant_override("separation", 16)
-	hsplit.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(hsplit)
+func _add_separator(parent: HBoxContainer) -> void:
+	var sep := ColorRect.new()
+	sep.custom_minimum_size = Vector2(1, 20)
+	sep.color = UITokens.CLR_SURFACE_MID
+	parent.add_child(sep)
 
-	# --- Left: truck visualization ---
-	var truck_panel := PanelContainer.new()
-	truck_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	truck_panel.size_flags_stretch_ratio = 1.2
-	UIStyles.apply_panel(truck_panel, UIStyles.flat(Color(0.08, 0.09, 0.12), 6, 1, UITokens.CLR_PANEL_BORDER))
-	hsplit.add_child(truck_panel)
 
-	var truck_margin := MarginContainer.new()
-	truck_margin.add_theme_constant_override("margin_left", 16)
-	truck_margin.add_theme_constant_override("margin_top", 12)
-	truck_margin.add_theme_constant_override("margin_right", 16)
-	truck_margin.add_theme_constant_override("margin_bottom", 12)
-	truck_panel.add_child(truck_margin)
-
-	var truck_scroll := ScrollContainer.new()
-	truck_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	truck_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	truck_margin.add_child(truck_scroll)
-
-	_rtl_truck = RichTextLabel.new()
-	_rtl_truck.bbcode_enabled = true
-	_rtl_truck.fit_content = true
-	_rtl_truck.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_rtl_truck.add_theme_color_override("default_color", UITokens.CLR_TEXT_SECONDARY)
-	_rtl_truck.add_theme_font_size_override("normal_font_size", UITokens.fs(13))
-	truck_scroll.add_child(_rtl_truck)
-
-	# --- Right: action log ---
-	var log_panel := PanelContainer.new()
-	log_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	log_panel.size_flags_stretch_ratio = 0.8
-	UIStyles.apply_panel(log_panel, UIStyles.flat(Color(0.06, 0.07, 0.10), 6, 1, UITokens.CLR_PANEL_BORDER))
-	hsplit.add_child(log_panel)
-
-	var log_margin := MarginContainer.new()
-	log_margin.add_theme_constant_override("margin_left", 12)
-	log_margin.add_theme_constant_override("margin_top", 8)
-	log_margin.add_theme_constant_override("margin_right", 12)
-	log_margin.add_theme_constant_override("margin_bottom", 8)
-	log_panel.add_child(log_margin)
-
-	_scroll_log = ScrollContainer.new()
-	_scroll_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_scroll_log.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	log_margin.add_child(_scroll_log)
-
-	_rtl_log = RichTextLabel.new()
-	_rtl_log.bbcode_enabled = true
-	_rtl_log.fit_content = true
-	_rtl_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_rtl_log.add_theme_color_override("default_color", UITokens.CLR_TEXT_SECONDARY)
-	_rtl_log.add_theme_font_size_override("normal_font_size", UITokens.fs(12))
-	_scroll_log.add_child(_rtl_log)
+func _make_btn(text: String, min_w: int) -> Button:
+	var btn := Button.new()
+	btn.text = text
+	btn.custom_minimum_size = Vector2(min_w, 28)
+	btn.add_theme_font_size_override("font_size", UITokens.fs(12))
+	UIStyles.apply_btn_auto(btn, UITokens.CLR_BG_DARK,
+			UITokens.CLR_TEXT_SECONDARY, UITokens.CLR_WHITE, 4,
+			1, UITokens.CLR_SURFACE_MID)
+	return btn
 
 
 # ==========================================
 # PUBLIC API
 # ==========================================
 
-func is_active() -> bool:
-	return _active
-
-
 func start_replay(record: Dictionary) -> void:
-	## Initialise and show the replay overlay for the given training record.
 	_scenario_name = str(record.get("scenario", ""))
 	_total_session_time = float(record.get("time_seconds", 0.0))
 	_record_score = int(record.get("score", 0))
 	_record_passed = bool(record.get("passed", false))
-	var seed_val: int = int(record.get("seed", 0))
+	_record_seed = int(record.get("seed", 0))
 
-	# Parse action log
 	_action_log.clear()
-	var raw_log: Array = record.get("action_log", []) as Array
-	for entry: Variant in raw_log:
+	var raw: Array = record.get("action_log", []) as Array
+	for entry: Variant in raw:
 		if entry is Dictionary:
-			_action_log.append(entry as Dictionary)
+			var e: Dictionary = entry as Dictionary
+			if _is_side_effect(e):
+				continue
+			_action_log.append(e)
 
-	# Regenerate inventory from seed to build pallet lookup
-	_pallet_lookup.clear()
-	_loaded_ids.clear()
-	var inv := InventoryManager.new()
-	inv.generate_inventory(_scenario_name, seed_val)
-	for p: Dictionary in inv.inventory_available:
-		_pallet_lookup[str(p.get("id", ""))] = p.duplicate()
-
-	# Reset playback
 	_action_index = 0
-	_elapsed = 0.0
-	_is_playing = false
-	_speed_idx = 0
-	_speed = SPEEDS[0]
 	_active = true
-	_current_workspace = "DOCK"
-	_dock_open = false
-	_decisions_made.clear()
-	_as400_state = -1
-	_current_snap = {}
 
-	# Update header
-	if _lbl_status != null:
-		var _score_clr: String = UITokens.BB_SUCCESS if _record_passed else UITokens.BB_ERROR
-		_lbl_status.text = Locale.t("replay.title") + "  —  " + _scenario_name
+	# Hide debrief if visible
+	if _ui._debrief.overlay != null:
+		_ui._debrief.overlay.visible = false
 
-	if _btn_play != null:
-		_btn_play.text = Locale.t("replay.play")
-	if _btn_speed != null:
-		_btn_speed.text = SPEED_LABELS[0]
+	# Set up a fresh session with the same scenario + seed
+	_init_replay_session()
 
-	_refresh_views()
-	_update_progress()
-	if overlay != null:
-		overlay.visible = true
+	# Show controls
+	_input_blocker.visible = true
+	_controls_bar.visible = true
+	_refresh_all()
 
 
 func stop_replay() -> void:
 	_active = false
-	_is_playing = false
-	if overlay != null:
-		overlay.visible = false
 
+	# Hide replay UI
+	_input_blocker.visible = false
+	_controls_bar.visible = false
 
-func tick(delta: float) -> void:
-	## Called from BayUI._process each frame while active.
-	if not _active or not _is_playing:
-		return
-	if _action_index >= _action_log.size():
-		_is_playing = false
-		if _btn_play != null:
-			_btn_play.text = Locale.t("replay.done")
-		return
+	# Exit replay mode
+	_ui.replay_mode = false
+	if _ui._session != null:
+		_ui._session.replay_suppress_log = false
+		_ui._session.is_active = false
+		_ui._session.is_paused = false
 
-	_elapsed += delta * _speed
-	var advanced: bool = false
-	while _action_index < _action_log.size():
-		var entry: Dictionary = _action_log[_action_index]
-		var action_time: float = float(entry.get("time", 0.0))
-		if _elapsed < action_time:
-			break
-		_apply_action(entry)
-		_action_index += 1
-		advanced = true
-
-	if advanced:
-		_refresh_views()
-	_update_progress()
+	# Return to portal with a fade
+	_ui._fade.fade_transition(_ui._flow._return_to_portal)
 
 
 # ==========================================
-# PLAYBACK CONTROLS
+# SESSION SETUP
 # ==========================================
 
-func _on_play_pressed() -> void:
+func _init_replay_session() -> void:
+	var idx: int = _scenario_name_to_index(_scenario_name)
+
+	# Configure portal so execute_session_start reads the right values
+	if _ui._portal.scenario_dropdown != null:
+		_ui._portal.scenario_dropdown.select(idx)
+	if _ui._portal.seed_input != null:
+		_ui._portal.seed_input.text = str(_record_seed)
+
+	# Set replay mode BEFORE session start so telemetry is suppressed
+	_ui.replay_mode = true
+
+	# Start the session — sets up inventory, metadata, dock, etc.
+	_ui._flow.execute_session_start()
+
+	# Remaining replay flags (replay_mode already true)
+	if _ui._session != null:
+		_ui._session.is_paused = true
+		_ui._session.replay_suppress_log = true
+
+	# Disable tutorial
+	_ui._tc.stop()
+	if _ui._tut.canvas != null:
+		_ui._tut.canvas.visible = false
+
+	# Release focus from any control
+	var focus_owner: Control = _ui.get_viewport().gui_get_focus_owner()
+	if focus_owner != null:
+		focus_owner.release_focus()
+
+
+static func _scenario_name_to_index(scenario: String) -> int:
+	if scenario.begins_with("0"):
+		return 0
+	if scenario.begins_with("1"):
+		return 1
+	if scenario.begins_with("2"):
+		return 2
+	if scenario.begins_with("3"):
+		return 3
+	if scenario.begins_with("4"):
+		return 4
+	return 1
+
+
+# ==========================================
+# STEPPING
+# ==========================================
+
+func _on_next_pressed() -> void:
 	if _action_index >= _action_log.size():
-		# Restart replay
-		_action_index = 0
-		_elapsed = 0.0
-		_loaded_ids.clear()
-		_current_workspace = "DOCK"
-		_dock_open = false
-		_decisions_made.clear()
-		_as400_state = -1
-		_current_snap = {}
-		_is_playing = true
-		if _btn_play != null:
-			_btn_play.text = Locale.t("replay.pause")
-		_refresh_views()
-		_update_progress()
 		return
-
-	_is_playing = not _is_playing
-	if _btn_play != null:
-		_btn_play.text = Locale.t("replay.pause") if _is_playing else Locale.t("replay.play")
-
-
-func _on_step_pressed() -> void:
-	if _action_index >= _action_log.size():
-		return
-	_is_playing = false
-	if _btn_play != null:
-		_btn_play.text = Locale.t("replay.play")
-
-	var entry: Dictionary = _action_log[_action_index]
-	_elapsed = float(entry.get("time", 0.0))
-	_apply_action(entry)
+	_apply_action(_action_log[_action_index])
 	_action_index += 1
-	_refresh_views()
-	_update_progress()
-
-	if _action_index >= _action_log.size():
-		if _btn_play != null:
-			_btn_play.text = Locale.t("replay.done")
+	_refresh_all()
 
 
-func _on_speed_pressed() -> void:
-	_speed_idx = (_speed_idx + 1) % SPEEDS.size()
-	_speed = SPEEDS[_speed_idx]
-	if _btn_speed != null:
-		_btn_speed.text = SPEED_LABELS[_speed_idx]
+func _on_prev_pressed() -> void:
+	if _action_index <= 0:
+		return
+	_step_to(_action_index - 1)
 
 
 func _on_back_pressed() -> void:
 	stop_replay()
 
 
+func _step_to(target: int) -> void:
+	## Replays from scratch to the given action index.
+	## All actions are applied instantly (no animations).
+	_init_replay_session()
+	for i: int in range(target):
+		if i >= _action_log.size():
+			break
+		_apply_action(_action_log[i])
+	_action_index = target
+	# Kill any stray tweens left by methods that sneak them in
+	_kill_tweens()
+	# Force correct modulate on workspace containers
+	if _ui._dock_workspace != null:
+		_ui._dock_workspace.modulate.a = 1.0
+		_ui._dock_workspace.position.x = 0.0
+	if _ui._office_workspace != null:
+		_ui._office_workspace.modulate.a = 1.0
+		_ui._office_workspace.position.x = 0.0
+	_refresh_all()
+
+
+func _kill_tweens() -> void:
+	if _ui._fade._xfade_tween != null and _ui._fade._xfade_tween.is_valid():
+		_ui._fade._xfade_tween.kill()
+	_ui._fade._xfade_target = null
+
+
 # ==========================================
-# ACTION APPLICATION
+# ACTION INTERPRETER — all instant, no animations
 # ==========================================
 
 func _apply_action(entry: Dictionary) -> void:
 	var action: String = str(entry.get("action", ""))
 	var detail: String = str(entry.get("detail", ""))
+	var action_time: float = float(entry.get("time", 0.0))
 
-	# Capture state snapshot if present
-	var snap: Variant = entry.get("state", null)
-	if snap is Dictionary:
-		_current_snap = snap as Dictionary
+	# Sync session clock
+	if _ui._session != null:
+		_ui._session.total_time = action_time
+		_ui._update_top_time(action_time)
 
 	match action:
 		"load_pallet":
-			if detail not in _loaded_ids:
-				_loaded_ids.append(detail)
+			_replay_load(detail)
 		"unload_pallet":
-			_loaded_ids.erase(detail)
+			_replay_unload(detail)
 		"undo_load":
-			_loaded_ids.erase(detail)
+			_replay_undo(detail)
 		"workspace":
-			_current_workspace = detail
+			_replay_workspace(detail)
 		"dock":
-			if detail == "open":
-				_dock_open = true
-			elif detail == "close":
-				_dock_open = false
+			_replay_dock(detail)
 		"decision":
-			if detail not in _decisions_made:
-				_decisions_made.append(detail)
+			_replay_decision(detail)
 		"as400_state":
-			_as400_state = int(detail) if detail.is_valid_int() else -1
-
-
-# ==========================================
-# VIEW RENDERING
-# ==========================================
-
-func _refresh_views() -> void:
-	_render_truck()
-	_render_action_log()
-
-
-func _render_truck() -> void:
-	if _rtl_truck == null:
-		return
-
-	var bb: String = ""
-	bb += "[font_size=20]" + UITokens.BB_ACCENT + "[b]" + Locale.t("replay.truck_title") + "[/b]" + UITokens.BB_END + "[/font_size]\n"
-	bb += UITokens.BB_DIM + Locale.t("replay.loaded_count") % _loaded_ids.size() + UITokens.BB_END + "\n\n"
-
-	# Screen context — what the user was seeing
-	bb += _render_screen_context()
-
-	if _loaded_ids.is_empty():
-		bb += "[font_size=14]" + UITokens.BB_HINT + Locale.t("replay.truck_empty") + UITokens.BB_END + "[/font_size]\n"
-	else:
-		# Render pallet sequence as colored blocks
-		bb += _render_pallet_sequence()
-		bb += "\n"
-		# Render pallet detail list
-		bb += _render_pallet_list()
-
-	# Score preview (always visible)
-	bb += "\n" + UITokens.BB_DIM + "─────────────────────" + UITokens.BB_END + "\n"
-	var score_clr: String = UITokens.BB_SUCCESS if _record_passed else UITokens.BB_ERROR
-	var result_text: String = Locale.t("replay.passed") if _record_passed else Locale.t("replay.failed")
-	bb += "[font_size=14]" + UITokens.BB_HINT + Locale.t("replay.final_score") + " " + UITokens.BB_END
-	bb += score_clr + "[b]" + str(_record_score) + "[/b] — " + result_text + UITokens.BB_END + "[/font_size]\n"
-
-	_rtl_truck.text = bb
-
-
-func _render_pallet_sequence() -> String:
-	## Renders a visual row of colored type abbreviations (matches debrief style).
-	var bb: String = "[font_size=13]"
-	for i: int in range(_loaded_ids.size()):
-		var pid: String = _loaded_ids[i]
-		var p: Dictionary = _pallet_lookup.get(pid, {})
-		var ptype: String = str(p.get("type", "?"))
-		var abbr: String = _type_abbr(ptype)
-		var clr: String = _type_bb_color(ptype)
-		bb += clr + "[" + str(i + 1) + ":" + abbr + "]" + UITokens.BB_END + " "
-	bb += "[/font_size]\n"
-
-	# Legend
-	bb += "[font_size=11]" + UITokens.BB_DIM
-	bb += "SC=ServiceCenter  BK=Bikes  BU=Bulky  ME=Mecha  AD=ADR  CC=C&C"
-	bb += UITokens.BB_END + "[/font_size]\n"
-	return bb
-
-
-func _render_screen_context() -> String:
-	## Delegates to ReplayScreenRenderer for full frame capture display.
-	return ReplayScreenRenderer.render(
-		_current_snap, _as400_state, _current_workspace,
-		_dock_open, _decisions_made,
-	)
-
-
-func _render_pallet_list() -> String:
-	## Renders a numbered list of loaded pallets with type and promise.
-	var bb: String = "[font_size=12]"
-	for i: int in range(_loaded_ids.size()):
-		var pid: String = _loaded_ids[i]
-		var p: Dictionary = _pallet_lookup.get(pid, {})
-		var ptype: String = str(p.get("type", "?"))
-		var promise: String = str(p.get("promise", ""))
-		var dest: int = int(p.get("dest", 1))
-		var clr: String = _type_bb_color(ptype)
-
-		bb += UITokens.BB_DIM + "%2d. " % (i + 1) + UITokens.BB_END
-		bb += clr + ptype + UITokens.BB_END
-		if promise != "":
-			bb += UITokens.BB_HINT + " (" + promise + ")" + UITokens.BB_END
-		if dest == 2:
-			bb += UITokens.BB_STORE + " [D2]" + UITokens.BB_END
-		bb += "\n"
-	bb += "[/font_size]"
-	return bb
-
-
-func _render_action_log() -> void:
-	if _rtl_log == null:
-		return
-
-	var bb: String = ""
-	bb += "[font_size=16]" + UITokens.BB_ACCENT + "[b]" + Locale.t("replay.log_title") + "[/b]" + UITokens.BB_END + "[/font_size]\n\n"
-
-	if _action_log.is_empty():
-		bb += UITokens.BB_HINT + Locale.t("replay.no_actions") + UITokens.BB_END + "\n"
-		_rtl_log.text = bb
-		return
-
-	for i: int in range(_action_log.size()):
-		var entry: Dictionary = _action_log[i]
-		var action_time: float = float(entry.get("time", 0.0))
-		var action: String = str(entry.get("action", ""))
-		var detail: String = str(entry.get("detail", ""))
-
-		var is_current: bool = (i == _action_index - 1)
-		var is_future: bool = (i >= _action_index)
-		var time_str: String = _format_time(action_time)
-
-		var line_clr: String = UITokens.BB_WHITE if is_current else (UITokens.BB_DIM if is_future else UITokens.BB_HINT)
-		var marker: String = "►" if is_current else " "
-
-		var action_display: String = _format_action(action, detail)
-
-		bb += "[font_size=12]"
-		if is_current:
-			bb += UITokens.BB_ACCENT + marker + UITokens.BB_END + " "
-		else:
-			bb += UITokens.BB_DIM + marker + UITokens.BB_END + " "
-		bb += line_clr + time_str + "  " + action_display + UITokens.BB_END
-		bb += "[/font_size]\n"
-
-	_rtl_log.text = bb
-
-	# Auto-scroll to current action
-	if _scroll_log != null and _action_index > 0:
-		_scroll_log.call_deferred("set_v_scroll", maxi(0, (_action_index - 3) * 20))
-
-
-func _format_action(action: String, detail: String) -> String:
-	## Returns a human-readable description of the action.
-	match action:
-		"load_pallet":
-			var p: Dictionary = _pallet_lookup.get(detail, {})
-			var ptype: String = str(p.get("type", "?"))
-			var clr: String = _type_bb_color(ptype)
-			return Locale.t("replay.act_load") + " " + clr + ptype + UITokens.BB_END
-		"unload_pallet":
-			var p: Dictionary = _pallet_lookup.get(detail, {})
-			var ptype: String = str(p.get("type", "?"))
-			return Locale.t("replay.act_unload") + " " + UITokens.BB_ERROR + ptype + UITokens.BB_END
-		"undo_load":
-			var p: Dictionary = _pallet_lookup.get(detail, {})
-			var ptype: String = str(p.get("type", "?"))
-			return Locale.t("replay.act_undo") + " " + UITokens.BB_WARNING + ptype + UITokens.BB_END
-		"workspace":
-			var ws_icon: String = "🏗" if detail == "DOCK" else "🗂"
-			return ws_icon + " " + UITokens.BB_HINT + "→ " + detail + UITokens.BB_END
-		"dock":
-			if detail == "open":
-				return "🚪 " + UITokens.BB_SUCCESS + "Dock opened" + UITokens.BB_END
-			return "🚪 " + UITokens.BB_DIM + "Dock closed" + UITokens.BB_END
-		"decision":
-			return UITokens.BB_ACCENT + detail + UITokens.BB_END
+			_replay_as400(detail)
+		"as400_dest":
+			_replay_as400_dest(detail)
+		"as400_seal":
+			_replay_as400_seal(detail)
+		"cmr_field":
+			_replay_cmr_field(detail)
+		"ls_field":
+			_replay_ls_field(detail)
+		"cmr_franco":
+			_replay_franco(detail)
 		"tutorial_skip":
-			return UITokens.BB_WARNING + "⏭ Skip step " + detail + UITokens.BB_END
-		"as400_state":
-			var sname: String = ReplayScreenRenderer._as400_state_name(int(detail) if detail.is_valid_int() else -1)
-			return "💻 " + UITokens.BB_HINT + "AS400 → " + sname + UITokens.BB_END
-	return action + ": " + detail
+			pass
+
+	# Re-sync clock (some methods add time internally)
+	if _ui._session != null:
+		_ui._session.total_time = action_time
+		_ui._update_top_time(action_time)
+
+
+# --- Pallet operations (instant, no animations) ---
+
+func _replay_load(id: String) -> void:
+	if _ui._session != null:
+		_ui._session.load_pallet_by_id(id)
+
+
+func _replay_unload(id: String) -> void:
+	if _ui._session != null:
+		_ui._session.unload_pallet_by_id(id)
+
+
+func _replay_undo(id: String) -> void:
+	if _ui._session != null:
+		var _ok: bool = _ui._session.undo_last_load(id)
+
+
+# --- Workspace (instant — skip crossfade) ---
+
+func _replay_workspace(ws: String) -> void:
+	_ui._active_workspace = ws
+	_ui._ws._style_workspace_tabs(ws)
+	_ui._ws._apply_workspace(ws)
+	# Ensure no mid-fade modulate from killed tweens
+	if _ui._dock_workspace != null:
+		_ui._dock_workspace.modulate.a = 1.0
+		_ui._dock_workspace.position.x = 0.0
+	if _ui._office_workspace != null:
+		_ui._office_workspace.modulate.a = 1.0
+		_ui._office_workspace.position.x = 0.0
+
+
+# --- Dock (already instant) ---
+
+func _replay_dock(detail: String) -> void:
+	if detail == "open":
+		_ui._dock.open_dock()
+		if _ui.btn_open_dock != null:
+			_ui.btn_open_dock.visible = false
+	elif detail == "close":
+		_ui._dock.close_dock()
+		if _ui.btn_close_dock != null:
+			_ui.btn_close_dock.visible = false
+		# Set wrapup phase instantly (no crossfade)
+		_ui._office.office_phase = "WRAPUP"
+		_ui._office.refresh_office_phase_ui()
+
+
+# --- Decisions (instant) ---
+
+func _replay_decision(detail: String) -> void:
+	match detail:
+		"Collect CMR":
+			_collect_desk("cmr")
+		"Collect Seal":
+			_collect_desk("seal")
+		"Collect Loading Sheet":
+			_collect_desk("loading_sheet")
+		"CMR Stamp Top":
+			_ui._paper.cmr._apply_stamp_top()
+		"CMR Stamp & Sign":
+			_ui._paper.cmr._apply_stamp_bot()
+		"Mark CMR":
+			_ui._paper.cmr._mark_x()
+		"Hand CMR to Driver":
+			_replay_workspace("OFFICE")
+			_ui._office.advance_wrapup("hand_cmr")
+		"Archive Papers":
+			_ui._office.advance_wrapup("archive")
+		"Seal Truck":
+			_ui._office.advance_wrapup("seal")
+		"Open Loading Sheet":
+			# Only toggle when on dock — on office it is a side-effect
+			# of the workspace switch, already handled by _apply_workspace
+			if _ui._active_workspace == "DOCK":
+				_ensure_panel("Loading Sheet")
+		"Open CMR":
+			if _ui._active_workspace == "DOCK":
+				_ensure_panel("CMR")
+		"Open CMR 2":
+			_ui._paper.cmr.switch_dest(2)
+		"Open Office", "Open AS400", "Phone Opened":
+			pass
+		_:
+			if _ui._session != null:
+				_ui._session.manual_decision(detail)
+
+
+func _collect_desk(key: String) -> void:
+	## Collect a desk item instantly — no crossfade animation.
+	var office: OfficeManager = _ui._office
+	if office.desk_items_collected.get(key, false):
+		return
+	office.desk_items_collected[key] = true
+	office.desk_collected_count += 1
+	# Visual: checkmark + disable button
+	if office.desk_checkmarks.has(key):
+		office.desk_checkmarks[key].visible = true
+	if office.desk_item_btns.has(key):
+		office.desk_item_btns[key].disabled = true
+	# After all 3: instantly swap to paperwork view
+	if office.desk_collected_count >= 3:
+		if office.desk_view_container != null:
+			office.desk_view_container.visible = false
+		if office.docs_row != null:
+			office.docs_row.visible = true
+		office.cmr_revealed = false
+		office.active_paperwork_tab = "LS"
+		_ui._paper.update_loading_sheet()
+		_ui._populate_overlay_panels()
+		# Sync panel visibility: show LS, hide CMR
+		office.refresh_office_phase_ui()
+
+
+func _ensure_panel(panel_name: String) -> void:
+	if not bool(_ui._panel_state.get(panel_name, false)):
+		_ui._ws.toggle_panel(panel_name)
+
+
+# --- AS400 (instant) ---
+
+func _replay_as400(detail: String) -> void:
+	if _ui._as400 == null or not detail.is_valid_int():
+		return
+	var state_id: int = int(detail)
+	_ui._as400.state = state_id
+	_ui._as400._render_as400_screen()
+	# VALIDATION state (F10 confirm) enables dock close
+	if state_id == AS400Terminal.S.VALIDATION:
+		_ui._as400_confirmed = true
+		if _ui.btn_close_dock != null:
+			_ui.btn_close_dock.visible = true
+	if not bool(_ui._panel_state.get("AS400", false)):
+		_ui._ws.set_panel_visible("AS400", true, true)
+
+
+func _replay_as400_dest(detail: String) -> void:
+	## Restore dest_code + dest_name on a specific AS400 tab.
+	## Format: "tab_idx:code:name"
+	if _ui._as400 == null:
+		return
+	var parts: PackedStringArray = detail.split(":", true, 2)
+	if parts.size() < 3:
+		return
+	var tab_idx: int = int(parts[0])
+	var code: String = parts[1]
+	var dname: String = parts[2]
+	if tab_idx >= 0 and tab_idx < _ui._as400._tabs.size():
+		_ui._as400._tabs[tab_idx]["dest_code"] = code
+		_ui._as400._tabs[tab_idx]["dest_name"] = dname
+		_ui._as400._rebuild__tab_bar()
+		_ui._as400._render_as400_screen()
+
+
+func _replay_as400_seal(detail: String) -> void:
+	## Restore seal_entered on a specific AS400 tab.
+	## Format: "tab_idx:seal_value"
+	if _ui._as400 == null:
+		return
+	var sep: int = detail.find(":")
+	if sep < 0:
+		return
+	var tab_idx: int = int(detail.left(sep))
+	var seal_val: String = detail.substr(sep + 1)
+	if tab_idx >= 0 and tab_idx < _ui._as400._tabs.size():
+		_ui._as400._tabs[tab_idx]["seal_entered"] = seal_val
+		_ui._as400._render_as400_screen()
+
+
+# --- Field inputs (instant) ---
+
+func _replay_cmr_field(detail: String) -> void:
+	var sep: int = detail.find(":")
+	if sep < 0:
+		return
+	var field: String = detail.left(sep)
+	var value: String = detail.substr(sep + 1)
+	_set_cmr_input(field, value)
+	_ui._paper.cmr._write_field(field, value)
+
+
+func _replay_ls_field(detail: String) -> void:
+	var sep: int = detail.find(":")
+	if sep < 0:
+		return
+	var field: String = detail.left(sep)
+	var value: String = detail.substr(sep + 1)
+	_set_ls_input(field, value)
+	_ui._paper.ls._write_field(field, value)
+
+
+func _replay_franco(detail: String) -> void:
+	_ui._paper.cmr._select_franco(detail)
+
+
+func _set_cmr_input(field: String, value: String) -> void:
+	var cmr: CMRForm = _ui._paper.cmr
+	match field:
+		"uats":
+			if cmr._input_uats != null: cmr._input_uats.text = value
+		"collis":
+			if cmr._input_collis != null: cmr._input_collis.text = value
+		"eur":
+			if cmr._input_eur != null: cmr._input_eur.text = value
+		"plastic":
+			if cmr._input_plastic != null: cmr._input_plastic.text = value
+		"magnum":
+			if cmr._input_magnum != null: cmr._input_magnum.text = value
+		"cc":
+			if cmr._input_cc != null: cmr._input_cc.text = value
+		"weight":
+			if cmr._input_weight != null: cmr._input_weight.text = value
+		"dm3":
+			if cmr._input_dm3 != null: cmr._input_dm3.text = value
+		"expedition":
+			if cmr._input_expedition != null: cmr._input_expedition.text = value
+		"seal":
+			if cmr._input_seal != null: cmr._input_seal.text = value
+		"dock":
+			if cmr._input_dock != null: cmr._input_dock.text = value
+
+
+func _set_ls_input(field: String, value: String) -> void:
+	var ls: LoadingSheetForm = _ui._paper.ls
+	match field:
+		"store":
+			if ls.ls_input_store != null: ls.ls_input_store.text = value
+		"seal":
+			if ls.ls_input_seal != null: ls.ls_input_seal.text = value
+		"dock":
+			if ls.ls_input_dock != null: ls.ls_input_dock.text = value
+		"expedition":
+			if ls.ls_input_expedition != null: ls.ls_input_expedition.text = value
 
 
 # ==========================================
-# PROGRESS BAR
+# DISPLAY UPDATES
 # ==========================================
 
-func _update_progress() -> void:
+func _refresh_all() -> void:
+	_refresh_status()
+	_refresh_action()
+	_refresh_count()
+	_refresh_progress()
+	_refresh_buttons()
+
+
+func _refresh_status() -> void:
+	if _lbl_status == null:
+		return
+	var icon: String = "✓" if _record_passed else "✗"
+	_lbl_status.text = (Locale.t("replay.title")
+			+ "  —  " + _scenario_name
+			+ "  " + icon + " " + str(_record_score))
+
+
+func _refresh_action() -> void:
+	if _lbl_action == null:
+		return
+	if _action_index <= 0 or _action_index > _action_log.size():
+		_lbl_action.text = "—"
+		return
+	var entry: Dictionary = _action_log[_action_index - 1]
+	var action: String = str(entry.get("action", ""))
+	var detail: String = str(entry.get("detail", ""))
+	var ts: String = _fmt_time(float(entry.get("time", 0.0)))
+	_lbl_action.text = "► " + ts + "  " + _action_text(action, detail)
+
+
+func _refresh_count() -> void:
+	if _lbl_count == null:
+		return
+	_lbl_count.text = str(_action_index) + " / " + str(_action_log.size())
+
+
+func _refresh_progress() -> void:
 	if _total_session_time < 0.1:
 		return
-	var progress: float = clampf(_elapsed / _total_session_time, 0.0, 1.0)
+	var current_time: float = 0.0
+	if _action_index > 0 and _action_index <= _action_log.size():
+		current_time = float(_action_log[_action_index - 1].get("time", 0.0))
+	var pct: float = clampf(current_time / _total_session_time, 0.0, 1.0)
+	if _bar_progress != null:
+		_bar_progress.anchor_right = pct
+	if _lbl_timer != null:
+		_lbl_timer.text = _fmt_time(current_time) + " / " + _fmt_time(_total_session_time)
 
-	if _bar_progress != null and _bar_bg != null:
-		_bar_progress.anchor_right = progress
 
-	if _lbl_time != null:
-		_lbl_time.text = _format_time(_elapsed) + " / " + _format_time(_total_session_time)
+func _refresh_buttons() -> void:
+	if _btn_prev != null:
+		_btn_prev.disabled = (_action_index <= 0)
+	if _btn_next != null:
+		_btn_next.disabled = (_action_index >= _action_log.size())
+		_btn_next.text = Locale.t("replay.done") if _action_index >= _action_log.size() else Locale.t("replay.next")
 
 
 # ==========================================
 # HELPERS
 # ==========================================
 
-static func _format_time(secs: float) -> String:
+# Decisions logged as side-effects of workspace/dock/AS400 actions.
+# These duplicate real actions already in the log and should not
+# appear as separate replay steps.
+const _SIDE_EFFECT_DECISIONS: Array[String] = [
+	"Open Office", "Open Loading Sheet", "Open CMR",
+	"Open CMR 2", "Open AS400", "Open Dock", "Close Dock",
+	"Phone Opened",
+]
+
+
+static func _is_side_effect(entry: Dictionary) -> bool:
+	## Returns true if this action log entry is a side-effect decision
+	## that duplicates another action and should be skipped in replay.
+	if str(entry.get("action", "")) != "decision":
+		return false
+	var detail: String = str(entry.get("detail", ""))
+	if detail in _SIDE_EFFECT_DECISIONS:
+		return true
+	if detail.begins_with("Confirm AS400"):
+		return true
+	return false
+
+static func _fmt_time(secs: float) -> String:
 	var total: int = int(secs)
 	@warning_ignore("integer_division")
 	var m: int = total / 60
@@ -617,23 +716,40 @@ static func _format_time(secs: float) -> String:
 	return "%d:%02d" % [m, s]
 
 
-static func _type_abbr(ptype: String) -> String:
-	match ptype:
-		"ServiceCenter": return "SC"
-		"Bikes": return "BK"
-		"Bulky": return "BU"
-		"Mecha": return "ME"
-		"ADR": return "AD"
-		"C&C": return "CC"
-	return ptype.left(2).to_upper()
-
-
-static func _type_bb_color(ptype: String) -> String:
-	match ptype:
-		"ServiceCenter": return UITokens.BB_SUCCESS
-		"Bikes": return UITokens.BB_BLUE
-		"Bulky": return UITokens.BB_ORANGE
-		"Mecha": return UITokens.BB_MAGNUM
-		"ADR": return UITokens.BB_RED_BRIGHT
-		"C&C": return UITokens.BB_WARNING
-	return UITokens.BB_DIM
+func _action_text(action: String, detail: String) -> String:
+	match action:
+		"load_pallet":
+			return Locale.t("replay.act_load") + " #" + detail
+		"unload_pallet":
+			return Locale.t("replay.act_unload") + " #" + detail
+		"undo_load":
+			return Locale.t("replay.act_undo") + " #" + detail
+		"workspace":
+			return "→ " + detail
+		"dock":
+			return "Dock " + detail
+		"decision":
+			return detail
+		"as400_state":
+			var sname: String = ReplayScreenRenderer._as400_state_name(
+					int(detail) if detail.is_valid_int() else -1)
+			return "AS400 → " + sname
+		"as400_dest":
+			var dparts: PackedStringArray = detail.split(":", true, 2)
+			if dparts.size() >= 3:
+				return "AS400 dest → " + dparts[2] + " " + dparts[1]
+			return "AS400 dest → " + detail
+		"as400_seal":
+			var ssep: int = detail.find(":")
+			if ssep >= 0:
+				return "AS400 seal → " + detail.substr(ssep + 1)
+			return "AS400 seal → " + detail
+		"cmr_field":
+			return "CMR: " + detail
+		"ls_field":
+			return "LS: " + detail
+		"cmr_franco":
+			return "Franco → " + detail
+		"tutorial_skip":
+			return "Skip step " + detail
+	return action + ": " + detail

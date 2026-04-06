@@ -190,6 +190,10 @@ static func load_preferences() -> void:
 	Telemetry.enabled = cfg.get_value("telemetry", "enabled", false)
 	if Telemetry.enabled:
 		Telemetry.load_data()
+	# Auto-login from saved credentials
+	var saved_user: String = cfg.get_value("account", "username", "")
+	if saved_user != "" and AccountManager.has_any_accounts():
+		AccountManager.restore_session(saved_user)
 
 static func save_preferences() -> void:
 	var cfg := ConfigFile.new()
@@ -198,6 +202,7 @@ static func save_preferences() -> void:
 	cfg.set_value("accessibility", "high_contrast", high_contrast)
 	cfg.set_value("user", "active_trainee", TrainingRecord.active_trainee)
 	cfg.set_value("telemetry", "enabled", Telemetry.enabled)
+	cfg.set_value("account", "username", AccountManager.current_username())
 	cfg.save(_PREFS_PATH)
 
 static func toggle_high_contrast() -> void:

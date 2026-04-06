@@ -172,7 +172,7 @@ func _render_step_text() -> void:
 		13: set_focus(null, "top", false)
 		14: set_focus(null, "top", false)
 		15: set_focus(_ui.btn_sop, "bottom", true)
-		16: set_focus(_ui.btn_dock_ls, "bottom", true)
+		16: set_focus(_ui.btn_dock_cmr, "bottom", true)
 		17: set_focus(_ui.btn_dock_cmr, "bottom", true)
 		18: set_focus(_ui.btn_as400_dock, "top", true)
 		19: set_focus(_ui.btn_dock_cmr, "bottom", true)

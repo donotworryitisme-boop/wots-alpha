@@ -28,12 +28,16 @@ var briefing_overlay: ColorRect
 var briefing_body: RichTextLabel
 var btn_briefing_continue: Button
 
-# Training history
-var _history_rtl: RichTextLabel
+# Run gallery (overlay)
+var btn_runs: Button
+var _gallery_overlay: ColorRect
+var _gallery_rtl: RichTextLabel
 
-# Trainee selector (Item 54)
-var _trainee_input: LineEdit
-var _lbl_trainee: Label
+# Login / user info (replaces old trainee selector)
+var _login: LoginPanel
+var _user_info_box: VBoxContainer
+var _login_container: VBoxContainer
+var _lbl_signed_in: Label
 
 # Seed input
 var seed_input: LineEdit
@@ -58,6 +62,11 @@ func rebuild() -> void:
 			briefing_overlay.get_parent().remove_child(briefing_overlay)
 		briefing_overlay.queue_free()
 		briefing_overlay = null
+	if _gallery_overlay != null and is_instance_valid(_gallery_overlay):
+		if _gallery_overlay.get_parent() != null:
+			_gallery_overlay.get_parent().remove_child(_gallery_overlay)
+		_gallery_overlay.queue_free()
+		_gallery_overlay = null
 	_build(_root)
 	_build_briefing(_root)
 
@@ -119,27 +128,36 @@ func _build(root: Node) -> void:
 	lbl_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(lbl_sub)
 
-	# --- Trainee selector (Item 54) ---
-	var trainee_group := VBoxContainer.new()
-	trainee_group.add_theme_constant_override("separation", 3)
-	vbox.add_child(trainee_group)
+	# --- Login / User Info Section ---
+	_login_container = VBoxContainer.new()
+	_login_container.add_theme_constant_override("separation", 4)
+	vbox.add_child(_login_container)
 
-	_lbl_trainee = Label.new()
-	_lbl_trainee.text = Locale.t("portal.trainee")
-	_lbl_trainee.add_theme_font_size_override("font_size", UITokens.fs(12))
-	_lbl_trainee.add_theme_color_override("font_color", UITokens.hc_text(UITokens.CLR_TEXT_SECONDARY))
-	_lbl_trainee.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	trainee_group.add_child(_lbl_trainee)
+	_login = LoginPanel.new(_ui)
+	_login.build(_login_container)
 
-	_trainee_input = LineEdit.new()
-	_trainee_input.text = TrainingRecord.get_trainee_display_name()
-	_trainee_input.placeholder_text = Locale.t("portal.trainee_placeholder")
-	_trainee_input.custom_minimum_size = Vector2(0, 34)
-	_trainee_input.add_theme_font_size_override("font_size", UITokens.fs(13))
-	UIStyles.apply_field_dark(_trainee_input)
-	_trainee_input.text_submitted.connect(_on_trainee_submitted)
-	_trainee_input.focus_exited.connect(_on_trainee_focus_lost)
-	trainee_group.add_child(_trainee_input)
+	# Signed-in user info (hidden when login panel is showing)
+	_user_info_box = VBoxContainer.new()
+	_user_info_box.add_theme_constant_override("separation", 3)
+	vbox.add_child(_user_info_box)
+
+	_lbl_signed_in = Label.new()
+	_lbl_signed_in.add_theme_font_size_override("font_size", UITokens.fs(12))
+	_lbl_signed_in.add_theme_color_override("font_color", UITokens.hc_text(UITokens.CLR_TEXT_SECONDARY))
+	_lbl_signed_in.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_user_info_box.add_child(_lbl_signed_in)
+
+	var btn_switch := Button.new()
+	btn_switch.text = Locale.t("login.switch_user")
+	btn_switch.custom_minimum_size = Vector2(0, 26)
+	UIStyles.apply_btn_ghost(btn_switch, Color(0.1, 0.1, 0.1, 0.0),
+			UITokens.hc_text(UITokens.CLR_TEXT_HINT), UITokens.COLOR_ACCENT_BLUE)
+	btn_switch.add_theme_font_size_override("font_size", UITokens.fs(10))
+	btn_switch.pressed.connect(func() -> void: show_login())
+	_user_info_box.add_child(btn_switch)
+
+	# Set initial visibility based on login state
+	_apply_login_visibility()
 
 	# Divider
 	var div := ColorRect.new()
@@ -220,16 +238,6 @@ func _build(root: Node) -> void:
 	UIStyles.apply_field_dark(seed_input)
 	seed_row.add_child(seed_input)
 
-	# --- Training history (compact, inline) ---
-	_history_rtl = RichTextLabel.new()
-	_history_rtl.bbcode_enabled = true
-	_history_rtl.fit_content = true
-	_history_rtl.custom_minimum_size = Vector2(0, 40)
-	_history_rtl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_history_rtl.add_theme_color_override("default_color", UITokens.hc_text(UITokens.CLR_TEXT_SECONDARY))
-	_history_rtl.add_theme_font_size_override("normal_font_size", UITokens.fs(11))
-	vbox.add_child(_history_rtl)
-
 	var div2 := ColorRect.new()
 	div2.custom_minimum_size = Vector2(0, 1)
 	div2.color = UITokens.hc_panel_border()
@@ -274,6 +282,17 @@ func _build(root: Node) -> void:
 			1, UITokens.hc_panel_border())
 	btn_drill.add_theme_font_size_override("font_size", UITokens.fs(11))
 	util_row.add_child(btn_drill)
+
+	btn_runs = Button.new()
+	btn_runs.text = "📋 " + Locale.t("portal.my_runs")
+	btn_runs.custom_minimum_size = Vector2(0, 30)
+	btn_runs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UIStyles.apply_btn_auto(btn_runs, UITokens.CLR_BG_DARK,
+			UITokens.hc_text(UITokens.CLR_TEXT_SECONDARY), UITokens.CLR_MUTED, 6,
+			1, UITokens.hc_panel_border())
+	btn_runs.add_theme_font_size_override("font_size", UITokens.fs(11))
+	btn_runs.pressed.connect(func() -> void: _show_gallery())
+	util_row.add_child(btn_runs)
 
 	# --- Second utility row: Trainer + Dev ---
 	var util_row2 := HBoxContainer.new()
@@ -372,6 +391,9 @@ func _build(root: Node) -> void:
 	btn_close.pressed.connect(func() -> void: _ui.get_tree().quit())
 	overlay.add_child(btn_close)
 
+	_build_gallery(root)
+
+
 func populate_scenarios(highest_unlocked: int) -> void:
 	if scenario_dropdown == null: return
 	scenario_dropdown.clear()
@@ -405,31 +427,36 @@ func update_scenario_desc(idx: int) -> void:
 		scenario_desc.text = ""
 
 
-func _on_trainee_submitted(new_name: String) -> void:
-	_apply_trainee(new_name)
-	if _trainee_input != null:
-		_trainee_input.release_focus()
-
-
-func _on_trainee_focus_lost() -> void:
-	if _trainee_input != null:
-		_apply_trainee(_trainee_input.text)
-
-
-func _apply_trainee(raw_name: String) -> void:
-	var clean_name: String = raw_name.strip_edges()
-	if clean_name == "":
-		clean_name = "default"
-	TrainingRecord.set_trainee(clean_name)
-	UITokens.save_preferences()
-	if _trainee_input != null:
-		_trainee_input.text = TrainingRecord.get_trainee_display_name()
+func _apply_login_visibility() -> void:
+	## Shows login panel or user info based on login state.
+	var logged_in: bool = AccountManager.is_logged_in()
+	if _login_container != null:
+		_login_container.visible = not logged_in
+	if _user_info_box != null:
+		_user_info_box.visible = logged_in
+	if logged_in and _lbl_signed_in != null:
+		var display: String = AccountManager.current_display_name()
+		var role: String = AccountManager.role_name(AccountManager.current_role())
+		_lbl_signed_in.text = Locale.t("login.signed_in_as") + " " + display + " (" + role + ")"
+	# Gate trainer features: only visible for trainers
+	var show_trainer: bool = AccountManager.is_trainer()
+	if btn_trainer != null:
+		btn_trainer.visible = show_trainer
+	if btn_dev != null:
+		btn_dev.visible = show_trainer
 	refresh_history()
+
+
+func show_login() -> void:
+	## Switches back to the login panel (logout).
+	AccountManager.logout()
+	if _login != null:
+		_login.clear_fields()
+	_apply_login_visibility()
 
 
 func refresh_language_labels() -> void:
 	if lbl_sub != null: lbl_sub.text = Locale.t("portal.subtitle")
-	if _lbl_trainee != null: _lbl_trainee.text = Locale.t("portal.trainee")
 	if lbl_lang != null: lbl_lang.text = Locale.t("portal.select_language")
 	if lbl_scen != null: lbl_scen.text = Locale.t("portal.select_scenario")
 	if btn_start != null: btn_start.text = Locale.t("portal.begin_shift")
@@ -437,23 +464,24 @@ func refresh_language_labels() -> void:
 	if btn_trainer != null: btn_trainer.text = "📊 " + Locale.t("trainer.open_dashboard")
 	if btn_quiz != null: btn_quiz.text = "📷 " + Locale.t("quiz.portal_btn")
 	if btn_drill != null: btn_drill.text = "🎯 " + Locale.t("drill.portal_btn")
+	if btn_runs != null: btn_runs.text = "📋 " + Locale.t("portal.my_runs")
 	if btn_close != null: btn_close.text = "✕  " + Locale.t("btn.close_app")
 	if seed_input != null: seed_input.placeholder_text = Locale.t("portal.seed_placeholder")
 	refresh_history()
 
 
 func refresh_history() -> void:
-	if _history_rtl == null:
+	if _gallery_rtl == null:
 		return
-	var recent: Array[Dictionary] = TrainingRecord.get_recent(5)
+	var recent: Array[Dictionary] = TrainingRecord.get_recent(10)
 	if recent.is_empty():
-		_history_rtl.text = "[center]" + UITokens.BB_DIM + Locale.t("portal.no_history") + UITokens.BB_END + "[/center]"
+		_gallery_rtl.text = "[center]\n\n" + UITokens.BB_DIM + Locale.t("portal.no_history") + UITokens.BB_END + "[/center]"
 		return
 
 	var bb: String = ""
 
 	# --- Recent Results ---
-	bb += UITokens.BB_HINT + "[b]" + Locale.t("portal.recent_results") + "[/b]" + UITokens.BB_END + "\n"
+	bb += UITokens.BB_HINT + "[b]" + Locale.t("portal.recent_results") + "[/b]" + UITokens.BB_END + "\n\n"
 	for r: Dictionary in recent:
 		var scen: String = _short_scenario_name(str(r.get("scenario", "")))
 		var score: int = int(r.get("score", 0))
@@ -472,7 +500,7 @@ func refresh_history() -> void:
 	# --- Personal Bests ---
 	var bests: Dictionary = TrainingRecord.get_best_per_scenario()
 	if not bests.is_empty():
-		bb += "\n" + UITokens.BB_HINT + "[b]" + Locale.t("portal.best_scores") + "[/b]" + UITokens.BB_END + "\n"
+		bb += "\n" + UITokens.BB_HINT + "[b]" + Locale.t("portal.best_scores") + "[/b]" + UITokens.BB_END + "\n\n"
 		var scenario_keys: Array[String] = ["0. Tutorial", "1. Standard Loading", "2. Priority Loading", "3. Co-Loading"]
 		for sk: String in scenario_keys:
 			if bests.has(sk):
@@ -481,7 +509,7 @@ func refresh_history() -> void:
 				bb += best_clr + "[b]" + str(best_score) + "[/b]" + UITokens.BB_END + "  "
 				bb += UITokens.BB_DIM + _short_scenario_name(sk) + UITokens.BB_END + "\n"
 
-	_history_rtl.text = bb
+	_gallery_rtl.text = bb
 
 
 static func _short_scenario_name(full: String) -> String:
@@ -505,6 +533,87 @@ static func _format_date_short(iso: String) -> String:
 	var months: Array[String] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 	var m_idx: int = clampi(int(parts[1]) - 1, 0, 11)
 	return parts[2] + " " + months[m_idx] + " " + time_part
+
+
+# ==========================================
+# RUN GALLERY OVERLAY
+# ==========================================
+
+func _build_gallery(root: Node) -> void:
+	_gallery_overlay = ColorRect.new()
+	_gallery_overlay.color = Color(0.0, 0.0, 0.0, 0.85)
+	_gallery_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_gallery_overlay.visible = false
+	root.add_child(_gallery_overlay)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_gallery_overlay.add_child(center)
+
+	var pnl := PanelContainer.new()
+	pnl.custom_minimum_size = Vector2(500, 500)
+	UIStyles.apply_panel(pnl, UIStyles.modal(UITokens.CLR_PANEL_BG, 8, 0, 0.0))
+	center.add_child(pnl)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 28)
+	margin.add_theme_constant_override("margin_top", 24)
+	margin.add_theme_constant_override("margin_right", 28)
+	margin.add_theme_constant_override("margin_bottom", 24)
+	pnl.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 12)
+	margin.add_child(vbox)
+
+	# Header row
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	vbox.add_child(header)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "📋 " + Locale.t("portal.my_runs")
+	title_lbl.add_theme_font_size_override("font_size", UITokens.fs(18))
+	title_lbl.add_theme_color_override("font_color", UITokens.COLOR_ACCENT_BLUE)
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title_lbl)
+
+	var close_btn := Button.new()
+	close_btn.text = "  ✕  "
+	close_btn.custom_minimum_size = Vector2(36, 30)
+	close_btn.add_theme_font_size_override("font_size", UITokens.fs(14))
+	close_btn.focus_mode = Control.FOCUS_NONE
+	UIStyles.apply_btn_auto(close_btn, Color(0.25, 0.1, 0.1),
+			UITokens.CLR_TEXT_SECONDARY, Color(1.0, 0.4, 0.4), 4,
+			1, Color(0.4, 0.15, 0.1))
+	close_btn.pressed.connect(func() -> void: _gallery_overlay.visible = false)
+	header.add_child(close_btn)
+
+	# Divider
+	var div := ColorRect.new()
+	div.custom_minimum_size = Vector2(0, 1)
+	div.color = UITokens.CLR_SURFACE_DIM
+	vbox.add_child(div)
+
+	# Scrollable content
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(scroll)
+
+	_gallery_rtl = RichTextLabel.new()
+	_gallery_rtl.bbcode_enabled = true
+	_gallery_rtl.fit_content = true
+	_gallery_rtl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_gallery_rtl.add_theme_color_override("default_color", UITokens.hc_text(UITokens.CLR_TEXT_SECONDARY))
+	_gallery_rtl.add_theme_font_size_override("normal_font_size", UITokens.fs(13))
+	scroll.add_child(_gallery_rtl)
+
+
+func _show_gallery() -> void:
+	refresh_history()
+	if _gallery_overlay != null:
+		_gallery_overlay.visible = true
 
 
 # ==========================================

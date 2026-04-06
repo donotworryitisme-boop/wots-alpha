@@ -69,12 +69,6 @@ func try_advance_panel(panel_name: String, make_visible: bool) -> void:
 		_set_step(4)
 	elif step == 5 and panel_name == "AS400":
 		_set_step(6)
-	elif step == 16 and panel_name == "Loading Sheet":
-		_set_step(17)
-	elif step == 17 and panel_name == "CMR":
-		_set_step(18)
-	elif step == 19 and panel_name == "CMR":
-		_set_step(20)
 
 
 func try_advance_desk(collected_count: int) -> void:
@@ -131,6 +125,31 @@ func try_advance_as400_raq_opened() -> void:
 		_set_step(9)
 
 
+func try_advance_cmr_filled() -> void:
+	## Called from CMRForm._write_field(), _apply_stamp_top(), _apply_stamp_bot(),
+	## _select_franco(). Handles step 16 → 17 (CMR pallet counts),
+	## step 17 → 18 (expedition/seal/stamp), and step 19 → 20 (weight/dm³).
+	if not active:
+		return
+	if _ui._session == null:
+		return
+	var sm: SessionManager = _ui._session
+	if step == 16:
+		if sm.typed_cmr_uats.strip_edges() != "" or sm.typed_cmr_collis.strip_edges() != "":
+			_set_step(17)
+	elif step == 17:
+		var has_input: bool = (
+			sm.typed_expedition_cmr.strip_edges() != ""
+			or sm.typed_cmr_seal.strip_edges() != ""
+			or _ui._paper.cmr.stamp_top_stamped
+		)
+		if has_input:
+			_set_step(18)
+	elif step == 19:
+		if sm.typed_weight.strip_edges() != "" or sm.typed_dm3.strip_edges() != "":
+			_set_step(20)
+
+
 func try_advance_as400_confirm() -> void:
 	## Called from AS400Terminal._confirm_as400_raq() when F10 confirms.
 	## Returns early with warning if not ready.
@@ -140,10 +159,7 @@ func try_advance_as400_confirm() -> void:
 		_ui._tut.flash_warning(Locale.t("warn.finish_loading_first"))
 		return
 	if step == 18:
-		# Close any open dock paperwork so user can cleanly reopen CMR
-		# to fill weight/dm3 at step 19
-		if _ui._ws.is_dock_paperwork_open():
-			_ui._ws.hide_dock_paperwork()
+		# Advance to step 19 — CMR stays open so user can fill weight/dm³
 		_set_step(19)
 
 
@@ -274,21 +290,17 @@ func skip_current_step() -> void:
 			# Load all pallets in correct order (skips the Mecha mistake)
 			_skip_load_all_pallets()
 		16:
-			# Open LS on dock
-			_ui._ws.toggle_panel("Loading Sheet")
+			# Fill CMR pallet counts + advance
+			_skip_fill_cmr_counts()
 		17:
-			# Close LS if open, open CMR on dock
-			if _ui._ws.is_dock_paperwork_open():
-				_ui._ws.hide_dock_paperwork()
-			_ui._ws.toggle_panel("CMR")
+			# Fill CMR expedition/seal/dock, stamp, sign, Franco + advance
+			_skip_fill_cmr_details()
 		18:
 			# AS400 F10 confirm
 			_skip_as400_confirm()
 		19:
-			# Reopen CMR on dock
-			if _ui._ws.is_dock_paperwork_open():
-				_ui._ws.hide_dock_paperwork()
-			_ui._ws.toggle_panel("CMR")
+			# Fill CMR weight/dm³ + advance
+			_skip_fill_cmr_weight_dm3()
 		20:
 			# Close dock (ensure AS400 confirmed first)
 			_skip_close_dock()
@@ -334,6 +346,110 @@ func _skip_fill_ls_preload() -> void:
 		_ui._session.typed_dock = dock
 	# Trigger the preload check which reveals CMR → advances to step 3
 	_ui._paper.check_ls_preload_done()
+
+
+func _skip_fill_cmr_counts() -> void:
+	## Auto-fill CMR pallet count fields from loaded inventory.
+	if _ui._session == null:
+		_set_step(17)
+		return
+	# Ensure CMR is open on dock
+	if not _ui._ws.is_dock_paperwork_open():
+		_ui._ws.toggle_panel("CMR")
+	var cmr: CMRForm = _ui._paper.cmr
+	cmr.build_if_needed()
+	# Calculate counts from loaded pallets
+	var source: Array = _ui._session.inventory_loaded
+	var uats: int = source.size()
+	var collis: int = 0
+	var eur: int = 0
+	var plastic: int = 0
+	var magnum: int = 0
+	var cc: int = 0
+	for p: Dictionary in source:
+		collis += int(p.get("collis", 0))
+		var base: String = str(p.get("pallet_base", "euro"))
+		if base == "euro":
+			eur += 1
+		elif base == "plastic":
+			plastic += 1
+		elif base == "magnum":
+			magnum += 1
+		if str(p.get("type", "")) == "C&C":
+			cc += 1
+	# Set input fields (text_changed triggers _write_field + log_action)
+	if cmr._input_uats != null:
+		cmr._input_uats.text = str(uats)
+	if cmr._input_collis != null:
+		cmr._input_collis.text = str(collis)
+	if cmr._input_eur != null:
+		cmr._input_eur.text = str(eur)
+	if cmr._input_plastic != null:
+		cmr._input_plastic.text = str(plastic)
+	if cmr._input_magnum != null:
+		cmr._input_magnum.text = str(magnum)
+	if cmr._input_cc != null:
+		cmr._input_cc.text = str(cc)
+	# Advance (may already have advanced via try_advance_cmr_filled)
+	if step == 16:
+		_set_step(17)
+
+
+func _skip_fill_cmr_details() -> void:
+	## Auto-fill CMR expedition, seal, dock, stamp, sign, Franco.
+	if _ui._session == null:
+		_set_step(18)
+		return
+	# Ensure CMR is open on dock
+	if _ui._ws.is_dock_paperwork_open():
+		_ui._ws.hide_dock_paperwork()
+	_ui._ws.toggle_panel("CMR")
+	var cmr: CMRForm = _ui._paper.cmr
+	cmr.build_if_needed()
+	# Fill expedition, seal, dock
+	var expedition: String = _ui._session.expedition_number_1
+	var seal: String = _ui.seal_number_1
+	var dock: String = str(_ui._session.dock_number)
+	if cmr._input_expedition != null:
+		cmr._input_expedition.text = expedition
+	if cmr._input_seal != null:
+		cmr._input_seal.text = seal
+	if cmr._input_dock != null:
+		cmr._input_dock.text = dock
+	# Stamp and sign
+	cmr._apply_stamp_top()
+	cmr._apply_stamp_bot()
+	# Franco
+	cmr._select_franco("franco")
+	# Advance
+	if step == 17:
+		_set_step(18)
+
+
+func _skip_fill_cmr_weight_dm3() -> void:
+	## Auto-fill CMR weight and dm³ from loaded inventory.
+	if _ui._session == null:
+		_set_step(20)
+		return
+	# Ensure CMR is open on dock
+	if _ui._ws.is_dock_paperwork_open():
+		_ui._ws.hide_dock_paperwork()
+	_ui._ws.toggle_panel("CMR")
+	var cmr: CMRForm = _ui._paper.cmr
+	cmr.build_if_needed()
+	# Calculate weight and dm³
+	var total_weight: float = 0.0
+	var total_dm3: int = 0
+	for p: Dictionary in _ui._session.inventory_loaded:
+		total_weight += float(p.get("weight_kg", 0.0))
+		total_dm3 += int(p.get("dm3", 0))
+	if cmr._input_weight != null:
+		cmr._input_weight.text = str(int(total_weight))
+	if cmr._input_dm3 != null:
+		cmr._input_dm3.text = str(total_dm3)
+	# Advance
+	if step == 19:
+		_set_step(20)
 
 
 func _skip_as400_to_raq() -> void:
@@ -442,13 +558,13 @@ func check_panel_gate(panel_name: String) -> String:
 	if step == 8 and panel_name != "AS400":
 		return "warn.open_as400_f13"
 	# Post-loading gates
-	if step == 16 and panel_name != "Loading Sheet":
-		return "warn.open_loading_sheet"
+	if step == 16 and panel_name != "CMR" and panel_name != "Loading Sheet":
+		return "warn.open_cmr"
 	if step == 17 and panel_name != "CMR" and panel_name != "Loading Sheet":
 		return "warn.open_cmr"
 	if step == 18 and panel_name != "AS400":
 		return "warn.open_as400_first"
-	if step == 19 and panel_name != "CMR":
+	if step == 19 and panel_name != "CMR" and panel_name != "AS400":
 		return "warn.open_cmr"
 	return ""
 

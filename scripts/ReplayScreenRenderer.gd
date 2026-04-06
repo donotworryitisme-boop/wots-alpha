@@ -3,142 +3,95 @@ extends RefCounted
 
 # ==========================================
 # REPLAY SCREEN RENDERER — Ghost Replay helper
-# Renders BBCode "mini screen preview" panels showing
-# what the user was seeing at a given moment during
-# the replayed session: AS400 state, LS/CMR progress,
-# workspace, dock status, and key decisions.
+# Builds visual pallet block Control nodes for the truck
+# cross-section and provides AS400 state name mapping.
 # ==========================================
 
-
-## Renders the full screen context BBCode block.
-## [param state]    Current snapshot dict from log_action (keys: ls, cmr, cf, ld, av, st)
-## [param as400]    Current AS400 state integer (-1 = unknown)
-## [param workspace] "DOCK" or "OFFICE"
-## [param dock_open] Whether the dock is open
-## [param decisions] Array of decision strings made so far
-static func render(
-		state: Dictionary,
-		as400: int,
-		workspace: String,
-		dock_open: bool,
-		decisions: Array[String],
-) -> String:
-	var bb: String = "[font_size=13]"
-	bb += UITokens.BB_DIM + "─────────────────────" + UITokens.BB_END + "\n"
-
-	# --- Workspace + dock row ---
-	bb += _render_workspace_row(workspace, dock_open)
-
-	# --- AS400 state ---
-	if as400 >= 0:
-		bb += _render_as400_state(as400)
-
-	# --- LS progress ---
-	bb += _render_field_progress("LS", state)
-
-	# --- CMR progress ---
-	bb += _render_cmr_progress(state)
-
-	# --- Loaded / Available counts ---
-	bb += _render_inventory_counts(state)
-
-	# --- Decision checklist ---
-	bb += _render_decisions(decisions)
-
-	bb += UITokens.BB_DIM + "─────────────────────" + UITokens.BB_END + "\n\n"
-	bb += "[/font_size]"
-	return bb
+## Type colors shared with GhostReplay.
+const TYPE_COLORS: Dictionary = {
+	"ServiceCenter": Color(0.18, 0.80, 0.44),
+	"Bikes": Color(0.20, 0.60, 0.86),
+	"Bulky": Color(0.90, 0.49, 0.13),
+	"Mecha": Color(0.56, 0.27, 0.68),
+	"ADR": Color(1.0, 0.3, 0.3),
+	"C&C": Color(0.95, 0.77, 0.06),
+}
 
 
-static func _render_workspace_row(workspace: String, dock_open: bool) -> String:
-	var ws_clr: String = UITokens.BB_ACCENT if workspace == "DOCK" else UITokens.BB_WARNING
-	var ws_icon: String = "🏗" if workspace == "DOCK" else "🗂"
-	var line: String = ws_icon + " " + ws_clr + "[b]" + workspace + "[/b]" + UITokens.BB_END
+## Creates a visual pallet block (PanelContainer) for the truck grid.
+## Shows: sequence number, type abbreviation, promise date, D2 indicator.
+static func make_pallet_block(
+		index: int,
+		ptype: String,
+		pallet: Dictionary,
+) -> PanelContainer:
+	var clr: Color = TYPE_COLORS.get(ptype, Color(0.4, 0.42, 0.45))
+	var block := PanelContainer.new()
+	block.custom_minimum_size = Vector2(72, 0)
+	block.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	UIStyles.apply_panel(block, UIStyles.flat(clr.darkened(0.3), 6, 2, clr))
 
-	if workspace == "DOCK":
-		if dock_open:
-			line += "  " + UITokens.BB_SUCCESS + "▸ Dock Open" + UITokens.BB_END
-		else:
-			line += "  " + UITokens.BB_DIM + "▸ Dock Closed" + UITokens.BB_END
+	var bmargin := MarginContainer.new()
+	bmargin.add_theme_constant_override("margin_left", 4)
+	bmargin.add_theme_constant_override("margin_top", 4)
+	bmargin.add_theme_constant_override("margin_right", 4)
+	bmargin.add_theme_constant_override("margin_bottom", 4)
+	block.add_child(bmargin)
 
-	line += "\n"
-	return line
+	var bvbox := VBoxContainer.new()
+	bvbox.add_theme_constant_override("separation", 2)
+	bvbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	bmargin.add_child(bvbox)
 
+	# Sequence number
+	var num_lbl := Label.new()
+	num_lbl.text = str(index + 1)
+	num_lbl.add_theme_font_size_override("font_size", UITokens.fs(18))
+	num_lbl.add_theme_color_override("font_color", Color.WHITE)
+	num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bvbox.add_child(num_lbl)
 
-static func _render_as400_state(state_id: int) -> String:
-	var sname: String = _as400_state_name(state_id)
-	var clr: String = UITokens.BB_HINT
-	# Highlight key operational screens
-	match state_id:
-		8:  clr = UITokens.BB_ACCENT    # RAQ
-		9:  clr = UITokens.BB_SUCCESS   # Validation
-		18: clr = UITokens.BB_WARNING   # Scanning
-		19: clr = UITokens.BB_ACCENT    # Saisie Expedition
-	return "💻 " + clr + "AS400: " + sname + UITokens.BB_END + "\n"
+	# Type abbreviation
+	var type_lbl := Label.new()
+	type_lbl.text = _type_abbr(ptype)
+	type_lbl.add_theme_font_size_override("font_size", UITokens.fs(11))
+	type_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.85))
+	type_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bvbox.add_child(type_lbl)
 
+	# Promise date
+	var promise: String = str(pallet.get("promise", ""))
+	if promise != "":
+		var prom_lbl := Label.new()
+		prom_lbl.text = promise
+		prom_lbl.add_theme_font_size_override("font_size", UITokens.fs(9))
+		prom_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.5))
+		prom_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		bvbox.add_child(prom_lbl)
 
-static func _render_field_progress(label: String, state: Dictionary) -> String:
-	var filled: int = int(state.get("ls", 0))
-	var total: int = int(state.get("ls_max", 9))
-	if total <= 0:
-		total = 9
-	var bar: String = _progress_bar(filled, total)
-	var clr: String = UITokens.BB_SUCCESS if filled == total else UITokens.BB_HINT
-	return "📋 " + clr + label + " " + bar + " " + str(filled) + "/" + str(total) + UITokens.BB_END + "\n"
+	# Co-loading dest indicator
+	var dest: int = int(pallet.get("dest", 1))
+	if dest == 2:
+		var dest_lbl := Label.new()
+		dest_lbl.text = "D2"
+		dest_lbl.add_theme_font_size_override("font_size", UITokens.fs(9))
+		dest_lbl.add_theme_color_override("font_color", UITokens.CLR_STORE)
+		dest_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		bvbox.add_child(dest_lbl)
 
-
-static func _render_cmr_progress(state: Dictionary) -> String:
-	var filled: int = int(state.get("cmr", 0))
-	var total: int = int(state.get("cmr_max", 11))
-	if total <= 0:
-		total = 11
-	var franco: bool = bool(state.get("cf", false))
-	var bar: String = _progress_bar(filled, total)
-	var clr: String = UITokens.BB_SUCCESS if filled == total else UITokens.BB_HINT
-	var extras: String = ""
-	if franco:
-		extras += " ☑Franco"
-	return "📄 " + clr + "CMR " + bar + " " + str(filled) + "/" + str(total) + extras + UITokens.BB_END + "\n"
-
-
-static func _render_inventory_counts(state: Dictionary) -> String:
-	var loaded: int = int(state.get("ld", 0))
-	var avail: int = int(state.get("av", 0))
-	var started: bool = bool(state.get("st", false))
-	if not started and loaded == 0:
-		return "📦 " + UITokens.BB_DIM + "Loading not started" + UITokens.BB_END + "\n"
-	return "📦 " + UITokens.BB_HINT + "Loaded " + str(loaded) + "  Available " + str(avail) + UITokens.BB_END + "\n"
-
-
-static func _render_decisions(decisions: Array[String]) -> String:
-	if decisions.is_empty():
-		return ""
-	var checks: Array[String] = []
-	for d: String in decisions:
-		if d == "Call departments (C&C check)":
-			checks.append("C&C ✓")
-		elif d == "Start Loading":
-			checks.append("Loading ✓")
-		elif d == "Hand CMR to Driver":
-			checks.append("CMR ✓")
-		elif d == "Archive Papers":
-			checks.append("Archived ✓")
-		elif d == "Seal Truck":
-			checks.append("Sealed ✓")
-	if checks.is_empty():
-		return ""
-	return UITokens.BB_HINT + "  " + "  ".join(PackedStringArray(checks)) + UITokens.BB_END + "\n"
+	return block
 
 
-## Build a simple text progress bar: [████░░░░]
-static func _progress_bar(filled: int, total: int) -> String:
-	var bar_width: int = mini(total, 10)
-	var filled_chars: int = 0
-	if total > 0:
-		@warning_ignore("integer_division")
-		filled_chars = (filled * bar_width) / total
-	var empty_chars: int = bar_width - filled_chars
-	return "[" + "█".repeat(filled_chars) + "░".repeat(empty_chars) + "]"
+## Type abbreviation for display.
+static func _type_abbr(ptype: String) -> String:
+	match ptype:
+		"ServiceCenter": return "SC"
+		"Bikes": return "BK"
+		"Bulky": return "BU"
+		"Mecha": return "ME"
+		"ADR": return "AD"
+		"C&C": return "CC"
+	return ptype.left(2).to_upper()
 
 
 ## Maps AS400 state integer to a human-readable screen name.

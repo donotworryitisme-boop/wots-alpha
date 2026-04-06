@@ -7,9 +7,10 @@ class_name WOTSConfig
 # -------------------------------------------------------------------
 
 # Roles (expand only if already approved in locked roadmap/council decisions)
+# NOTE: CAPTAIN role removed — no captain training content planned.
+# TRAINER value kept at 2 for backward compatibility with existing accounts.
 enum Role {
 	OPERATOR = 0,
-	CAPTAIN = 1,
 	TRAINER = 2
 }
 

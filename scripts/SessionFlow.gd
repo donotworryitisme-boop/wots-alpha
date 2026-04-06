@@ -298,7 +298,8 @@ func execute_session_start() -> void:
 		_ui._ws.switch_workspace("OFFICE")
 
 	_ui._session.start_session_with_scenario(_ui._current_scenario_name, seed_val)
-	Telemetry.log_session_start(_ui._current_scenario_name)
+	if not _ui.replay_mode:
+		Telemetry.log_session_start(_ui._current_scenario_name)
 
 	# Setup interruption events for this session
 	_ui._interruptions.setup_for_session(_ui._current_scenario_index, seed_val)

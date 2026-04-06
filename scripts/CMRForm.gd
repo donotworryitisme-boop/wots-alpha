@@ -274,6 +274,12 @@ func _write_field(field: String, value: String) -> void:
 			"expedition": sm.typed_cmr2_expedition = value
 			"seal": sm.typed_cmr2_seal = value
 			"dock": sm.typed_cmr2_dock = value
+	# Log for ghost replay
+	sm.log_action("cmr_field", field + ":" + value)
+	# Tutorial: advance step 16/17/19 and reset hint timer
+	_ui._tc.try_advance_cmr_filled()
+	if _ui.tutorial_active:
+		_ui._tut.reset_hint_timer()
 
 
 # ==========================================
@@ -289,6 +295,7 @@ func _apply_stamp_top() -> void:
 	WOTSAudio.play_scan_beep(_ui)
 	if _ui._session != null:
 		_ui._session.manual_decision("CMR Stamp Top")
+	_ui._tc.try_advance_cmr_filled()
 
 
 func _mark_x() -> void:
@@ -310,6 +317,7 @@ func _apply_stamp_bot() -> void:
 	WOTSAudio.play_scan_beep(_ui)
 	if _ui._session != null:
 		_ui._session.manual_decision("CMR Stamp & Sign")
+	_ui._tc.try_advance_cmr_filled()
 
 
 func _select_franco(choice: String) -> void:
@@ -336,6 +344,8 @@ func _select_franco(choice: String) -> void:
 		else:
 			_ui._session.cmr2_franco_correct = (choice == "franco")
 			_ui._session.cmr2_franco_selected = true
+		_ui._session.log_action("cmr_franco", choice)
+	_ui._tc.try_advance_cmr_filled()
 
 
 # ==========================================

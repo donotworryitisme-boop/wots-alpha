@@ -22,6 +22,7 @@ var raq_viewed_dests: Array = []
 var _action_log: Array = []
 var session_seed: int = 0
 var _time_breakdown: Dictionary = {}
+var replay_suppress_log: bool = false
 
 # --- Pre-loading timeline ---
 var clock_base_seconds: int = 31500
@@ -270,6 +271,7 @@ func start_session_with_scenario(scenario_name: String, seed_value: int = 0) -> 
 	_time_breakdown.clear()
 	is_active = true
 	is_paused = false
+	replay_suppress_log = false
 	# Session metadata
 	expedition_number_1 = ""
 	expedition_number_2 = ""
@@ -408,7 +410,8 @@ func manual_decision(action: String) -> void:
 		paperwork_cmr2_opened = true
 
 	elif action == "Seal Truck":
-		end_session()
+		if not replay_suppress_log:
+			end_session()
 
 
 # ==========================================
@@ -471,6 +474,8 @@ func _get_load_rank(p: Dictionary) -> int:
 
 
 func _add_categorized_time(seconds: float, category: String) -> void:
+	if replay_suppress_log:
+		return
 	total_time += seconds
 	if not _time_breakdown.has(category):
 		_time_breakdown[category] = 0.0
@@ -478,6 +483,8 @@ func _add_categorized_time(seconds: float, category: String) -> void:
 
 
 func log_action(category: String, detail: String, extra_state: Dictionary = {}) -> void:
+	if replay_suppress_log:
+		return
 	var entry: Dictionary = {
 		"time": total_time,
 		"action": category,
