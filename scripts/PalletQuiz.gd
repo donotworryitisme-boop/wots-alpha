@@ -283,6 +283,12 @@ func start_quiz() -> void:
 	_btn_restart.visible = false
 	_result_label.visible = false
 	_score_label.text = ""
+	# S61 Fix #6: portal rebuild re-parents the portal overlay as the last
+	# child of $Root, covering this quiz overlay. Move ourselves to the top
+	# of the sibling stack so the quiz is visible and clickable.
+	var parent_node: Node = overlay.get_parent()
+	if parent_node != null:
+		parent_node.move_child(overlay, parent_node.get_child_count() - 1)
 	overlay.visible = true
 
 

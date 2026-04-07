@@ -205,6 +205,10 @@ func update_truck_visualizer(loaded_pallets: Array) -> void:
 	var emb_count: int = 0
 	if _dock._ui._session != null:
 		emb_count = _dock._ui._session.emballage_remaining
+
+	# T7: "← UNLOAD FIRST" arrow only visible while emballage remain
+	if _dock.lifo_lbl != null:
+		_dock.lifo_lbl.visible = (emb_count > 0)
 	for ei: int in range(emb_count):
 		var emb_btn := build_emballage_graphic()
 		var emb_hover: String = "[font_size=15][color=#c8a860][b]EMBALLAGE[/b][/color]\n[color=#c0c8d0]Empty return pallet %d / %d[/color]\n[color=#f1c40f]Click to remove from truck (~45s)[/color][/font_size]" % [ei + 1, emb_count]
@@ -212,6 +216,12 @@ func update_truck_visualizer(loaded_pallets: Array) -> void:
 		emb_btn.mouse_exited.connect(func() -> void: _dock._set_hover_text(_dock._hover_default_text()))
 		emb_btn.pressed.connect(func() -> void:
 			if _dock._ui._load_cooldown: return
+			# T11: Cannot remove emballage before opening the dock
+			if not _dock._dock_open:
+				if _dock.lbl_hover_info:
+					_dock.lbl_hover_info.text = "[font_size=15][color=#e74c3c][b]Open the dock first![/b][/color] [color=#c0c8d0]You cannot enter the trailer with the EPT until the dock leveler is down.[/color][/font_size]"
+				WOTSAudio.play_error_buzz(_dock._ui)
+				return
 			_dock._ui._load_cooldown = true
 			emb_btn.modulate = Color(1.5, 1.2, 0.5)
 			WOTSAudio.play_emballage_click(_dock._ui)

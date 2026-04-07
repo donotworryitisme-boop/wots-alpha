@@ -95,7 +95,7 @@ func render() -> void:
 		"10010100001000010010011001001010000100101001",
 		"11100111100111010010011001001011110011001001",
 	]
-	var t: String = "[font_size=24]"
+	var t: String = "[font_size=17]"
 	var d: String = "19/03/26"
 	var H: String = "[color=#00ff00]"
 	var C: String = "[color=#00ffff]"
@@ -114,7 +114,7 @@ func render() -> void:
 		t += "[center]%sScreen . . . . . :   TILBN1117%s[/center]\n\n" % [H, E]
 		t += "[center]%sUser  . . . . . . . . . . . .%s   %s_________%s[/center]\n" % [P, E, Y, E]
 		t += "[center]%sPassword  . . . . . . . . . .%s[/center]\n\n" % [P, E]
-		t += "[/font_size]" + build_deca_art(_deca_art, B) + "[font_size=24]\n"
+		t += "[/font_size]" + build_deca_art(_deca_art, B) + "[font_size=17]\n"
 		t += "[center]%s(C) COPYRIGHT IBM CORP. 1980, 2018.%s[/center]\n" % [W, E]
 		_term._input_field.placeholder_text = "Type 'BAYB2B' and press Enter"
 
@@ -126,7 +126,7 @@ func render() -> void:
 		t += "[center]%sScreen . . . . . :   TILBN1117%s[/center]\n\n" % [H, E]
 		t += "[center]%sUser  . . . . . . . . . . . .%s   %sBAYB2B%s[/center]\n" % [P, E, H, E]
 		t += "[center]%sPassword  . . . . . . . . . .%s   %s______%s[/center]\n\n" % [P, E, Y, E]
-		t += "[/font_size]" + build_deca_art(_deca_art, B) + "[font_size=24]\n"
+		t += "[/font_size]" + build_deca_art(_deca_art, B) + "[font_size=17]\n"
 		t += "[center]%s(C) COPYRIGHT IBM CORP. 1980, 2018.%s[/center]\n" % [W, E]
 		_term._input_field.placeholder_text = "Type '123456' and press Enter"
 
@@ -230,7 +230,7 @@ func render() -> void:
 		t += "%s__  06845806 XXXXXXXX    7  2680 CIRCULAR CENTER TILB EN COURS%s\n" % [H, E]
 		t += "\n\n                                                                      %s+%s\n" % [H, E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Sortie    F6=Créer%s                                                %sAIDE%s\n" % [C, E, C, E]
+		t += "%sF3=Sortie    F6=Créer%s                                                %sAIDE%s\n" % [Y, E, C, E]
 		_term._input_field.placeholder_text = "Type '8600555' (your badge code)"
 
 	# State 7: Badge password
@@ -256,7 +256,7 @@ func render() -> void:
 		t += "%s__  06845806 XXXXXXXX    7  2680 CIRCULAR CENTER TILB EN COURS%s\n" % [H, E]
 		t += "\n\n                                                                      %s+%s\n" % [H, E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Sortie    F6=Créer%s                                                %sAIDE%s\n" % [C, E, C, E]
+		t += "%sF3=Sortie    F6=Créer%s                                                %sAIDE%s\n" % [Y, E, C, E]
 		_term._input_field.placeholder_text = "Type '123456' (your password)"
 
 	# State 8: RAQ screen (DSPF COLIS RAQ/RAC)
@@ -370,7 +370,7 @@ func render() -> void:
 						var adr_stime: String = p_adr.get("scan_time", "")
 						t += "%s  %-20s  MAP ADR  %2d 86 11 %-20s %s %s%s\n" % [H, p_adr.id, p_adr.collis, p_adr.get("colis_id", ""), UITokens.LOADING_DATE_DDMMYY, adr_stime, E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Sortie  F5=Ttes UAT  F7=UAT non Adress{es  F8=UAT Adress{es  F9=CCC/ADR%s\n" % [C, E]
+		t += "%sF3=Sortie  F5=Ttes UAT  F7=UAT non Adress{es  F8=UAT Adress{es  F9=CCC/ADR%s\n" % [Y, E]
 		t += "%sF10=NBC/CFP   F11=EM/CD   F15=Tri F&R%s\n" % [C, E]
 
 	# State 9: Validation
@@ -409,7 +409,7 @@ func render() -> void:
 		t += "%sVolume (dm³)    :%s  %s%d%s\n\n" % [H, E, Y, s9_dm3, E]
 		t += "%s→ Transfer expedition, weight + dm³ to your CMR.%s\n" % [C, E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Sortie%s\n" % [C, E]
+		t += "%sF3=Sortie%s\n" % [Y, E]
 
 	# === EASTER EGG: Recep Dock (state 15) ===
 	elif _term.state == S.RECEP_DOCK:
@@ -421,7 +421,7 @@ func render() -> void:
 		t += "%s  (Ce module n'est pas actif dans cette version de la simulation.)%s\n" % [Y, E]
 		t += "\n\n\n\n\n\n"
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Retour  F12=Annuler%s\n" % [C, E]
+		t += "%sF3=Retour  F12=Annuler%s\n" % [Y, E]
 
 	# === EASTER EGG: Impression (state 16) ===
 	elif _term.state == S.IMPRESSION:
@@ -434,7 +434,7 @@ func render() -> void:
 		t += "%s  (Les impressions ne sont pas actives dans cette version.)%s\n" % [Y, E]
 		t += "\n\n\n\n\n\n"
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Retour  F12=Annuler%s\n" % [C, E]
+		t += "%sF3=Retour  F12=Annuler%s\n" % [Y, E]
 
 	# === EASTER EGG: RAQ Par Magasin (state 17) ===
 	elif _term.state == S.RAQ_PAR_MAGASIN:
@@ -445,11 +445,11 @@ func render() -> void:
 		t += "%s  (La consultation par magasin n'est pas active dans cette version.)%s\n" % [Y, E]
 		t += "\n\n\n\n\n\n\n\n"
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Retour  F12=Annuler%s\n" % [C, E]
+		t += "%sF3=Retour  F12=Annuler%s\n" % [Y, E]
 
 	# === SCANNING SCREEN (state 18) ===
 	elif _term.state == S.SCANNING:
-		_term._input_field.placeholder_text = "N° Colis ou UAT — Shift+F1 or F13=RAQ"
+		_term._input_field.placeholder_text = "N° Colis ou UAT — Shift+F1 = RAQ"
 		t += "%s%s%s   %s***%s      %s[u]SCANNING QUAI[/u]%s          %s***%s  %sQUAI390%s    %sNLDKL01%s\n" % [H, d, E, H, E, C, E, H, E, H, E, H, E]
 		t += "%s19:32:02%s                                    %sENTRER%s   %sPII1PVR%s\n\n" % [H, E, H, E, H, E]
 		if _term._ui.current_dest2_name != "" and not _term._tabs.is_empty():
@@ -476,14 +476,14 @@ func render() -> void:
 			if p.is_uat:
 				uat_loaded += 1
 				colis_loaded += p.collis
-		var G := "[color=#00ff00]"
+		var G := "[color=#33ff66]"
 		t += "  %sCOLIS EN RESTE A CHARGER%s    %sUAT VOCAL%s    %sUAT EN RESTE A CHARGER%s\n" % [H, E, H, E, H, E]
-		t += "[/font_size][font_size=28]"
+		t += "[/font_size][font_size=20][b]"
 		var cr_art: Array = build_number_art(colis_remaining, 4, G)
 		var ur_art: Array = build_number_art(uat_remaining, 4, G)
 		for r: int in range(5):
 			t += "    %s              %s\n" % [cr_art[r], ur_art[r]]
-		t += "[/font_size][font_size=24]\n"
+		t += "[/b][/font_size][font_size=17]\n"
 		var load_mins: int = 0
 		var load_secs: int = 0
 		if _term._ui._session != null:
@@ -492,16 +492,16 @@ func render() -> void:
 			load_secs = int(t_total) % 60
 		t += "%s------------------------------]TEMPS CHARGEMENT]------------------------------%s\n" % [C, E]
 		t += "  %sCOLIS CHARGES%s              %s]   %02d:%02d:%02d   ]%s      %sUAT CHARGEES%s\n" % [H, E, H, load_mins, load_secs, 0, E, H, E]
-		t += "[/font_size][font_size=28]\n"
+		t += "[/font_size][font_size=20][b]\n"
 		var cl_art: Array = build_number_art(colis_loaded, 4, G)
 		var ul_art: Array = build_number_art(uat_loaded, 4, G)
 		for r: int in range(5):
 			t += "    %s              %s\n" % [cl_art[r], ul_art[r]]
-		t += "[/font_size][font_size=24]\n"
+		t += "[/b][/font_size][font_size=17]\n"
 		t += "    %sN° Colis ou UAT%s %s_________________________%s\n" % [H, E, Y, E]
 		t += "    %sMode%s %s+%s\n" % [H, E, Y, E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Sortie F5=R@J F13=RAQ (or Shift+F1)  F10=Valider F14=UAT/Colis Charg{s%s\n" % [C, E]
+		t += "%sF3=Sortie  F5=R@J  Shift+F1=RAQ  F10=Valider  F14=UAT/Colis Charg{s%s\n" % [Y, E]
 		t += "%sF6=Toisage F7=EXPE colis sans flux F8=UAT normal/vrac F9=Modif support UAT%s\n" % [C, E]
 
 	# === SAISIE D'UNE EXPEDITION (state 19) ===
@@ -538,11 +538,9 @@ func render() -> void:
 		t += "%sType transport :%s %s1%s\n" % [H, E, Y, E]
 		t += "%sPrestataire    :%s %sDHL%s\n" % [H, E, Y, E]
 		t += "%sType exp{dition :%s %s[u]C[/u]%s %s(C=Classical / S=Specific)%s\n\n\n" % [H, E, Y, E, H, E]
-		var operators: Array = ["Benancio", "Lydia", "Lorena", "Zuzanna", "Georgios", "Damian"]
-		var op_name: String = operators[hash(tab_dest_name if dest_filled else "default") % operators.size()]
-		t += "%sOp{rateur        :%s                  %s%s%s\n" % [H, E, R, op_name.to_upper(), E]
+		t += "%sOp{rateur        :%s                  %s%s%s\n" % [H, E, R, _term.session_operator, E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Sortie    F4=Invite    F10=Valider%s                            %sAIDE%s\n" % [C, E, C, E]
+		t += "%sF3=Sortie    F4=Invite    F10=Valider%s                            %sAIDE%s\n" % [Y, E, C, E]
 
 	# === EXPEDITION EN COURS (state 22) ===
 	elif _term.state == S.EXPEDITION_EN_COURS:
@@ -567,7 +565,7 @@ func render() -> void:
 		t += "%s__  06845806 XXXXXXXX    7  2680 CIRCULAR CENTER TILB DANIEL     EN COURS%s\n" % [H, E]
 		t += "\n\n\n                                                                      %s+%s\n" % [H, E]
 		t += "\n%s─────────────────────────────────────────────────────────────────────────────%s\n" % [C, E]
-		t += "%sF3=Sortie    F6=Cr{er%s                                                %sAIDE%s\n" % [C, E, C, E]
+		t += "%sF3=Sortie    F6=Cr{er%s                                                %sAIDE%s\n" % [Y, E, C, E]
 		t += "%sFin de balayage; utilisez la touche D{filH afin d'explorer davantage d'enreg%s\n" % [H, E]
 
 	# === EASTER EGG: GE Menu (state 20) ===

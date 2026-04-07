@@ -33,6 +33,7 @@ var lane_misc: VBoxContainer
 var truck_grid: GridContainer
 var truck_cap_label: RichTextLabel
 var truck_cap_bar: ColorRect
+var lifo_lbl: Label = null  # T7: class member so visibility can be toggled
 
 # Scanner
 var lbl_hover_info: RichTextLabel
@@ -216,11 +217,12 @@ func _build(stage_hbox: HBoxContainer) -> void:
 	truck_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	truck_vbox.add_child(truck_grid)
 
-	var lifo_lbl := Label.new()
+	lifo_lbl = Label.new()
 	lifo_lbl.text = Locale.t("dock.unload_first")
 	lifo_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lifo_lbl.add_theme_font_size_override("font_size", UITokens.fs(10))
 	lifo_lbl.add_theme_color_override("font_color", Color(0.85, 0.40, 0.35))
+	lifo_lbl.visible = false  # T7: only shown when emballage > 0
 	truck_vbox.add_child(lifo_lbl)
 
 	var truck_spacer := Control.new()

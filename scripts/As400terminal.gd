@@ -52,21 +52,27 @@ var last_loaded_cache: Array = []
 var _prev_logged_state: int = -1
 var _screens: AS400Screens
 
+# S61 Fix #4: pinned per-session operator name (was randomized per-render
+# from a hash of dest_name, causing the SAISIE operator to flip mid-session).
+var session_operator: String = "BENANCIO"
+
 func _init(ui: BayUI, parent: Control) -> void:
 	_ui = ui
 	_parent = parent
 	_screens = AS400Screens.new(self)
+	var operators: Array[String] = ["BENANCIO", "LYDIA", "LORENA", "ZUZANNA", "GEORGIOS", "DAMIAN"]
+	session_operator = operators[randi() % operators.size()]
 
 func _build_as400_stage() -> void:
 	panel = PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.size_flags_stretch_ratio = 1.4
-	panel.visible = false 
-	
+	panel.visible = false
+
 	UIStyles.apply_panel(panel, UIStyles.flat(Color(0, 0, 0)))
 	_parent.add_child(panel)
-	
+
 	var as400_vbox: VBoxContainer = VBoxContainer.new()
 	panel.add_child(as400_vbox)
 
@@ -84,7 +90,7 @@ func _build_as400_stage() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	as400_vbox.add_child(scroll)
-	
+
 	var margin: MarginContainer = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 20)
 	margin.add_theme_constant_override("margin_right", 10)
@@ -111,7 +117,7 @@ func _build_as400_stage() -> void:
 	_display.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_display.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_display.text = ""
-	_display.mouse_filter = Control.MOUSE_FILTER_IGNORE 
+	_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_display.focus_mode = Control.FOCUS_NONE
 	# Use monospace font for authentic AS400 terminal look
 	var mono_font: SystemFont = SystemFont.new()
@@ -129,11 +135,11 @@ func _build_as400_stage() -> void:
 	input_bg.color = Color(0, 0, 0)
 	input_bg.custom_minimum_size = Vector2(0, 40)
 	as400_vbox.add_child(input_bg)
-	
+
 	var input_hbox: HBoxContainer = HBoxContainer.new()
 	input_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	input_bg.add_child(input_hbox)
-	
+
 	var prompt: Label = Label.new()
 	prompt.text = " > "
 	prompt.add_theme_font_size_override("font_size", UITokens.fs(18))
@@ -142,7 +148,7 @@ func _build_as400_stage() -> void:
 	prompt_mono.font_names = PackedStringArray(["Courier New", "Consolas", "Liberation Mono", "monospace"])
 	prompt.add_theme_font_override("font", prompt_mono)
 	input_hbox.add_child(prompt)
-	
+
 	_input_field = LineEdit.new()
 	_input_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var input_sb: StyleBoxEmpty = StyleBoxEmpty.new()
@@ -153,26 +159,26 @@ func _build_as400_stage() -> void:
 	var input_mono: SystemFont = SystemFont.new()
 	input_mono.font_names = PackedStringArray(["Courier New", "Consolas", "Liberation Mono", "monospace"])
 	_input_field.add_theme_font_override("font", input_mono)
-	
+
 	_input_field.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
 			_on_as400_input_submitted(_input_field.text)
-			_input_field.accept_event() 
+			_input_field.accept_event()
 	)
 	_input_field.text_changed.connect(_on_as400_text_changed)
 	input_hbox.add_child(_input_field)
 
 	var btn_hbox: HBoxContainer = HBoxContainer.new()
 	as400_vbox.add_child(btn_hbox)
-	
+
 	var btn_confirm: Button = Button.new()
 	btn_confirm.text = Locale.t("btn.confirm_raq")
 	btn_confirm.custom_minimum_size = Vector2(0, 40)
-	btn_confirm.focus_mode = Control.FOCUS_NONE 
+	btn_confirm.focus_mode = Control.FOCUS_NONE
 	btn_confirm.add_theme_stylebox_override("normal", UIStyles.flat(Color(0.2, 0.2, 0.2)))
 	btn_confirm.pressed.connect(_confirm_as400_raq)
 	btn_hbox.add_child(btn_confirm)
-	
+
 	panel.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton and event.pressed:
 			if _input_field != null:
@@ -425,12 +431,11 @@ func _on_as400_input_submitted(text: String) -> void:
 				return
 	elif state == S.SCANNING:
 		if input == "F3": state = S.MENU_OPERATION
-		elif input == "F13" or input == "SHIFT+F1":
+		elif input == "SHIFT+F1":
 			state = S.RAQ
 			raq_opened.emit()
 	elif state == S.RAQ:
 		if input == "F3": state = S.SCANNING
-		elif input == "F13": state = S.SCANNING
 	elif state == S.VALIDATION and input == "F3": state = S.EXPEDITION_EN_COURS
 	elif state == S.RECEP_DOCK and input == "F3": state = S.MENU_MAIN
 	elif state == S.IMPRESSION and input == "F3": state = S.MENU_OPERATION
@@ -583,20 +588,6 @@ func handle_fkey(keycode: int, shift_pressed: bool) -> bool:
 			_save_tab_state()
 			_render_as400_screen()
 			WOTSAudio.play_as400_key(_ui)
-		return true
-
-	elif keycode == KEY_F13:
-		if error:
-			WOTSAudio.play_error_buzz(_ui)
-			return true
-		if state == S.SCANNING:
-			state = S.RAQ
-			_save_tab_state()
-			_render_as400_screen()
-			WOTSAudio.play_as400_key(_ui)
-			raq_opened.emit()
-			if _ui.tutorial_active:
-				_ui._tc.try_advance_as400_raq_opened()
 		return true
 
 	elif keycode == KEY_F1 and shift_pressed:

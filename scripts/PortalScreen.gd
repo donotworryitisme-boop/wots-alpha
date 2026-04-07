@@ -42,6 +42,14 @@ var _lbl_signed_in: Label
 # Seed input
 var seed_input: LineEdit
 
+# Display settings (Item A — resolution autodetect + override)
+var _display_title_lbl: Label = null
+var _display_scale_lbl: Label = null
+var _display_size_lbl: Label = null
+var _display_scale_dd: OptionButton = null
+var _display_size_dd: OptionButton = null
+var _display_reset_btn: Button = null
+
 # Root node reference for rebuild
 var _root: Node = null
 
@@ -379,6 +387,68 @@ func _build(root: Node) -> void:
 	)
 	telem_grp.add_child(telem_btn)
 
+	# --- Display settings (Item A) — autodetect window + scale, with overrides ---
+	var display_div := ColorRect.new()
+	display_div.custom_minimum_size = Vector2(0, 1)
+	display_div.color = UITokens.hc_panel_border()
+	vbox.add_child(display_div)
+
+	_display_title_lbl = Label.new()
+	_display_title_lbl.text = Locale.t("display.title")
+	_display_title_lbl.add_theme_font_size_override("font_size", UITokens.fs(11))
+	_display_title_lbl.add_theme_color_override("font_color", UITokens.hc_text(UITokens.CLR_TEXT_SECONDARY))
+	vbox.add_child(_display_title_lbl)
+
+	var scale_row := HBoxContainer.new()
+	scale_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(scale_row)
+	_display_scale_lbl = _make_display_label(Locale.t("display.scale_label"))
+	scale_row.add_child(_display_scale_lbl)
+	_display_scale_dd = _make_display_dropdown()
+	var scale_opts: Array[float] = DisplayManager.get_scale_options()
+	for i: int in range(scale_opts.size()):
+		_display_scale_dd.add_item(DisplayManager.get_scale_label(scale_opts[i]))
+	_display_scale_dd.select(DisplayManager.get_current_scale_index())
+	_display_scale_dd.item_selected.connect(func(idx: int) -> void:
+		var opts: Array[float] = DisplayManager.get_scale_options()
+		if idx < 0 or idx >= opts.size(): return
+		DisplayManager.set_scale_override(opts[idx], _ui)
+		_ui.rebuild_portal()
+	)
+	scale_row.add_child(_display_scale_dd)
+
+	var size_row := HBoxContainer.new()
+	size_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(size_row)
+	_display_size_lbl = _make_display_label(Locale.t("display.size_label"))
+	size_row.add_child(_display_size_lbl)
+	_display_size_dd = _make_display_dropdown()
+	var size_opts: Array[Vector2i] = DisplayManager.get_size_options()
+	for i: int in range(size_opts.size()):
+		_display_size_dd.add_item(DisplayManager.get_size_label(size_opts[i]))
+	_display_size_dd.select(DisplayManager.get_current_size_index())
+	_display_size_dd.item_selected.connect(func(idx: int) -> void:
+		var opts: Array[Vector2i] = DisplayManager.get_size_options()
+		if idx < 0 or idx >= opts.size(): return
+		var v: Vector2i = opts[idx]
+		DisplayManager.set_size_override(v.x, v.y, _ui)
+		_ui.rebuild_portal()
+	)
+	size_row.add_child(_display_size_dd)
+
+	_display_reset_btn = Button.new()
+	_display_reset_btn.text = Locale.t("display.reset")
+	_display_reset_btn.custom_minimum_size = Vector2(0, 26)
+	_display_reset_btn.add_theme_font_size_override("font_size", UITokens.fs(10))
+	_display_reset_btn.focus_mode = Control.FOCUS_NONE
+	UIStyles.apply_btn_ghost(_display_reset_btn, Color(0.1, 0.1, 0.1, 0.0),
+			UITokens.hc_text(UITokens.CLR_CELL_TEXT_DIM), UITokens.COLOR_ACCENT_BLUE)
+	_display_reset_btn.pressed.connect(func() -> void:
+		DisplayManager.reset_to_auto(_ui)
+		_ui.rebuild_portal()
+	)
+	vbox.add_child(_display_reset_btn)
+
 	# Close / Quit button — top right of overlay
 	btn_close = Button.new()
 	btn_close.text = "✕  " + Locale.t("btn.close_app")
@@ -467,7 +537,32 @@ func refresh_language_labels() -> void:
 	if btn_runs != null: btn_runs.text = "📋 " + Locale.t("portal.my_runs")
 	if btn_close != null: btn_close.text = "✕  " + Locale.t("btn.close_app")
 	if seed_input != null: seed_input.placeholder_text = Locale.t("portal.seed_placeholder")
+	if _display_title_lbl != null: _display_title_lbl.text = Locale.t("display.title")
+	if _display_scale_lbl != null: _display_scale_lbl.text = Locale.t("display.scale_label")
+	if _display_size_lbl != null: _display_size_lbl.text = Locale.t("display.size_label")
+	if _display_reset_btn != null: _display_reset_btn.text = Locale.t("display.reset")
 	refresh_history()
+
+
+func _make_display_label(text: String) -> Label:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", UITokens.fs(10))
+	lbl.add_theme_color_override("font_color", UITokens.hc_text(UITokens.CLR_CELL_TEXT_DIM))
+	lbl.custom_minimum_size = Vector2(110, 0)
+	return lbl
+
+
+func _make_display_dropdown() -> OptionButton:
+	var dd := OptionButton.new()
+	dd.custom_minimum_size = Vector2(0, 28)
+	dd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dd.add_theme_font_size_override("font_size", UITokens.fs(11))
+	UIStyles.apply_dropdown(dd)
+	var pop: PopupMenu = dd.get_popup()
+	if pop != null:
+		UIStyles.apply_dropdown_popup(pop)
+	return dd
 
 
 func refresh_history() -> void:

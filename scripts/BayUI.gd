@@ -60,6 +60,9 @@ var btn_adr: Button = null
 var btn_combine: Button = null
 var btn_open_dock: Button = null
 var btn_close_dock: Button = null
+var _transit_used: bool = false
+var _adr_used: bool = false
+var _call_used: bool = false
 var _as400_confirmed: bool = false
 
 @warning_ignore("unused_private_class_variable")
@@ -74,6 +77,7 @@ var btn_dock_cmr: Button = null
 var _undo_pallet_id: String = ""
 var _undo_remaining: float = 0.0
 var _undo_btn: Button = null
+var _undo_persistent: bool = false  # T4: tutorial step 11 holds undo open until pressed
 const UNDO_WINDOW: float = 5.0
 
 # --- WORKSPACE SYSTEM ---
@@ -263,14 +267,19 @@ func _process(delta: float) -> void:
 
 	# Undo window countdown
 	if _undo_remaining > 0.0:
-		_undo_remaining -= delta
-		if _undo_remaining <= 0.0:
-			_undo_pallet_id = ""
-			_undo_remaining = 0.0
-			if _undo_btn != null:
-				_undo_btn.visible = false
-		elif _undo_btn != null and _undo_btn.visible:
-			_undo_btn.text = Locale.t("btn.undo") + " (%ds)" % ceili(_undo_remaining)
+		if _undo_persistent:
+			# T4: tutorial step 11 holds the button visible — no countdown,
+			# no auto-hide. Cleared when player presses Undo or session ends.
+			pass
+		else:
+			_undo_remaining -= delta
+			if _undo_remaining <= 0.0:
+				_undo_pallet_id = ""
+				_undo_remaining = 0.0
+				if _undo_btn != null:
+					_undo_btn.visible = false
+			elif _undo_btn != null and _undo_btn.visible:
+				_undo_btn.text = Locale.t("btn.undo") + " (%ds)" % ceili(_undo_remaining)
 
 	if tutorial_active:
 		# Pause hint timer when SOP overlay is open — user is reading help
@@ -648,9 +657,9 @@ func _on_raq_opened() -> void:
 	var dest_seq: int = _as400._get_tab_dest_seq(_as400._active_tab)
 	if _session != null:
 		_session.mark_raq_viewed(dest_seq)
-	if btn_transit != null and btn_transit.visible:
+	if btn_transit != null and btn_transit.visible and not _transit_used:
 		btn_transit.disabled = false
-	if btn_adr != null and btn_adr.visible:
+	if btn_adr != null and btn_adr.visible and not _adr_used:
 		btn_adr.disabled = false
 
 
@@ -768,13 +777,17 @@ func _on_decision_pressed(action: String) -> void:
 		WOTSAudio.play_seal_confirm(self)
 	elif action == "Call departments (C&C check)":
 		WOTSAudio.play_scan_beep(self)
+		_call_used = true
+		if btn_call != null: btn_call.disabled = true
 	elif action == "Start Loading":
 		WOTSAudio.play_panel_click(self)
 		if btn_combine != null and btn_combine.visible:
 			_refresh_combine_btn()
 	elif action == "Check Transit":
+		_transit_used = true
 		if btn_transit != null: btn_transit.disabled = true
 	elif action == "Check Yellow Lockers":
+		_adr_used = true
 		if btn_adr != null: btn_adr.disabled = true
 	elif action == "Combine Pallets":
 		WOTSAudio.play_scan_beep(self)
@@ -782,11 +795,26 @@ func _on_decision_pressed(action: String) -> void:
 
 
 func _start_undo_window(pallet_id: String) -> void:
-	## Begin the 5-second undo window for the most recently loaded pallet.
+	## Begin the undo window for the most recently loaded pallet.
+	## T4: in tutorial step 12 (second Mecha load) the button is suppressed
+	##     so the player is forced to use the truck-unload (penalty) path.
+	## T4: in tutorial step 11 the button is shown without countdown and
+	##     stays visible until pressed.
+	if tutorial_active and tutorial_step == 12:
+		_undo_pallet_id = ""
+		_undo_remaining = 0.0
+		_undo_persistent = false
+		if _undo_btn != null:
+			_undo_btn.visible = false
+		return
 	_undo_pallet_id = pallet_id
+	_undo_persistent = (tutorial_active and tutorial_step == 11)
 	_undo_remaining = UNDO_WINDOW
 	if _undo_btn != null:
-		_undo_btn.text = Locale.t("btn.undo") + " (%ds)" % ceili(UNDO_WINDOW)
+		if _undo_persistent:
+			_undo_btn.text = Locale.t("btn.undo")
+		else:
+			_undo_btn.text = Locale.t("btn.undo") + " (%ds)" % ceili(UNDO_WINDOW)
 		_undo_btn.visible = true
 
 
@@ -794,11 +822,16 @@ func _perform_undo() -> void:
 	## Execute the undo — remove last loaded pallet without penalty.
 	if _undo_pallet_id == "" or _session == null:
 		return
+	# T4: notify TC BEFORE undo runs so the inventory_updated signal that
+	# follows sees the correct mecha_undone_once flag and renders Phase C text.
+	if tutorial_active:
+		_tc.on_undo_used()
 	if _session.undo_last_load(_undo_pallet_id):
 		WOTSAudio.play_undo_confirm(self)
 		if _dock.lbl_hover_info:
 			_dock.lbl_hover_info.text = "[font_size=15]" + UITokens.BB_SUCCESS + "[b]" + Locale.t("dock.undo_success") + "[/b]" + UITokens.BB_END + "[/font_size]"
 	_undo_pallet_id = ""
 	_undo_remaining = 0.0
+	_undo_persistent = false
 	if _undo_btn != null:
 		_undo_btn.visible = false

@@ -51,10 +51,13 @@ func _build() -> void:
 	canvas.add_child(highlight_box)
 
 	screen_margin = MarginContainer.new()
-	screen_margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	screen_margin.anchor_bottom = 0.0
+	# S61 Fix #2: anchor top-left with fixed ~800px width so banner never
+	# overlaps the LS/CMR right panel in office view.
+	screen_margin.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	screen_margin.offset_left = 8
+	screen_margin.offset_right = 808
 	screen_margin.offset_top = 50
-	screen_margin.offset_bottom = 50
+	screen_margin.offset_bottom = 200
 	screen_margin.add_theme_constant_override("margin_left", 8)
 	screen_margin.add_theme_constant_override("margin_right", 8)
 	screen_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -68,7 +71,7 @@ func _build() -> void:
 	var tut_panel := PanelContainer.new()
 	tut_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tut_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := UIStyles.flat(Color(0.06, 0.08, 0.12, 0.92))
+	var sb := UIStyles.flat(Color(0.06, 0.08, 0.12, 0.85))
 	sb.border_width_bottom = 3
 	sb.border_color = UITokens.CLR_SUCCESS
 	sb.corner_radius_bottom_left = 6
@@ -145,6 +148,12 @@ func _render_step_text() -> void:
 	t += UITokens.BB_SUCCESS + "[b]" + Locale.t("tutorial.header") + "[/b]" + UITokens.BB_END + "  "
 
 	var step_key: String = "tutorial.step_%d" % _ui.tutorial_step
+	# T4: Step 11 has 3 phases (A: load Mecha, B: undo, C: load Mecha again).
+	if _ui.tutorial_step == 11:
+		if _ui._tc.mecha_undone_once:
+			step_key = "tutorial.step_11_load_again"
+		elif _ui._tc.mecha_loaded_in_step_11:
+			step_key = "tutorial.step_11_undo_prompt"
 	t += Locale.t(step_key)
 
 	# Detailed hint at 60s+

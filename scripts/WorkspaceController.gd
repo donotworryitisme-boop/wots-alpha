@@ -541,7 +541,10 @@ func style_overlay_panels() -> void:
 
 func populate_overlay_panels() -> void:
 	_ui._lp_board.populate()
-	_ui._office.build_office_seal_button()
+	# S61 Fix #1: legacy office_seal_btn removed — wrap-up row's btn_seal_final
+	# is the canonical seal flow. Function still defined in OfficeManager but
+	# unused; SessionFlow.gd has null guards.
+	# _ui._office.build_office_seal_button()
 	_ui._phone.update_content()
 	_ui._paper.update_loading_sheet()
 	_ui._paper.update_cmr()

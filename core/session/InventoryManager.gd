@@ -44,6 +44,12 @@ var combine_source_ids: Array = []
 var reworked_pallet_ids: Array = []
 var wave_pallet_ids: Array = []
 
+# --- Tutorial mode flag (T5) ---
+# When true, is_combine_source() always returns false so the green outline,
+# the ⊕ marker, the combine button, and combine_pallets() are all disabled.
+# Set in generate_inventory() based on scenario name.
+var _tutorial_mode: bool = false
+
 # --- Emballage ---
 var emballage_remaining: int = 0
 var emballage_initial: int = 0
@@ -79,6 +85,7 @@ func reset() -> void:
 	wave_pallet_ids.clear()
 	emballage_remaining = 0
 	emballage_initial = 0
+	_tutorial_mode = false
 
 
 # ==========================================
@@ -291,6 +298,8 @@ func undo_load(id: String) -> bool:
 # ==========================================
 
 func is_combine_source(p: Dictionary) -> bool:
+	# T5: combinable pairs are confusing in the tutorial — disable entirely
+	if _tutorial_mode: return false
 	if p.type == "Mecha": return false
 	if p.type == "C&C" and p.get("subtype", "") == "Bulky": return false
 	if not p.get("combined_uats", []).is_empty(): return false
@@ -583,6 +592,8 @@ func _complete_wave_delivery(wave: Dictionary) -> void:
 # ==========================================
 
 func generate_inventory(scenario_name: String, seed_value: int = 0) -> void:
+	# T5: tutorial scenario disables combinable pairs (confusing for new users)
+	_tutorial_mode = scenario_name.begins_with("0")
 	var rng := RandomNumberGenerator.new()
 	if seed_value != 0:
 		rng.seed = seed_value

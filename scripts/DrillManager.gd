@@ -49,6 +49,12 @@ func tick(delta: float) -> void:
 
 func open_selection() -> void:
 	if _sel_overlay != null:
+		# S61 Fix #6: portal rebuild re-parents the portal overlay as the last
+		# child of $Root, covering this drill selection overlay. Move ourselves
+		# to the top of the sibling stack so the selection is visible.
+		var parent_node: Node = _sel_overlay.get_parent()
+		if parent_node != null:
+			parent_node.move_child(_sel_overlay, parent_node.get_child_count() - 1)
 		_sel_overlay.visible = true
 
 

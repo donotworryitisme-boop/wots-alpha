@@ -322,6 +322,9 @@ func execute_session_start() -> void:
 	_ui._session.seal_number = seal_number_1
 	_ui._session.seal_number_2 = seal_number_2
 
+	_ui._transit_used = false
+	_ui._adr_used = false
+	_ui._call_used = false
 	if _ui.btn_transit != null:
 		_ui.btn_transit.visible = (_ui._current_scenario_index >= 1)
 		_ui.btn_transit.disabled = true

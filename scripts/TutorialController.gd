@@ -21,6 +21,12 @@ var _ui: BayUI
 var active: bool = false
 var step: int = -1
 
+# T4: Step 11 has two phases — first Mecha load must be UNDONE,
+# second Mecha load must be UNLOADED via the truck (penalty).
+# These flags track sub-state inside step 11.
+var mecha_loaded_in_step_11: bool = false
+var mecha_undone_once: bool = false
+
 
 func _init(ui: BayUI) -> void:
 	_ui = ui
@@ -29,12 +35,16 @@ func _init(ui: BayUI) -> void:
 func start() -> void:
 	active = true
 	step = 0
+	mecha_loaded_in_step_11 = false
+	mecha_undone_once = false
 	_ui._tut.update_ui()
 
 
 func stop() -> void:
 	active = false
 	step = -1
+	mecha_loaded_in_step_11 = false
+	mecha_undone_once = false
 
 
 # ==========================================
@@ -175,16 +185,37 @@ func try_advance_inventory(avail: Array, loaded: Array) -> void:
 	if not active:
 		return
 	if step == 11:
-		for p: Dictionary in loaded:
-			if str(p.get("type", "")) == "Mecha":
-				_set_step(12)
-				return
-	elif step == 12:
+		# T4: Two-phase Mecha lesson.
+		# Phase A: no Mecha loaded yet, undone_once=false → wait for first load
+		# Phase B: Mecha loaded, undone_once=false → force UNDO
+		# Phase C: no Mecha loaded, undone_once=true → wait for second load
+		# Then advance to step 12 (truck-unload phase).
 		var has_mecha: bool = false
 		for p: Dictionary in loaded:
 			if str(p.get("type", "")) == "Mecha":
 				has_mecha = true
-		if not has_mecha:
+				break
+		if has_mecha and mecha_undone_once:
+			_set_step(12)
+			return
+		if has_mecha and not mecha_undone_once:
+			# Entered Phase B — refresh overlay text to prompt undo
+			if not mecha_loaded_in_step_11:
+				mecha_loaded_in_step_11 = true
+				_ui._tut.update_ui()
+			return
+		if not has_mecha and mecha_loaded_in_step_11 and mecha_undone_once:
+			# Just exited Phase B via undo → entered Phase C
+			mecha_loaded_in_step_11 = false
+			_ui._tut.update_ui()
+			return
+	elif step == 12:
+		var has_mecha_12: bool = false
+		for p: Dictionary in loaded:
+			if str(p.get("type", "")) == "Mecha":
+				has_mecha_12 = true
+				break
+		if not has_mecha_12:
 			_set_step(13)
 	elif step == 13:
 		for p: Dictionary in loaded:
@@ -597,9 +628,23 @@ func check_pallet_unload_gate() -> String:
 	## Called from DockView truck grid unload pressed handler.
 	if not active:
 		return ""
+	# T4: Step 11 Phase B — force player to use the Undo button, not the truck
+	if step == 11 and mecha_loaded_in_step_11 and not mecha_undone_once:
+		return "warn.use_undo_first"
 	if step != 12:
 		return "warn.dont_unload"
 	return ""
+
+
+func on_undo_used() -> void:
+	## T4: Called from BayUI._perform_undo() BEFORE the actual undo runs,
+	## so the inventory_updated signal that follows sees the correct flag state.
+	if not active:
+		return
+	if step == 11 and mecha_loaded_in_step_11 and not mecha_undone_once:
+		mecha_undone_once = true
+		# mecha_loaded_in_step_11 is reset by try_advance_inventory once
+		# the inventory_updated signal arrives showing no Mecha loaded.
 
 
 func check_scanner_gate() -> String:
